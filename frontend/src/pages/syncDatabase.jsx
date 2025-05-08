@@ -1,0 +1,129 @@
+import React, { useState, useContext } from "react";
+import Navbar from "../components/NavBar";
+import Heading from "../components/Heading";
+import { Navigate } from "react-router-dom";
+import { AuthContext } from "../AuthContext";
+import Alert from '../components/Alert';
+import axios from "axios";
+import { useNavigate } from "react-router-dom";
+import { jwtDecode } from "jwt-decode";
+
+const Reset = () => {
+  const { authToken } = useContext(AuthContext);
+  const [isDisable, setIsDisable] = useState(false)
+  const [alert, setAlert] = useState(null); // State to hold the alert message and type
+  
+  const token = localStorage.getItem("authToken");
+  const navigate = useNavigate();
+  let username;
+ 
+  if (!authToken) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (token) {
+    // Split the token into its parts
+    const decodedToken = jwtDecode(token);
+    username = decodedToken.username;
+  } else {
+      console.error("No token found in localStorage");
+  }
+
+  const handleDataSubmit = async (e) => {
+    setIsDisable(true);
+    const token = localStorage.getItem("authToken");
+    try {
+        const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}sync-databases`, {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        });
+
+        if (response.data.message === "Database sync completed successfully.") {
+            // console.log("Sync completed successfully.");
+            setAlert({
+                message: "Database sync completed successfully",
+                type: "success",
+              });
+              setTimeout(() => setAlert(null), 3000);
+            setIsDisable(false);  
+        } else {
+            // console.log("Sync is still in progress.");
+            setAlert({
+                message: "Error syncing databases",
+                type: "error",
+              });
+              setTimeout(() => setAlert(null), 3000);
+        }
+    } catch (err) {
+      if(err.response.data.error === "payments is not iterable"){
+        setAlert({
+          message: "No payment details available for now",
+          type: "error",
+        });
+        setTimeout(() => setAlert(null), 3000);
+      }
+      else if(err.response.data.error[0] === "Cannot fetch user items details"){
+        setAlert({
+          message: "No items available for now",
+          type: "error",
+        });
+        setTimeout(() => setAlert(null), 3000);
+      }
+      else{
+        setAlert({
+          message: "Error syncing databases",
+          type: "error",
+        });
+        setTimeout(() => setAlert(null), 3000);
+      }
+      
+  }
+  setIsDisable(false);
+  }
+ 
+  
+  return (
+    <div>
+      <Navbar />
+      <div className="flex">
+        {/* <Sidebar onToggle={handleSidebarToggle} /> */}
+        <div className="flex-1 p-10 ml-12">
+          <div className="mt-20 mb-10 ml-[-50px]">
+            <Heading text="Sync Databases" />
+          </div>
+
+      {/* Alert Component: Display if alert state is set */}
+      <div className="ml-[-50px]">
+      {alert && (
+        <Alert
+          message={alert.message}
+          type={alert.type}
+          onClose={() => setAlert(null)} // Close alert when clicked
+        />
+      )}
+      </div>
+     
+     
+<div>
+    <button  onClick={handleDataSubmit}
+    disabled={isDisable}
+                  className={`bg-black hover:bg-gray-800 text-white font-semibold py-2 px-5 rounded-md shadow-md transition-all ${
+                    isDisable ? "opacity-50 cursor-not-allowed" : ""
+                  }`}>
+        Sync OGF Database
+    </button>
+    </div>
+
+
+
+
+          
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Reset;
+
