@@ -1,0 +1,14 @@
+# frontend
+frontend/node_modules
+frontend/build
+frontend/certs
+frontend/web.config
+frontend/README.md
+frontend/.env
+
+
+# backend
+backend/node_modules
+backend/certs
+backend/logs
+backend/.env
