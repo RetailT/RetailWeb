@@ -9,7 +9,7 @@ const serverless = require("serverless-http");
 const app = express();
 
 const corsOptions = {
-  origin: ['http://www.retailtarget.lk', 'http://retailtarget.lk', 'http://localhost:3000'],
+  origin: ['https://www.retailtarget.lk', 'https://retailtarget.lk'],
   credentials: true,
   optionSuccessStatus: 200,
   methods: "GET,PUT,POST,DELETE"
