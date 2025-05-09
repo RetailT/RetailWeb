@@ -20,7 +20,7 @@ let IP;
 let PORT;
 let CUSTOMER_ID;
 
-const logsDir = path.join(__dirname, "../logs"); // One level up in a 'logs' folder
+const logsDir = path.join(__dirname, "./logs"); // One level up in a 'logs' folder
 const errorLogPath = path.join(logsDir, "error_log.csv");
 const successLogPath = path.join(logsDir, "success_log.csv");
 
