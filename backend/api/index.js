@@ -8,14 +8,14 @@ const serverless = require("serverless-http");
 
 const app = express();
 
-const corsOptions = {
+// CORS should be applied first
+app.use(cors({
   origin: ['https://www.retailtarget.lk', 'https://retailtarget.lk'],
   credentials: true,
-  optionSuccessStatus: 200,
-  methods: "GET,PUT,POST,DELETE"
-};
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+}));
 
-app.use(cors(corsOptions));
+app.options('*', cors());
 app.use(bodyParser.json());
 
 app.get("/", (req, res) => { res.send("Hello from Node.js"); });
@@ -52,13 +52,11 @@ app.delete('/grnprn-delete', authenticateToken, authController.grnprnDelete);
 
 app.put('/reset-database-connection', authenticateToken, authController.resetDatabaseConnection);
 
-// Connect to DB (async operation)
-connectToDatabase().then(() => {
-  console.log("Database connected");
-}).catch((err) => {
-  console.error("Database connection failed", err);
-});
+// Connect to the database
+connectToDatabase()
+  .then(() => console.log("Database connected"))
+  .catch((err) => console.error("Database connection failed", err));
 
-// Export serverless handler for Vercel
+// Export for Vercel serverless
 module.exports = app;
 module.exports.handler = serverless(app);
