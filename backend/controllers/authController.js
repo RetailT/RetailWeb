@@ -20,14 +20,14 @@ let IP;
 let PORT;
 let CUSTOMER_ID;
 
-const logsDir = path.join(__dirname, "./logs"); // One level up in a 'logs' folder
-const errorLogPath = path.join(logsDir, "error_log.csv");
-const successLogPath = path.join(logsDir, "success_log.csv");
+// const logsDir = path.join(__dirname, "../logs"); // One level up in a 'logs' folder
+// const errorLogPath = path.join(logsDir, "error_log.csv");
+// const successLogPath = path.join(logsDir, "success_log.csv");
 
-// Ensure logs directory exists
-if (!fs.existsSync(logsDir)) {
-  fs.mkdirSync(logsDir, { recursive: true });
-}
+// // Ensure logs directory exists
+// if (!fs.existsSync(logsDir)) {
+//   fs.mkdirSync(logsDir, { recursive: true });
+// }
 
 const dbConfig = {
   user: process.env.DB_USER, // Database username
@@ -251,47 +251,47 @@ async function updateTables() {
   }
 }
 
-async function logErrorsToCSV(errorMessage) {
-  const sriLankaTime = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Asia/Colombo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false, // 24-hour format
-  }).format(new Date());
+// async function logErrorsToCSV(errorMessage) {
+//   const sriLankaTime = new Intl.DateTimeFormat("en-GB", {
+//     timeZone: "Asia/Colombo",
+//     year: "numeric",
+//     month: "2-digit",
+//     day: "2-digit",
+//     hour: "2-digit",
+//     minute: "2-digit",
+//     second: "2-digit",
+//     hour12: false, // 24-hour format
+//   }).format(new Date());
 
-  const errorData = {
-    message: errorMessage,
-    date_time: sriLankaTime.replace(",", ""), // Remove comma for cleaner CSV
-  };
+//   const errorData = {
+//     message: errorMessage,
+//     date_time: sriLankaTime.replace(",", ""), // Remove comma for cleaner CSV
+//   };
 
-  const csv = parse([errorData], { header: !fs.existsSync(errorLogPath) });
+//   const csv = parse([errorData], { header: !fs.existsSync(errorLogPath) });
 
-  fs.appendFileSync(errorLogPath, csv + "\n", "utf8");
-}
+//   fs.appendFileSync(errorLogPath, csv + "\n", "utf8");
+// }
 
-async function logSuccessToCSV(successMessage) {
-  const successData = {
-    message: successMessage,
-    date_time: new Intl.DateTimeFormat("en-GB", {
-      timeZone: "Asia/Colombo",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: false, // 24-hour format
-    }).format(new Date()),
-  };
+// async function logSuccessToCSV(successMessage) {
+//   const successData = {
+//     message: successMessage,
+//     date_time: new Intl.DateTimeFormat("en-GB", {
+//       timeZone: "Asia/Colombo",
+//       year: "numeric",
+//       month: "2-digit",
+//       day: "2-digit",
+//       hour: "2-digit",
+//       minute: "2-digit",
+//       second: "2-digit",
+//       hour12: false, // 24-hour format
+//     }).format(new Date()),
+//   };
 
-  const csv = parse([successData], { header: !fs.existsSync(successLogPath) });
+//   const csv = parse([successData], { header: !fs.existsSync(successLogPath) });
 
-  fs.appendFileSync(successLogPath, csv + "\n", "utf8");
-}
+//   fs.appendFileSync(successLogPath, csv + "\n", "utf8");
+// }
 
 async function syncDB() {
   try {
@@ -345,7 +345,7 @@ async function syncDB() {
 
         if (payments.error) {
           errors.push(payments.error);
-          logErrorsToCSV(payments.error);
+          // logErrorsToCSV(payments.error);
         }
 
         const result = [];
@@ -393,7 +393,7 @@ async function syncDB() {
             );
             if (items.error) {
               errors.push(items.error);
-              logErrorsToCSV(items.error);
+              // logErrorsToCSV(items.error);
             }
 
             const paymentWithItems = {
@@ -410,7 +410,7 @@ async function syncDB() {
           if (!token) {
             const errorMsg = `Skipping API call due to token error.`;
             console.error(errorMsg);
-            logErrorsToCSV(errorMsg);
+            // logErrorsToCSV(errorMsg);
             return [];
           }
 
@@ -436,17 +436,17 @@ async function syncDB() {
 
               console.log(`API Call Successful:`, response.data);
               apiResponses.push(response.data);
-              logSuccessToCSV(
-                `API Call Successful: ${JSON.stringify(response.data)}`
-              );
+              // logSuccessToCSV(
+              //   `API Call Successful: ${JSON.stringify(response.data)}`
+              // );
             } catch (error) {
               const errorMessage = `API Call Failed: ${
                 error.response?.data || error.message
               }`;
               console.error(errorMessage);
 
-              // Log errors correctly
-              logErrorsToCSV(errorMessage);
+              // // Log errors correctly
+              // logErrorsToCSV(errorMessage);
 
               apiResponses.push({ error: errorMessage });
             }
@@ -454,7 +454,7 @@ async function syncDB() {
         }
       } catch (err) {
         console.error("Database Connection Error:", err);
-        logErrorsToCSV(`Database Connection Error: ${err.message}`);
+        // logErrorsToCSV(`Database Connection Error: ${err.message}`);
         errors.push(err.message);
       }
     }
@@ -466,44 +466,44 @@ async function syncDB() {
     return { responses: apiResponses };
   } catch (error) {
     console.log("Error occurred:", error);
-    logErrorsToCSV(error.message);
+    // logErrorsToCSV(error.message);
 
     throw error;
   }
 }
 
-// Schedule the job to run every day
-cron.schedule(
-  "0 */3 * * *",
-  async () => {
-    console.log(
-      "⏳ Executing scheduled API call for all customers in SYNCDB_USERS"
-    );
+// // Schedule the job to run every day
+// cron.schedule(
+//   "0 */3 * * *",
+//   async () => {
+//     console.log(
+//       "⏳ Executing scheduled API call for all customers in SYNCDB_USERS"
+//     );
 
-    try {
-      const responses = await syncDB();
-      // Ensure `responses` is an array and check its first element
-      if (responses.responses[0]?.returnStatus === "Success") {
-        console.log("✅ Database sync completed successfully.");
+//     try {
+//       const responses = await syncDB();
+//       // Ensure `responses` is an array and check its first element
+//       if (responses.responses[0]?.returnStatus === "Success") {
+//         console.log("✅ Database sync completed successfully.");
 
-        try {
-          const updateTableResult = await updateTables();
-          console.log("✅ Tables updated successfully:", updateTableResult);
-        } catch (updateError) {
-          console.error("❌ Error updating tables:", updateError);
-        }
-      } else {
-        console.error("⚠ Database sync had some issues. Response:", responses);
-      }
-    } catch (error) {
-      console.error("❌ Database sync failed:", error);
-    }
-  },
-  {
-    scheduled: true,
-    timezone: "Asia/Colombo",
-  }
-);
+//         try {
+//           const updateTableResult = await updateTables();
+//           console.log("✅ Tables updated successfully:", updateTableResult);
+//         } catch (updateError) {
+//           console.error("❌ Error updating tables:", updateError);
+//         }
+//       } else {
+//         console.error("⚠ Database sync had some issues. Response:", responses);
+//       }
+//     } catch (error) {
+//       console.error("❌ Database sync failed:", error);
+//     }
+//   },
+//   {
+//     scheduled: true,
+//     timezone: "Asia/Colombo",
+//   }
+// );
 
 //sync databases
 exports.syncDatabases = async (req, res) => {
