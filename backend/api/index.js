@@ -4,7 +4,6 @@ const bodyParser = require('body-parser');
 const { authenticateToken } = require('../middleware/authenticateToken');
 const { connectToDatabase } = require('../config/db');
 const authController = require('../controllers/authController');
-const serverless = require("serverless-http");
 
 const app = express();
 
@@ -16,12 +15,29 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// app.options('*', cors());
 app.use(bodyParser.json());
 
-app.get("/", (req, res) => { res.send("Hello from Node.js"); });
+// Test route
+app.get("/", (req, res) => {
+  res.send("Hello from Node.js");
+});
 
-// Define routes immediately
+// Auth routes
+app.post('/login', authController.login);
+app.post('/register', authController.register);
+app.post('/reset-password', authController.resetPassword);
+app.post('/forgot-password', authController.forgotPassword);
+app.post('/close-connection', authController.closeConnection);
+app.post('/update-temp-sales-table', authController.updateTempSalesTable);
+app.post('/update-temp-grn-table', authController.updateTempGrnTable);
+app.post('/update-temp-tog-table', authController.updateTempTogTable);
+
+app.delete('/stock-update-delete', authenticateToken, authController.stockUpdateDelete);
+app.delete('/grnprn-delete', authenticateToken, authController.grnprnDelete);
+
+app.put('/reset-database-connection', authenticateToken, authController.resetDatabaseConnection);
+
+// GET routes with authentication
 app.get('/companies', authenticateToken, authController.dashboardOptions);
 app.get('/vendors', authenticateToken, authController.vendorOptions);
 app.get('/report-data', authenticateToken, authController.reportData);
@@ -39,25 +55,11 @@ app.get('/final-grnprn-update', authenticateToken, authController.finalGrnPrnUpd
 app.get('/sync-databases', authenticateToken, authController.syncDatabases);
 app.get('/find-user-connection', authenticateToken, authController.findUserConnection);
 
-app.post('/login', authController.login);
-app.post('/register', authController.register);
-app.post('/reset-password', authController.resetPassword);
-app.post('/forgot-password', authController.forgotPassword);
-app.post('/close-connection', authController.closeConnection);
-app.post('/update-temp-sales-table', authController.updateTempSalesTable);
-app.post('/update-temp-grn-table', authController.updateTempGrnTable);
-app.post('/update-temp-tog-table', authController.updateTempTogTable);
-
-app.delete('/stock-update-delete', authenticateToken, authController.stockUpdateDelete);
-app.delete('/grnprn-delete', authenticateToken, authController.grnprnDelete);
-
-app.put('/reset-database-connection', authenticateToken, authController.resetDatabaseConnection);
-
-// Connect to the database
+// Connect to the database once
 connectToDatabase()
   .then(() => console.log("Database connected"))
   .catch((err) => console.error("Database connection failed", err));
 
-// Export for Vercel serverless
-module.exports = app;
-module.exports.handler = serverless(app);
+// Export handler for Vercel
+const serverless = require("serverless-http");
+module.exports = serverless(app);
