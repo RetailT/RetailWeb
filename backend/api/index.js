@@ -24,7 +24,7 @@ app.get("/api", (req, res) => {
 });
 
 // Auth routes
-app.post('/api/login', authController.login);
+// app.post('/api/login', authController.login);
 // app.post('/api/register', authController.register);
 // app.post('/api/reset-password', authController.resetPassword);
 // app.post('/api/forgot-password', authController.forgotPassword);
