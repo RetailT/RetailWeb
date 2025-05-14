@@ -24,37 +24,37 @@ app.get("/", (req, res) => {
 });
 
 // Auth routes
-app.post('/login', authController.login);
-app.post('/register', authController.register);
-app.post('/reset-password', authController.resetPassword);
-app.post('/forgot-password', authController.forgotPassword);
-app.post('/close-connection', authController.closeConnection);
-app.post('/update-temp-sales-table', authController.updateTempSalesTable);
-app.post('/update-temp-grn-table', authController.updateTempGrnTable);
-app.post('/update-temp-tog-table', authController.updateTempTogTable);
+app.post('/api/login', authController.login);
+app.post('/api/register', authController.register);
+app.post('/api/reset-password', authController.resetPassword);
+app.post('/api/forgot-password', authController.forgotPassword);
+app.post('/api/close-connection', authController.closeConnection);
+app.post('/api/update-temp-sales-table', authController.updateTempSalesTable);
+app.post('/api/update-temp-grn-table', authController.updateTempGrnTable);
+app.post('/api/update-temp-tog-table', authController.updateTempTogTable);
 
-app.delete('/stock-update-delete', authenticateToken, authController.stockUpdateDelete);
-app.delete('/grnprn-delete', authenticateToken, authController.grnprnDelete);
+app.delete('/api/stock-update-delete', authenticateToken, authController.stockUpdateDelete);
+app.delete('/api/grnprn-delete', authenticateToken, authController.grnprnDelete);
 
-app.put('/reset-database-connection', authenticateToken, authController.resetDatabaseConnection);
+app.put('/api/reset-database-connection', authenticateToken, authController.resetDatabaseConnection);
 
 // GET routes with authentication
-app.get('/companies', authenticateToken, authController.dashboardOptions);
-app.get('/vendors', authenticateToken, authController.vendorOptions);
-app.get('/report-data', authenticateToken, authController.reportData);
-app.get('/current-report-data', authenticateToken, authController.currentReportData);
-app.get('/dashboard-data', authenticateToken, authController.loadingDashboard);
-app.get('/department-data', authenticateToken, authController.departmentDashboard);
-app.get('/category-data', authenticateToken, authController.categoryDashboard);
-app.get('/sub-category-data', authenticateToken, authController.subCategoryDashboard);
-app.get('/vendor-data', authenticateToken, authController.vendorDashboard);
-app.get('/scan', authenticateToken, authController.scan);
-app.get('/stock-update', authenticateToken, authController.stockUpdate);
-app.get('/grnprn-table-data', authenticateToken, authController.grnprnTableData);
-app.get('/final-stock-update', authenticateToken, authController.finalStockUpdate);
-app.get('/final-grnprn-update', authenticateToken, authController.finalGrnPrnUpdate);
-app.get('/sync-databases', authenticateToken, authController.syncDatabases);
-app.get('/find-user-connection', authenticateToken, authController.findUserConnection);
+app.get('/api/companies', authenticateToken, authController.dashboardOptions);
+app.get('/api/vendors', authenticateToken, authController.vendorOptions);
+app.get('/api/report-data', authenticateToken, authController.reportData);
+app.get('/api/current-report-data', authenticateToken, authController.currentReportData);
+app.get('/api/dashboard-data', authenticateToken, authController.loadingDashboard);
+app.get('/api/department-data', authenticateToken, authController.departmentDashboard);
+app.get('/api/category-data', authenticateToken, authController.categoryDashboard);
+app.get('/api/sub-category-data', authenticateToken, authController.subCategoryDashboard);
+app.get('/api/vendor-data', authenticateToken, authController.vendorDashboard);
+app.get('/api/scan', authenticateToken, authController.scan);
+app.get('/api/stock-update', authenticateToken, authController.stockUpdate);
+app.get('/api/grnprn-table-data', authenticateToken, authController.grnprnTableData);
+app.get('/api/final-stock-update', authenticateToken, authController.finalStockUpdate);
+app.get('/api/final-grnprn-update', authenticateToken, authController.finalGrnPrnUpdate);
+app.get('/api/sync-databases', authenticateToken, authController.syncDatabases);
+app.get('/api/find-user-connection', authenticateToken, authController.findUserConnection);
 
 // Connect to the database once
 connectToDatabase()
