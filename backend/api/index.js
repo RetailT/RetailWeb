@@ -56,10 +56,10 @@ app.post('/api/login', authController.login);
 // app.get('/api/sync-databases', authenticateToken, authController.syncDatabases);
 // app.get('/api/find-user-connection', authenticateToken, authController.findUserConnection);
 
-// Connect to the database once
-connectToDatabase()
-  .then(() => console.log("Database connected"))
-  .catch((err) => console.error("Database connection failed", err));
+// // Connect to the database once
+// connectToDatabase()
+//   .then(() => console.log("Database connected"))
+//   .catch((err) => console.error("Database connection failed", err));
 
 //   if (require.main === module) {
 //   const PORT = process.env.PORT || 5000;
