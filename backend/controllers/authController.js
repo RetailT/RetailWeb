@@ -10,9 +10,10 @@ const { promisify } = require("util");
 const verifyToken = promisify(jwt.verify);
 const axios = require('axios');
 
-const buildSqlInClause = (arr) => {
-  return arr.map((val) => `'${val}'`).join(",");
-};
+function buildSqlInClause(array) {
+  return array.map(code => `'${code}'`).join(', ');
+}
+
 const buildSqlInClause2 = (arr) => arr.map(code => `'${code}'`).join(",");
 
 //report data, current report, company dashboard, 
@@ -405,7 +406,6 @@ async function syncDB() {
     return { responses: [], errors: [error.message] };
   }
 }
-
 
 //login
 exports.login = async (req, res) => {
@@ -1420,10 +1420,18 @@ exports.loadingDashboard = async (req, res) => {
       return res.status(400).json({ message: "Invalid or missing company codes" });
     }
 
+    // Optional: Validate company codes are alphanumeric (prevent SQL injection)
+    const isSafe = selectedOptions.every(code => /^[a-zA-Z0-9]+$/.test(code));
+    if (!isSafe) {
+      return res.status(400).json({ message: "Invalid characters in company codes" });
+    }
+
     const formattedCurrentDate = formatDate(currentDate);
     const formattedFromDate = formatDate(fromDate);
     const formattedToDate = formatDate(toDate);
     const reportType = "SALESSUM1";
+
+    console.log(formattedCurrentDate, formattedFromDate, formattedToDate, selectedOptions);
 
     // Clear previous dashboard view data
     await mssql.query`USE RT_WEB; DELETE FROM tb_SALES_DASHBOARD_VIEW WHERE REPUSER = ${username};`;
@@ -1436,9 +1444,10 @@ exports.loadingDashboard = async (req, res) => {
             @COMPANY_CODE = ${companyCode}, 
             @DATE1 = ${formattedFromDate}, 
             @DATE2 = ${formattedToDate}, 
-            @REPUSER = ${username}, 
+            @REPUSER = '${username}', 
             @REPORT_TYPE = ${reportType};
         `;
+     
       } else {
         await mssql.query`
           EXEC RT_WEB.dbo.Sp_SalesCurView 
@@ -1447,95 +1456,99 @@ exports.loadingDashboard = async (req, res) => {
             @REPUSER = ${username}, 
             @REPORT_TYPE = ${reportType};
         `;
+        
       }
     }
 
-    // Query results
-    const companyCodesList = selectedOptions.map((_, i) => `@code${i}`).join(", ");
-    const params = selectedOptions.reduce((acc, code, i) => {
-      acc[`code${i}`] = code;
-      return acc;
-    }, {});
+    // Properly formatted IN clause (quoted string literals)
+    const companyCodesList = selectedOptions.map(code => `'${code}'`).join(", ");
 
     // One row summary
-    const loadingDashboardResult = await mssql.query({
-      query: `
-        USE RT_WEB;
-        SELECT 
-          SUM(NETSALES) AS NETSALES,
-          SUM(CASHSALES) AS CASHSALES,
-          SUM(CARDSALES) AS CARDSALES,
-          SUM(CREDITSALES) AS CREDITSALES,
-          SUM(OTHER_PAYMENT) AS OTHER_PAYMENT,
-          SUM(GVOUCHER_SALE) AS GIFT_VOUCHER,
-          SUM(PAIDOUT) AS PAIDOUT,
-          SUM(CASHINHAND) AS CASHINHAND
-        FROM tb_SALES_DASHBOARD_VIEW
-        WHERE REPUSER = @username AND COMPANY_CODE IN (${companyCodesList});
-      `,
-      params: { username, ...params }
-    });
+    const loadingDashboardResult = await new mssql.Request()
+  .input('username', mssql.VarChar, username)
+  .query(`
+    USE [RT_WEB];
+    SELECT 
+      SUM(NETSALES) AS NETSALES,
+      SUM(CASHSALES) AS CASHSALES,
+      SUM(CARDSALES) AS CARDSALES,
+      SUM(CREDITSALES) AS CREDITSALES,
+      SUM(OTHER_PAYMENT) AS OTHER_PAYMENT,
+      SUM(GVOUCHER_SALE) AS GIFT_VOUCHER,
+      SUM(PAIDOUT) AS PAIDOUT,
+      SUM(CASHINHAND) AS CASHINHAND
+    FROM tb_SALES_DASHBOARD_VIEW
+    WHERE REPUSER = @username AND COMPANY_CODE IN (${companyCodesList});
+  `);
 
-    // Per company
-    const record = await mssql.query({
-      query: `
-        USE RT_WEB;
-        SELECT 
-          COMPANY_CODE,      
-          SUM(NETSALES) AS NETSALES, 
-          SUM(CASHSALES) AS CASHSALES, 
-          SUM(CARDSALES) AS CARDSALES, 
-          SUM(CREDITSALES) AS CREDITSALES, 
-          SUM(OTHER_PAYMENT) AS OTHER_PAYMENT,
-          SUM(GVOUCHER_SALE) AS GIFT_VOUCHER,
-          SUM(PAIDOUT) AS PAIDOUT,
-          SUM(CASHINHAND) AS CASHINHAND
-        FROM tb_SALES_DASHBOARD_VIEW
-        WHERE REPUSER = @username AND COMPANY_CODE IN (${companyCodesList})
-        GROUP BY COMPANY_CODE;
-      `,
-      params: { username, ...params }
-    });
+    // Per company summary
+    const record = await new mssql.Request()
+  .input('username', mssql.VarChar, username)
+  .query(`
+    USE [RT_WEB];
+    SELECT 
+      COMPANY_CODE,      
+      SUM(NETSALES) AS NETSALES, 
+      SUM(CASHSALES) AS CASHSALES, 
+      SUM(CARDSALES) AS CARDSALES, 
+      SUM(CREDITSALES) AS CREDITSALES, 
+      SUM(OTHER_PAYMENT) AS OTHER_PAYMENT,
+      SUM(GVOUCHER_SALE) AS GIFT_VOUCHER,
+      SUM(PAIDOUT) AS PAIDOUT,
+      SUM(CASHINHAND) AS CASHINHAND
+    FROM tb_SALES_DASHBOARD_VIEW
+    WHERE REPUSER = @username AND COMPANY_CODE IN (${companyCodesList})
+    GROUP BY COMPANY_CODE;
+  `);
 
-    // Per unit
-    const cashierPointRecord = await mssql.query({
-      query: `
-        USE RT_WEB;
-        SELECT 
-          COMPANY_CODE, 
-          UNITNO, 
-          SUM(NETSALES) AS NETSALES, 
-          SUM(CASHSALES) AS CASHSALES, 
-          SUM(CARDSALES) AS CARDSALES, 
-          SUM(CREDITSALES) AS CREDITSALES, 
-          SUM(OTHER_PAYMENT) AS OTHER_PAYMENT,
-          SUM(GVOUCHER_SALE) AS GIFT_VOUCHER,
-          SUM(PAIDOUT) AS PAIDOUT,
-          SUM(CASHINHAND) AS CASHINHAND
-        FROM tb_SALES_DASHBOARD_VIEW
-        WHERE REPUSER = @username AND COMPANY_CODE IN (${companyCodesList})
-        GROUP BY COMPANY_CODE, UNITNO;
-      `,
-      params: { username, ...params }
-    });
+    // Per unit summary
+    const cashierPointRecord = await new mssql.Request()
+  .input('username', mssql.VarChar, username)
+  .query(`
+    USE [RT_WEB];
+    SELECT 
+      COMPANY_CODE, 
+      UNITNO, 
+      SUM(NETSALES) AS NETSALES, 
+      SUM(CASHSALES) AS CASHSALES, 
+      SUM(CARDSALES) AS CARDSALES, 
+      SUM(CREDITSALES) AS CREDITSALES, 
+      SUM(OTHER_PAYMENT) AS OTHER_PAYMENT,
+      SUM(GVOUCHER_SALE) AS GIFT_VOUCHER,
+      SUM(PAIDOUT) AS PAIDOUT,
+      SUM(CASHINHAND) AS CASHINHAND
+    FROM tb_SALES_DASHBOARD_VIEW
+    WHERE REPUSER = @username AND COMPANY_CODE IN (${companyCodesList})
+    GROUP BY COMPANY_CODE, UNITNO;
+  `);
 
-    const formattedResult = loadingDashboardResult.recordset.map(row => ({
-      NETSALES: parseFloat(row.NETSALES).toFixed(2),
-      CASHSALES: parseFloat(row.CASHSALES).toFixed(2),
-      CARDSALES: parseFloat(row.CARDSALES).toFixed(2),
-      CREDITSALES: parseFloat(row.CREDITSALES).toFixed(2),
-      OTHER_PAYMENT: parseFloat(row.OTHER_PAYMENT).toFixed(2),
-      GIFT_VOUCHER: parseFloat(row.GIFT_VOUCHER).toFixed(2),
-      PAIDOUT: parseFloat(row.PAIDOUT).toFixed(2),
-      CASHINHAND: parseFloat(row.CASHINHAND).toFixed(2),
-    }));
 
+    // Format results
+    const formattedResult = (loadingDashboardResult && Array.isArray(loadingDashboardResult.recordset))
+      ? loadingDashboardResult.recordset.map(row => ({
+          NETSALES: parseFloat(row.NETSALES || 0).toFixed(2),
+          CASHSALES: parseFloat(row.CASHSALES || 0).toFixed(2),
+          CARDSALES: parseFloat(row.CARDSALES || 0).toFixed(2),
+          CREDITSALES: parseFloat(row.CREDITSALES || 0).toFixed(2),
+          OTHER_PAYMENT: parseFloat(row.OTHER_PAYMENT || 0).toFixed(2),
+          GIFT_VOUCHER: parseFloat(row.GIFT_VOUCHER || 0).toFixed(2),
+          PAIDOUT: parseFloat(row.PAIDOUT || 0).toFixed(2),
+          CASHINHAND: parseFloat(row.CASHINHAND || 0).toFixed(2),
+        }))
+      : [];
+
+    console.log('formattedResult:', formattedResult);
+    console.log('loadingDashboardResult:', loadingDashboardResult);
+    console.log('record:', record?.recordset);
+    console.log('cashierPointRecord:', cashierPointRecord?.recordset);
+
+    // Send response
     res.status(200).json({
       message: "Processed parameters for company codes",
       success: true,
-      result: formattedResult,
-      record: record.recordset,
-      cashierPointRecord: cashierPointRecord.recordset,
+      result: formattedResult ?? [],
+      record: record?.recordset ?? [],
+      cashierPointRecord: cashierPointRecord?.recordset ?? [],
     });
 
   } catch (error) {
@@ -1860,7 +1873,11 @@ exports.vendorDashboard = async (req, res) => {
       if (err) return res.status(403).json({ message: "Invalid or expired token" });
 
       const username = decoded.username;
-      const { currentDate, fromDate, toDate, selectedOptions } = req.query;
+      let { currentDate, fromDate, toDate, selectedOptions } = req.query;
+
+      if (typeof selectedOptions === "string") {
+  selectedOptions = selectedOptions.split(",").map((code) => code.trim());
+}
 
       if (!Array.isArray(selectedOptions) || selectedOptions.length === 0) {
         return res.status(400).json({ message: "No company codes provided" });
@@ -1873,7 +1890,7 @@ exports.vendorDashboard = async (req, res) => {
       const inClause = buildSqlInClause(selectedOptions);
 
       try {
-        await mssql.query`USE [RT_WEB]; DELETE FROM tb_SALESVIEW WHERE REPUSER = ${username}`;
+        await mssql.query`USE [RT_WEB]; DELETE FROM tb_SALESVIEW WHERE REPUSER = '${username}'`;
       } catch (error) {
         console.error("Error deleting tb_SALESVIEW records:", error);
       }
@@ -1886,14 +1903,14 @@ exports.vendorDashboard = async (req, res) => {
                 @COMPANY_CODE = ${companyCode},
                 @DATE1 = ${formattedFromDate},
                 @DATE2 = ${formattedToDate},
-                @REPUSER = ${username},
+                @REPUSER = '${username}',
                 @REPORT_TYPE = ${reportType}`;
           } else {
             await mssql.query`
               EXEC Sp_SalesCurView 
                 @COMPANY_CODE = ${companyCode},
                 @DATE = ${formattedCurrentDate},
-                @REPUSER = ${username},
+                @REPUSER = '${username}',
                 @REPORT_TYPE = ${reportType}`;
           }
         } catch (error) {
@@ -1911,22 +1928,22 @@ exports.vendorDashboard = async (req, res) => {
             SUM(QTY) AS QUANTITY,
             SUM(AMOUNT) AS AMOUNT
           FROM tb_SALESVIEW
-          WHERE REPUSER = @username AND COMPANY_CODE IN (${inClause})
-          GROUP BY COMPANY_CODE, VENDORCODE, VENDORNAME`, { username }),
+          WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause})
+          GROUP BY COMPANY_CODE, VENDORCODE, VENDORNAME`),
 
         mssql.query(`
           USE [RT_WEB];
           SELECT VENDORNAME, SUM(AMOUNT) AS AMOUNT
           FROM tb_SALESVIEW
-          WHERE REPUSER = @username AND COMPANY_CODE IN (${inClause})
-          GROUP BY VENDORNAME`, { username }),
+          WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause})
+          GROUP BY VENDORNAME`),
 
         mssql.query(`
           USE [RT_WEB];
           SELECT VENDORNAME, SUM(QTY) AS QUANTITY
           FROM tb_SALESVIEW
-          WHERE REPUSER = @username AND COMPANY_CODE IN (${inClause})
-          GROUP BY VENDORNAME`, { username }),
+          WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause})
+          GROUP BY VENDORNAME`),
       ]);
 
       return res.status(200).json({
@@ -2490,7 +2507,7 @@ exports.findUserConnection = async (req, res) => {
         encrypt: false,
         trustServerCertificate: true,
       },
-      port: 1433, // verify this port is correct for your DB server
+      port: 1443, // verify this port is correct for your DB server
     };
 
     await mssql.connect(dbConnection);

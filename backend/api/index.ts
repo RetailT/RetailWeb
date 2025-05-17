@@ -10,7 +10,7 @@ const authController = require("../controllers/authController");
 
 app.use(
   cors({
-    origin: ["https://retailtarget.lk", "https://retail-web-xo4u.vercel.app"],
+    origin: ["https://retailtarget.lk", "https://retail-web-xo4u.vercel.app", "http://localhost:3000"],
     credentials: true,
   })
 );
@@ -52,6 +52,16 @@ app.delete('/grnprn-delete', authenticateToken, authController.grnprnDelete);
 
 app.put('/reset-database-connection', authenticateToken, authController.resetDatabaseConnection);
 
-// Export as serverless function
-module.exports = app;
-module.exports.handler = serverless(app);
+// if (process.env.NODE_ENV !== "production") {
+//   app.listen(5000, () => {
+//     console.log(`Server is running on http://localhost:5000`);
+//   });
+// }
+
+// // Export as serverless function
+// module.exports = app;
+// module.exports.handler = serverless(app);
+
+const handler = serverless(app);
+export default handler;
+

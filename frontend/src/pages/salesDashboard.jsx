@@ -6,6 +6,7 @@ import MultiSelectDropdown from "../components/MultiSelectDropdown";
 import Alert from "../components/Alert";
 import { Navigate } from "react-router-dom";
 import { AuthContext } from "../AuthContext";
+import qs from "qs";
 import axios from "axios";
 import PieChart from "../components/PieChart";
 import BarChart from "../components/BarChart";
@@ -154,6 +155,7 @@ const Dashboard = () => {
       setLoading(true);
       const token = localStorage.getItem("authToken");
       try {
+        
         const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}dashboard-data`, {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -164,8 +166,18 @@ const Dashboard = () => {
             toDate: newToDate,
             selectedOptions: selectedOptions.map((option) => option.code),
           },
+          paramsSerializer: (params) => qs.stringify(params, { arrayFormat: "repeat" }),
         });
+        setLoading(false);
+        if (response.data.cashierPointRecord.length === 0 && response.data.record.length === 0 && response.data.result.length === 0) {
+          setAlert({
+            message: "No data available",
+            type: "error",
+          });
+          setTimeout(() => setAlert(null), 3000);
 
+        }
+console.log("Response from API:", response.data.cashierPointRecord.length);
         const rearrangedLabels = [
           "Company Code",
           // "Sales Date",
@@ -208,11 +220,6 @@ const Dashboard = () => {
               salesData.push(result.COMPANY_CODE);
               labels.push("Company Code");
               break;
-            // case "Sales Date":
-            //   const formattedSalesDate = formatDate(result.SALESDATE);
-            //   salesData.push(formattedSalesDate);
-            //   labels.push("Sales Date");
-            //   break;
             case "Net Sales":
               salesData.push(parseFloat(result.NETSALES));
               labels.push("Net Sales");
@@ -273,10 +280,6 @@ const Dashboard = () => {
                 } else {
                     key = label.replace(" ", "").toUpperCase(); //the error comes because of this
                   }
-
-                  // if (label === "Sales Date") {
-                  //   return formatDate(rec[key]);
-                  // }
 
                   return rec[key] ?? "--"; // Handle missing data gracefully
                 })
