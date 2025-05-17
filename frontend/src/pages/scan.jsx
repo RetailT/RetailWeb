@@ -995,15 +995,15 @@ function App() {
                       <div
                         className="scan border border-gray-400 rounded-lg bg-gray-200 flex justify-center items-center"
                         style={{
-                          width: "320px", // Default size
-                          height: "320px",
+                          width: "240px",
+                          height: "240px",
                           maxWidth: "100vw",
                         }}
                       >
                         {scannerEnabled ? (
                           <BarcodeScannerComponent
-                            width={320}
-                            height={320}
+                            width={240}
+                            height={240}
                             className="w-full h-full object-cover"
                             onUpdate={handleScan}
                             delay={1000}
@@ -1013,7 +1013,7 @@ function App() {
                             }}
                           />
                         ) : (
-                          <CameraOff size={80} className="text-gray-600" /> // Icon stays centered inside fixed box
+                          <CameraOff size={60} className="text-gray-600" /> // Icon stays centered inside fixed box
                         )}
                       </div>
                       <button
