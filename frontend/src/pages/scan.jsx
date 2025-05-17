@@ -983,7 +983,7 @@ function App() {
                     </form>
                   </div>
                   {codeError && (
-                    <p className="text-red-500 text-sm mt-1 mb-4">
+                    <p className="text-red-500 text-sm mt-1 mb-10">
                       {codeError}
                     </p>
                   )}
@@ -993,7 +993,7 @@ function App() {
                   {hasCameraPermission ? (
                     <div className="text-center">
                       <div
-                        className="scan border border-gray-400 rounded-lg bg-gray-200 flex justify-center items-center"
+                        className="scan border border-gray-400 rounded-lg bg-gray-200 flex justify-center items-center mt-10"
                         style={{
                           width: "240px",
                           height: "240px",
@@ -1017,7 +1017,7 @@ function App() {
                         )}
                       </div>
                       <button
-                        className="bg-[#f17e21] hover:bg-[#efa05f] text-white px-4 py-2 rounded mt-6"
+                        className="bg-[#f17e21] hover:bg-[#efa05f] text-white px-4 py-2 rounded mt-16"
                         onClick={() => setScannerEnabled(!scannerEnabled)}
                       >
                         {scannerEnabled ? "Disable Scanner" : "Enable Scanner"}
