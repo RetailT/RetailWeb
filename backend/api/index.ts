@@ -58,10 +58,10 @@ app.put('/reset-database-connection', authenticateToken, authController.resetDat
 //   });
 // }
 
-// // Export as serverless function
-// module.exports = app;
-// module.exports.handler = serverless(app);
+// Export as serverless function
+module.exports = app;
+module.exports.handler = serverless(app);
 
-const handler = serverless(app);
-export default handler;
+// const handler = serverless(app);
+// export default handler;
 
