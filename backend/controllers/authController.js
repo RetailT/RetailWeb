@@ -486,7 +486,7 @@ exports.login = async (req, res) => {
         encrypt: false,
         trustServerCertificate: true,
       },
-      port: parseInt(port),
+      port: parseInt(port.trim()),
       connectionTimeout: 5000,  // << timeout in ms
       requestTimeout: 5000
     };
