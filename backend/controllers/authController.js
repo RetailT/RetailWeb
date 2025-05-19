@@ -14,6 +14,18 @@ function buildSqlInClause(array) {
   return array.map(code => `'${code}'`).join(', ');
 }
 
+const dbConfig = {
+  user: process.env.DB_USER, // Database username
+  password: process.env.DB_PASSWORD, // Database password
+  server: process.env.DB_SERVER, // Database server address
+  database: process.env.DB_DATABASE1, // Database name
+  options: {
+    encrypt: false, // Disable encryption
+    trustServerCertificate: true, // Trust server certificate (useful for local databases)
+  },
+  port: 1443, // Default MSSQL port (1433)
+};
+
 const buildSqlInClause2 = (arr) => arr.map(code => `'${code}'`).join(",");
 
 //report data, current report, company dashboard, 
@@ -2501,45 +2513,36 @@ exports.syncDatabases = async (req, res) => {
   try {
     const responses = await syncDB();
 
-    if (responses.errors && responses.errors.length > 0) {
-      // Send the collected errors to the frontend
-      return res.status(400).json({
-        success: false,
-        message: "Issues detected during sync.",
-        errors: responses.errors,
-      });
-    }
-
     if (
       Array.isArray(responses.responses) &&
       responses.responses[0]?.returnStatus === "Success"
     ) {
-      console.log("Database sync completed successfully.");
       const updateTableResult = await updateTables();
-
       return res.status(200).json({
         success: true,
         message: "Database sync completed successfully.",
         syncDetails: responses.responses,
         updateDetails: updateTableResult,
+        errors: responses.errors || [],
       });
     } else {
-      console.error("Database sync had some issues.");
-      return res.status(500).json({
+      return res.status(207).json({
         success: false,
-        message: "Database sync encountered an error.",
-        errors: responses.responses,
+        message: "Partial or full sync failure.",
+        syncDetails: responses.responses,
+        errors: responses.errors,
       });
     }
   } catch (error) {
-    console.error("Database sync failed:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to start database sync.",
+      syncDetails: [],
       errors: [error.message],
     });
   }
 };
+
 
 // Get user connection details
 exports.findUserConnection = async (req, res) => {
