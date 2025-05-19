@@ -1221,7 +1221,13 @@ exports.reportData = async (req, res) => {
     const decoded = await verifyToken(token, process.env.JWT_SECRET);
     const username = decoded.username;
 
-    const { fromDate, toDate, invoiceNo, selectedOptions } = req.query;
+    // Normalize selectedOptions from query string
+    let selectedOptions = req.query.selectedOptions || req.query["selectedOptions[]"];
+    if (typeof selectedOptions === "string") {
+      selectedOptions = [selectedOptions];
+    }
+
+    const { fromDate, toDate, invoiceNo } = req.query;
 
     if (!fromDate || !toDate || !Array.isArray(selectedOptions) || selectedOptions.length === 0) {
       return res.status(400).json({ message: "Missing required parameters" });
@@ -1231,7 +1237,7 @@ exports.reportData = async (req, res) => {
     const formattedToDate = formatDate(toDate);
     const reportType = "INVOICEWISE";
 
-    // Clean start: delete previous report for user
+    // Clean previous data
     await mssql.query`
       USE RT_WEB;
       DELETE FROM tb_SALESVIEW WHERE REPUSER = ${username};
@@ -1249,7 +1255,7 @@ exports.reportData = async (req, res) => {
       `;
     }
 
-    // Main report data
+    // Main report query
     const reportQuery = await mssql.query`
       USE RT_WEB;
       SELECT 
@@ -1261,7 +1267,7 @@ exports.reportData = async (req, res) => {
         SALESDATE
       FROM tb_SALESVIEW 
       WHERE (ID='PT' OR ID='BL') 
-        AND (PRODUCT_NAME = 'CASH' OR PRODUCT_NAME = 'BALANCE') 
+        AND PRODUCT_NAME IN ('CASH', 'BALANCE') 
         AND REPUSER = ${username}
       GROUP BY COMPANY_CODE, SALESDATE, UNITNO, REPNO, INVOICENO
 
@@ -1271,12 +1277,13 @@ exports.reportData = async (req, res) => {
         INVOICENO, COMPANY_CODE, UNITNO, REPNO, PRODUCT_NAME, 
         ISNULL(SUM(AMOUNT), 0) AS AMOUNT, SALESDATE
       FROM tb_SALESVIEW 
-      WHERE ID='PT' AND PRODUCT_NAME NOT IN ('CASH', 'BALANCE') 
+      WHERE ID='PT' 
+        AND PRODUCT_NAME NOT IN ('CASH', 'BALANCE') 
         AND REPUSER = ${username}
       GROUP BY COMPANY_CODE, SALESDATE, UNITNO, REPNO, INVOICENO, PRODUCT_NAME;
     `;
 
-    // Invoice detail data if requested
+    // Invoice detail query if needed
     let invoiceData = [];
     if (invoiceNo) {
       const result = await mssql.query`
@@ -1319,7 +1326,13 @@ exports.currentReportData = async (req, res) => {
     const decoded = await verifyToken(token, process.env.JWT_SECRET);
     const username = decoded.username;
 
-    const { companyCodes, currentDate, invoiceNo } = req.query;
+    // Handle companyCodes parsing (from ?companyCodes=01&companyCodes=02 or ?companyCodes[]=01&companyCodes[]=02)
+    let companyCodes = req.query.companyCodes || req.query["companyCodes[]"];
+    if (typeof companyCodes === "string") {
+      companyCodes = [companyCodes];
+    }
+
+    const { currentDate, invoiceNo } = req.query;
 
     if (!Array.isArray(companyCodes) || companyCodes.length === 0 || !currentDate) {
       return res.status(400).json({ message: "Missing or invalid parameters" });
@@ -1400,6 +1413,7 @@ exports.currentReportData = async (req, res) => {
     res.status(500).json({ message: "Failed to retrieve current report data" });
   }
 };
+
 
 //company dashboard
 exports.loadingDashboard = async (req, res) => {
@@ -1576,7 +1590,11 @@ exports.departmentDashboard = async (req, res) => {
       }
 
       const username = decoded.username;
-      const { currentDate, fromDate, toDate, selectedOptions } = req.query;
+      let { currentDate, fromDate, toDate, selectedOptions } = req.query;
+
+      if (typeof selectedOptions === "string") {
+        selectedOptions = selectedOptions.split(",").map((code) => code.trim());
+      }
 
       if (!Array.isArray(selectedOptions) || selectedOptions.length === 0) {
         return res.status(400).json({ message: "No company codes provided" });
@@ -1587,6 +1605,23 @@ exports.departmentDashboard = async (req, res) => {
       const formattedToDate = formatDate(toDate);
       const reportType = "SALESDET";
 
+      // Helper function: retry mechanism
+      const executeWithRetry = async (queryFunc, retries = 3) => {
+        for (let i = 0; i < retries; i++) {
+          try {
+            return await queryFunc();
+          } catch (err) {
+            if (err.originalError?.number === 1205 && i < retries - 1) {
+              console.warn(`Deadlock occurred. Retrying attempt ${i + 1}...`);
+              await new Promise(resolve => setTimeout(resolve, 1000));
+            } else {
+              throw err;
+            }
+          }
+        }
+      };
+
+      // Step 1: Clear previous user records
       try {
         await mssql.query`
           USE [RT_WEB];
@@ -1595,68 +1630,71 @@ exports.departmentDashboard = async (req, res) => {
         console.error("Error deleting previous records:", deleteErr);
       }
 
-      // Call SPs based on date range
-      for (let i = 0; i < selectedOptions.length; i++) {
-        const companyCode = String(selectedOptions[i]);
-
+      // Step 2: Run stored procedures for each company
+      for (const companyCode of selectedOptions) {
         try {
-          if (fromDate && toDate) {
-            await mssql.query`
-              EXEC Sp_SalesView @COMPANY_CODE = ${companyCode}, 
-                                @DATE1 = ${formattedFromDate}, 
-                                @DATE2 = ${formattedToDate}, 
-                                @REPUSER = ${username}, 
-                                @REPORT_TYPE = ${reportType}`;
-          } else {
-            await mssql.query`
-              EXEC Sp_SalesCurView @COMPANY_CODE = ${companyCode}, 
-                                   @DATE = ${formattedCurrentDate}, 
-                                   @REPUSER = ${username}, 
-                                   @REPORT_TYPE = ${reportType}`;
-          }
+          const queryFn = fromDate && toDate
+            ? () => mssql.query`
+                EXEC Sp_SalesView @COMPANY_CODE = ${companyCode}, 
+                                  @DATE1 = ${formattedFromDate}, 
+                                  @DATE2 = ${formattedToDate}, 
+                                  @REPUSER = ${username}, 
+                                  @REPORT_TYPE = ${reportType}`
+            : () => mssql.query`
+                EXEC Sp_SalesCurView @COMPANY_CODE = ${companyCode}, 
+                                     @DATE = ${formattedCurrentDate}, 
+                                     @REPUSER = ${username}, 
+                                     @REPORT_TYPE = ${reportType}`;
+
+          await executeWithRetry(queryFn);
         } catch (spErr) {
           console.error(`Error executing stored procedure for ${companyCode}:`, spErr);
         }
       }
 
-      const inClause = buildSqlInClause(selectedOptions);
+      // Step 3: Fetch department data
+      const inClause = selectedOptions.map(code => `'${code}'`).join(","); // safe, string literals
 
-      // Fetch department sales data
-      const [tableRecords, amountBarChart, quantityBarChart] = await Promise.all([
-        mssql.query(`
-          USE [RT_WEB];
-          SELECT   
-            LTRIM(RTRIM(COMPANY_CODE)) AS COMPANY_CODE,
-            LTRIM(RTRIM(DEPTCODE)) AS DEPARTMENT_CODE,
-            DEPTNAME AS DEPARTMENT_NAME,
-            SUM(QTY) AS QUANTITY,
-            SUM(AMOUNT) AS AMOUNT
-          FROM tb_SALESVIEW
-          WHERE REPUSER = @username AND COMPANY_CODE IN (${inClause})
-          GROUP BY COMPANY_CODE, DEPTCODE, DEPTNAME`, { username }),
+      try {
+        const [tableRecords, amountBarChart, quantityBarChart] = await Promise.all([
+          mssql.query(`
+            USE [RT_WEB];
+            SELECT   
+              LTRIM(RTRIM(COMPANY_CODE)) AS COMPANY_CODE,
+              LTRIM(RTRIM(DEPTCODE)) AS DEPARTMENT_CODE,
+              DEPTNAME AS DEPARTMENT_NAME,
+              SUM(QTY) AS QUANTITY,
+              SUM(AMOUNT) AS AMOUNT
+            FROM tb_SALESVIEW
+            WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause})
+            GROUP BY COMPANY_CODE, DEPTCODE, DEPTNAME`),
 
-        mssql.query(`
-          USE [RT_WEB];
-          SELECT DEPTNAME, SUM(AMOUNT) AS AMOUNT
-          FROM tb_SALESVIEW
-          WHERE REPUSER = @username AND COMPANY_CODE IN (${inClause})
-          GROUP BY DEPTNAME`, { username }),
+          mssql.query(`
+            USE [RT_WEB];
+            SELECT DEPTNAME, SUM(AMOUNT) AS AMOUNT
+            FROM tb_SALESVIEW
+            WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause})
+            GROUP BY DEPTNAME`),
 
-        mssql.query(`
-          USE [RT_WEB];
-          SELECT DEPTNAME, SUM(QTY) AS QUANTITY
-          FROM tb_SALESVIEW
-          WHERE REPUSER = @username AND COMPANY_CODE IN (${inClause})
-          GROUP BY DEPTNAME`, { username }),
-      ]);
+          mssql.query(`
+            USE [RT_WEB];
+            SELECT DEPTNAME, SUM(QTY) AS QUANTITY
+            FROM tb_SALESVIEW
+            WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause})
+            GROUP BY DEPTNAME`)
+        ]);
 
-      return res.status(200).json({
-        message: "Processed parameters for company codes",
-        success: true,
-        tableRecords: tableRecords.recordset || [],
-        amountBarChart: amountBarChart.recordset || [],
-        quantityBarChart: quantityBarChart.recordset || [],
-      });
+        return res.status(200).json({
+          message: "Processed parameters for company codes",
+          success: true,
+          tableRecords: tableRecords.recordset || [],
+          amountBarChart: amountBarChart.recordset || [],
+          quantityBarChart: quantityBarChart.recordset || [],
+        });
+      } catch (fetchErr) {
+        console.error("Error fetching department data:", fetchErr);
+        return res.status(500).json({ message: "Failed to fetch department data" });
+      }
     });
   } catch (error) {
     console.error("Unhandled error in departmentDashboard:", error);
@@ -1677,7 +1715,12 @@ exports.categoryDashboard = async (req, res) => {
       if (err) return res.status(403).json({ message: "Invalid or expired token" });
 
       const username = decoded.username;
-      const { currentDate, fromDate, toDate, selectedOptions } = req.query;
+      let { currentDate, fromDate, toDate, selectedOptions } = req.query;
+
+      // Ensure selectedOptions is always an array
+      if (typeof selectedOptions === "string") {
+        selectedOptions = selectedOptions.split(",").map(code => code.trim());
+      }
 
       if (!Array.isArray(selectedOptions) || selectedOptions.length === 0) {
         return res.status(400).json({ message: "No company codes provided" });
@@ -1688,13 +1731,14 @@ exports.categoryDashboard = async (req, res) => {
       const formattedToDate = formatDate(toDate);
       const reportType = "SALESDET";
 
+      // Clear previous report data
       try {
         await mssql.query`USE [RT_WEB]; DELETE FROM tb_SALESVIEW WHERE REPUSER = ${username}`;
       } catch (err) {
         console.error("Error clearing tb_SALESVIEW:", err);
       }
 
-      // Run stored procedures
+      // Run stored procedures for each company code
       for (const companyCode of selectedOptions) {
         try {
           if (fromDate && toDate) {
@@ -1718,7 +1762,8 @@ exports.categoryDashboard = async (req, res) => {
         }
       }
 
-      const inClause = buildSqlInClause(selectedOptions);
+      // Safely construct SQL IN clause
+      const inClause = selectedOptions.map(code => `'${code}'`).join(", ");
 
       // Run summary queries
       const [categoryTableRecords, categoryAmountBarChart, categoryQuantityBarChart] = await Promise.all([
@@ -1731,22 +1776,22 @@ exports.categoryDashboard = async (req, res) => {
             SUM(QTY) AS QUANTITY,
             SUM(AMOUNT) AS AMOUNT
           FROM tb_SALESVIEW
-          WHERE REPUSER = @username AND COMPANY_CODE IN (${inClause})
-          GROUP BY COMPANY_CODE, CATCODE, CATNAME`, { username }),
+          WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause})
+          GROUP BY COMPANY_CODE, CATCODE, CATNAME`),
 
         mssql.query(`
           USE [RT_WEB];
           SELECT CATNAME, SUM(AMOUNT) AS AMOUNT
           FROM tb_SALESVIEW
-          WHERE REPUSER = @username AND COMPANY_CODE IN (${inClause})
-          GROUP BY CATNAME`, { username }),
+          WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause})
+          GROUP BY CATNAME`),
 
         mssql.query(`
           USE [RT_WEB];
           SELECT CATNAME, SUM(QTY) AS QUANTITY
           FROM tb_SALESVIEW
-          WHERE REPUSER = @username AND COMPANY_CODE IN (${inClause})
-          GROUP BY CATNAME`, { username }),
+          WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause})
+          GROUP BY CATNAME`),
       ]);
 
       return res.status(200).json({
@@ -1776,7 +1821,12 @@ exports.subCategoryDashboard = async (req, res) => {
       if (err) return res.status(403).json({ message: "Invalid or expired token" });
 
       const username = decoded.username;
-      const { currentDate, fromDate, toDate, selectedOptions } = req.query;
+      let { currentDate, fromDate, toDate, selectedOptions } = req.query;
+
+      // Ensure selectedOptions is parsed to an array
+      if (typeof selectedOptions === "string") {
+        selectedOptions = selectedOptions.split(",").map(code => code.trim());
+      }
 
       if (!Array.isArray(selectedOptions) || selectedOptions.length === 0) {
         return res.status(400).json({ message: "No company codes provided" });
@@ -1787,12 +1837,14 @@ exports.subCategoryDashboard = async (req, res) => {
       const formattedToDate = formatDate(toDate);
       const reportType = "SALESDET";
 
+      // Clear previous data
       try {
         await mssql.query`USE [RT_WEB]; DELETE FROM tb_SALESVIEW WHERE REPUSER = ${username}`;
       } catch (error) {
         console.error("Error clearing tb_SALESVIEW:", error);
       }
 
+      // Execute SP for each company code
       for (const companyCode of selectedOptions) {
         try {
           if (fromDate && toDate) {
@@ -1816,8 +1868,10 @@ exports.subCategoryDashboard = async (req, res) => {
         }
       }
 
-      const inClause = buildSqlInClause2(selectedOptions);
+      // Safely construct IN clause
+      const inClause = selectedOptions.map(code => `'${code}'`).join(", ");
 
+      // Perform summary queries
       const [subCategoryTableRecords, subCategoryAmountBarChart, subCategoryQuantityBarChart] = await Promise.all([
         mssql.query(`
           USE [RT_WEB];
@@ -1828,22 +1882,22 @@ exports.subCategoryDashboard = async (req, res) => {
             SUM(QTY) AS QUANTITY,
             SUM(AMOUNT) AS AMOUNT
           FROM tb_SALESVIEW
-          WHERE REPUSER = @username AND COMPANY_CODE IN (${inClause})
-          GROUP BY COMPANY_CODE, SCATCODE, SCATNAME`, { username }),
+          WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause})
+          GROUP BY COMPANY_CODE, SCATCODE, SCATNAME`),
 
         mssql.query(`
           USE [RT_WEB];
           SELECT SCATNAME, SUM(AMOUNT) AS AMOUNT
           FROM tb_SALESVIEW
-          WHERE REPUSER = @username AND COMPANY_CODE IN (${inClause})
-          GROUP BY SCATNAME`, { username }),
+          WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause})
+          GROUP BY SCATNAME`),
 
         mssql.query(`
           USE [RT_WEB];
           SELECT SCATNAME, SUM(QTY) AS QUANTITY
           FROM tb_SALESVIEW
-          WHERE REPUSER = @username AND COMPANY_CODE IN (${inClause})
-          GROUP BY SCATNAME`, { username }),
+          WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause})
+          GROUP BY SCATNAME`)
       ]);
 
       return res.status(200).json({
