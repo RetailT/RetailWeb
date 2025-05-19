@@ -75,7 +75,7 @@ function App() {
           code: selectedCompany,
         },
       });
-      console.log(response.data.stockData);
+      
       const stockData = response.data.stockData;
       
 

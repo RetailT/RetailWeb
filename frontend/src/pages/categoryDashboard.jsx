@@ -113,7 +113,8 @@ const Dashboard = () => {
             currentDate: formattedDate,
             fromDate: newFromDate,
             toDate: newToDate,
-            selectedOptions: selectedOptions.map((option) => option.code),
+            selectedOptions: selectedOptions.map((option) => option.code).join(","),
+
           },
         });
 

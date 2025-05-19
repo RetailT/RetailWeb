@@ -89,9 +89,8 @@ const Report = () => {
           Authorization: `Bearer ${token}`,
         },
         params: {
-          companyCodes: companyCodes, // this will send as ?companyCodes[]=...&companyCodes[]=...
-          currentDate: currentDate,
-          invoiceNo,
+          companyCodes, 
+          currentDate,
           invoiceNo,
         },
       });
@@ -182,12 +181,12 @@ const Report = () => {
         headers: {
           Authorization: `Bearer ${token}`,
         },
-        params: {
-          fromDate: selectedDates.fromDate,
-          toDate: selectedDates.toDate,
-          invoiceNo: invoiceNo,
-          selectedOptions: selectedOptions.map((option) => option.code),
-        },
+         params: {
+        fromDate: selectedDates.fromDate,
+        toDate: selectedDates.toDate,
+        invoiceNo: invoiceNo,
+        selectedOptions: selectedOptions.map((option) => option.code),
+      },
       });
 
       if (response.data.message === "Invoice data found") {
