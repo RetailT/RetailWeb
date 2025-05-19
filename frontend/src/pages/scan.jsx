@@ -202,29 +202,34 @@ function App() {
     }
   };
 
-  const handleScan = (err, result) => {
+const handleScan = (err, result) => {
   if (err) {
-    console.warn("Scanner Error:", err.name, err.message || err);
-
-    if (err.name === "NotFoundException") {
-      return;
+    // Only show actual issues, ignore scanning misses
+    if (
+      err.message?.includes("No MultiFormat Readers") ||
+      err.name === "NotFoundException"
+    ) {
+      return; // Expected: no readable code in the current frame
     }
 
+    console.warn("Scanner Error:", err);
     toast.error("Scanner encountered an issue.");
     return;
   }
 
   if (result) {
     const beep = new Audio("https://www.myinstants.com/media/sounds/beep.mp3");
-    beep.play().catch((error) => console.error("Beep sound error:", error));
+    beep.play().catch((error) =>
+      console.error("Beep sound error:", error)
+    );
 
     setCurrentData(result.text);
     setCode("");
-
     toast.success(`Product scanned: ${result.text}`);
     requestData(result.text);
   }
 };
+
 
 
   const handleCompanyChange = (event) => {
