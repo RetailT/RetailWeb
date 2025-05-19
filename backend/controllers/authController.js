@@ -14,7 +14,7 @@ function buildSqlInClause(array) {
   return array.map(code => `'${code}'`).join(', ');
 }
 
-const dbConfig = {
+const dbConfig1 = {
   user: process.env.DB_USER, // Database username
   password: process.env.DB_PASSWORD, // Database password
   server: process.env.DB_SERVER, // Database server address
@@ -258,7 +258,7 @@ async function updateTables() {
 async function syncDB() {
   try {
     await mssql.close();
-    await mssql.connect(dbConfig);
+    await mssql.connect(dbConfig1);
 
     const dbConnectionData = await syncDBConnection();
 
