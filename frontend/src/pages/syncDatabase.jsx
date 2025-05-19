@@ -30,57 +30,52 @@ const Reset = () => {
   }
 
   const handleDataSubmit = async (e) => {
-    setIsDisable(true);
-    const token = localStorage.getItem("authToken");
-    try {
-        const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}sync-databases`, {
-            headers: {
-                Authorization: `Bearer ${token}`,
-            },
-        });
+  setIsDisable(true);
+  const token = localStorage.getItem("authToken");
 
-        if (response.data.message === "Database sync completed successfully.") {
-            // console.log("Sync completed successfully.");
-            setAlert({
-                message: "Database sync completed successfully",
-                type: "success",
-              });
-              setTimeout(() => setAlert(null), 3000);
-            setIsDisable(false);  
-        } else {
-            // console.log("Sync is still in progress.");
-            setAlert({
-                message: "Error syncing databases",
-                type: "error",
-              });
-              setTimeout(() => setAlert(null), 3000);
-        }
-    } catch (err) {
-      if(err.response.data.error === "payments is not iterable"){
-        setAlert({
-          message: "No payment details available for now",
-          type: "error",
-        });
-        setTimeout(() => setAlert(null), 3000);
-      }
-      else if(err.response.data.error[0] === "Cannot fetch user items details"){
-        setAlert({
-          message: "No items available for now",
-          type: "error",
-        });
-        setTimeout(() => setAlert(null), 3000);
-      }
-      else{
-        setAlert({
-          message: "Error syncing databases",
-          type: "error",
-        });
-        setTimeout(() => setAlert(null), 3000);
-      }
-      
+  try {
+    const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}sync-databases`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (response.data?.message === "Database sync completed successfully.") {
+      setAlert({
+        message: "Database sync completed successfully",
+        type: "success",
+      });
+    } else {
+      setAlert({
+        message: "Error syncing databases",
+        type: "error",
+      });
+    }
+  } catch (err) {
+    const apiError = err.response?.data;
+
+    if (typeof apiError?.error === "string" && apiError.error.includes("payments is not iterable")) {
+      setAlert({
+        message: "No payment details available for now",
+        type: "error",
+      });
+    } else if (Array.isArray(apiError?.errors) && apiError.errors.includes("Cannot fetch user items details")) {
+      setAlert({
+        message: "No items available for now",
+        type: "error",
+      });
+    } else {
+      setAlert({
+        message: apiError?.message || "Error syncing databases",
+        type: "error",
+      });
+    }
+  } finally {
+    setTimeout(() => setAlert(null), 3000);
+    setIsDisable(false);
   }
-  setIsDisable(false);
-  }
+};
+
  
   
   return (
