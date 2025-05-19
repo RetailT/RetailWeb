@@ -130,17 +130,23 @@ function App() {
   };
 
   const getCameraStream = async () => {
-    try {
-      await navigator.mediaDevices.getUserMedia({
-        video: { width: 1280, height: 720, facingMode: "environment" },
-      });
-      setHasCameraPermission(true);
-    } catch (error) {
-      console.error("Camera Error:", error);
-      setCameraError("Camera access denied or not available.");
-      setHasCameraPermission(false);
-    }
-  };
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        facingMode: { ideal: "environment" }, // Use ideal instead of forcing it
+      },
+    });
+    console.log("Camera stream obtained", stream);
+    setHasCameraPermission(true);
+  } catch (error) {
+    console.error("Camera Error:", error);
+    setCameraError("Camera access denied or not available.");
+    setHasCameraPermission(false);
+  }
+};
+
 
   useEffect(() => {
     if (!token) {
@@ -197,29 +203,29 @@ function App() {
   };
 
   const handleScan = (err, result) => {
-    if (err) {
-      if (err.name === "NotFoundException") {
-        return; // Ignore NotFoundException to prevent screen blocking
-      }
-      console.warn("Scan Error:", err);
-      toast.error("Scanner encountered an issue.");
+  if (err) {
+    console.warn("Scanner Error:", err.name, err.message || err);
+
+    if (err.name === "NotFoundException") {
+      return;
     }
 
-    if (result) {
-      // Play beep sound on a successful scan
-      const beep = new Audio(
-        "https://www.myinstants.com/media/sounds/beep.mp3"
-      );
-      beep.play().catch((error) => console.error("Beep sound error:", error));
+    toast.error("Scanner encountered an issue.");
+    return;
+  }
 
-      setCurrentData(result.text);
-      setCode("");
-      
-      toast.success(`Product scanned: ${result.text}`);
+  if (result) {
+    const beep = new Audio("https://www.myinstants.com/media/sounds/beep.mp3");
+    beep.play().catch((error) => console.error("Beep sound error:", error));
 
-      requestData(result.text);
-    }
-  };
+    setCurrentData(result.text);
+    setCode("");
+
+    toast.success(`Product scanned: ${result.text}`);
+    requestData(result.text);
+  }
+};
+
 
   const handleCompanyChange = (event) => {
     const selectedCode = event.target.value;
