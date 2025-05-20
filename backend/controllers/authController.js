@@ -1006,7 +1006,7 @@ exports.resetDatabaseConnection = async (req, res) => {
     removeStock = [],
     removeDashboard = [],
   } = req.body;
-
+console.log('req',admin)
   const trimmedName = name?.trim();
   const trimmedIP = ip?.trim();
   const trimmedPort = port?.trim();
@@ -1076,53 +1076,68 @@ exports.resetDatabaseConnection = async (req, res) => {
     }
 
     // Utility function to update permissions
-    const updatePermissions = async (columns, value) => {
-      for (const column of columns) {
-        if (!/^[a-zA-Z0-9_]+$/.test(column)) {
-          return res.status(400).json({ message: `Invalid column name: ${column}` });
-        }
+    const updatePermissions = async (permissionArray) => {
+  if (!Array.isArray(permissionArray)) return;
 
-        const query = `
-          USE [RTPOS_MAIN];
-          UPDATE tb_USERS SET ${column} = @value, registered_by = @registeredBy
-          WHERE username = @username;
-        `;
+  for (const permissionObject of permissionArray) {
+    for (const column in permissionObject) {
+      const columnValue = permissionObject[column] ? "T" : "F";
 
-        const req2 = new mssql.Request();
-        req2.input("value", value);
-        req2.input("registeredBy", username);
-        req2.input("username", trimmedName);
-
-        const result = await req2.query(query);
-        if (result.rowsAffected[0] === 0) {
-          return res.status(404).json({ message: `Failed to update permission for ${column}` });
-        }
+      if (!/^[a-zA-Z0-9_]+$/.test(column)) {
+        return res.status(400).json({ message: `Invalid column name: ${column}` });
       }
-    };
 
-    // Apply T (grant) / F (revoke) permissions
-    await updatePermissions(admin, "T");
-    await updatePermissions(dashboard, "T");
-    await updatePermissions(stock, "T");
-    await updatePermissions(removeAdmin, "F");
-    await updatePermissions(removeDashboard, "F");
-    await updatePermissions(removeStock, "F");
+      const query = `
+        USE [RTPOS_MAIN];
+        UPDATE tb_USERS 
+        SET ${column} = @value, registered_by = @registeredBy
+        WHERE username = @username;
+      `;
+
+      const req2 = new mssql.Request();
+      req2.input("value", columnValue);
+      req2.input("registeredBy", username);
+      req2.input("username", trimmedName);
+
+      const result = await req2.query(query);
+      if (result.rowsAffected[0] === 0) {
+        return res.status(404).json({ message: `Failed to update permission for ${column}` });
+      }
+    }
+  }
+};
+
+    await updatePermissions(admin);
+    await updatePermissions(dashboard);
+    await updatePermissions(stock);
 
     // Check if nothing was sent
-    const nothingToUpdate =
-      !ip &&
-      !port &&
-      !customerID &&
-      admin.length === 0 &&
-      dashboard.length === 0 &&
-      stock.length === 0 &&
-      removeAdmin.length === 0 &&
-      removeDashboard.length === 0 &&
-      removeStock.length === 0;
+    const isEmptyOrAllFalse = (arr) => {
+  return (
+    !Array.isArray(arr) ||
+    arr.length === 0 ||
+    arr.every(obj => 
+      typeof obj === 'object' &&
+      Object.values(obj).every(value => value === false)
+    )
+  );
+};
 
-    if (nothingToUpdate) {
-      return res.status(400).json({ message: "Please provide details to update." });
-    }
+const nothingToUpdate =
+  !ip &&
+  !port &&
+  !customerID &&
+  isEmptyOrAllFalse(admin) &&
+  isEmptyOrAllFalse(dashboard) &&
+  isEmptyOrAllFalse(stock) &&
+  isEmptyOrAllFalse(removeAdmin) &&
+  isEmptyOrAllFalse(removeDashboard) &&
+  isEmptyOrAllFalse(removeStock);
+
+if (nothingToUpdate) {
+  return res.status(400).json({ message: "Please provide details to update." });
+}
+
 
     return res.status(200).json({ message: "Database connection updated successfully" });
   } catch (err) {
@@ -2546,7 +2561,8 @@ exports.syncDatabases = async (req, res) => {
 
 // Get user connection details
 exports.findUserConnection = async (req, res) => {
-  const name = req.query.nameNew;
+
+  const name = req.query.name;
 
   if (!name || typeof name !== "string") {
     return res.status(400).json({ message: "Invalid or missing username parameter" });
@@ -2572,7 +2588,7 @@ exports.findUserConnection = async (req, res) => {
     const userPermissionResult = await mssql.query`
       USE [RTPOS_MAIN];
       SELECT [a_permission], [a_sync], [d_company], [d_department], [d_category], [d_scategory], 
-             [d_vendor], [d_invoice], [t_scan], [t_stock], [t_grn], [t_prn], [t_sales],[t_stock_update]
+             [d_vendor], [d_invoice], [t_scan], [t_stock], [t_grn], [t_prn], [t_tog],[t_stock_update]
       FROM tb_USERS
       WHERE username = ${name};
     `;
