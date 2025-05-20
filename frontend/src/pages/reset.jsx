@@ -16,57 +16,33 @@ import { FadeLoader } from "react-spinners";
 const Reset = () => {
   const { authToken } = useContext(AuthContext);
   const [name, setName] = useState("");
-  const [nameNew, setNameNew] = useState("");
   const [ip, setIp] = useState("");
   const [port, setPort] = useState("");
   const [customerID, setCustomerID] = useState("");
   const [nameError, setNameError] = useState("");
-  const [nameErrorNew, setNameErrorNew] = useState("");
   const [disable, setDisable] = useState(false);
   const [disableNew, setDisableNew] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [selectedAdmin, setSelectedAdmin] = useState([]);
-  const [selectedDashboard, setSelectedDashboard] = useState([]);
-  const [selectedStock, setSelectedStock] = useState([]);
-  const [removeAdmin, setRemoveAdmin] = useState([]);
-  const [removeDashboard, setRemoveDashboard] = useState([]);
-  const [removeStock, setRemoveStock] = useState([]);
   const [alert, setAlert] = useState(null);
-  const [data, setData] = useState([]);
+  const [permissionSetting, setPermissionSetting] = useState(false);
+  const [databaseSync, setDatabaseSync] = useState(false);
+  const [company, setCompany] = useState(false);
+  const [category, setCategory] = useState(false);
+  const [department, setDepartment] = useState(false);
+  const [subCategory, setSubCategory] = useState(false);
+  const [vendor, setVendor] = useState(false);
+  const [invoice, setInvoice] = useState(false);
+  const [scan, setScan] = useState(false);
+  const [stock, setStock] = useState(false);
+  const [stockUpdate, setStockUpdate] = useState(false);
+  const [grn, setGRN] = useState(false);
+  const [prn, setPRN] = useState(false);
+  const [tog, setTOG] = useState(false);
 
   const token = localStorage.getItem("authToken");
   const navigate = useNavigate();
   let username;
 
- 
-  const [Admin, setAdmin] = useState([]);
-  const [Dashboard, setDashboard] = useState([]);
-  const [Transaction, setTransaction] = useState([]);
-
-
-
-  const adminPermissionOptions = [
-    { value: "a_permission", label: "Permission Setting" },
-    { value: "a_sync", label: "Databases Synchronization" },
-  ];
-
-  const dashboardPermissionOptions = [
-    { value: "d_company", label: "Company Wise Dashboard" },
-    { value: "d_department", label: "Department Wise Dashboard" },
-    { value: "d_category", label: "Category Wise Dashboard" },
-    { value: "d_scategory", label: "Sub Category Wise Dashboard" },
-    { value: "d_vendor", label: "Vendor Wise Dashboard" },
-    { value: "d_invoice", label: "Invoice Wise Reports" },
-  ];
-
-  const stockUpdatePermissionOptions = [
-    { value: "t_scan", label: "Scan" },
-    { value: "t_stock", label: "Stock" },
-    { value: "t_grn", label: "GRN" },
-    { value: "t_prn", label: "PRN" },
-    { value: "t_tog", label: "TOG" },
-    { value: "t_stock_update", label: "Stock Update" },
-  ];
 
   if (!authToken) {
     return <Navigate to="/login" replace />;
@@ -76,54 +52,6 @@ const Reset = () => {
     const decodedToken = jwtDecode(token);
     username = decodedToken.username;
   }
-
-  // Handlers for each dropdown
-  const handleAdminSelect = (value) => {
-    setSelectedAdmin((prev) =>
-      prev.includes(value)
-        ? prev.filter((item) => item !== value)
-        : [...prev, value]
-    );
-  };
-
-  const handleDashboardSelect = (value) => {
-    setSelectedDashboard((prev) =>
-      prev.includes(value)
-        ? prev.filter((item) => item !== value)
-        : [...prev, value]
-    );
-  };
-
-  const handleStockSelect = (value) => {
-    setSelectedStock((prev) =>
-      prev.includes(value)
-        ? prev.filter((item) => item !== value)
-        : [...prev, value]
-    );
-  };
-
-  const handleRemoveAdmin = (value) => {
-    setRemoveAdmin((prev) =>
-      prev.includes(value)
-        ? prev.filter((item) => item !== value)
-        : [...prev, value]
-    );
-  };
-  const handleRemoveDashboard = (value) => {
-    setRemoveDashboard((prev) =>
-      prev.includes(value)
-        ? prev.filter((item) => item !== value)
-        : [...prev, value]
-    );
-  };
-
-  const handleRemoveStock = (value) => {
-    setRemoveStock((prev) =>
-      prev.includes(value)
-        ? prev.filter((item) => item !== value)
-        : [...prev, value]
-    );
-  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -144,12 +72,9 @@ const Reset = () => {
         port,
         username,
         customerID,
-        admin: selectedAdmin,
-        dashboard: selectedDashboard,
-        stock: selectedStock,
-        removeAdmin: removeAdmin,
-        removeStock: removeStock,
-        removeDashboard: removeDashboard,
+        admin: [{ a_permission: permissionSetting, a_sync: databaseSync }],
+        dashboard: [{d_company: company, d_category:category, d_department:department, d_scategory:subCategory, d_vendor:vendor, d_invoice:invoice}],
+        stock: [{t_scan:scan, t_stock:stock, t_stock_update:stockUpdate, t_grn:grn, t_prn:prn, t_tog:tog}]
       };
 
       const config1 = {
@@ -161,7 +86,7 @@ const Reset = () => {
           debug: true,
         },
       };
-
+      
       axios
         .put(`${process.env.REACT_APP_BACKEND_URL}reset-database-connection`, data, config1)
         .then((response) => {
@@ -196,103 +121,16 @@ const Reset = () => {
     }
   };
 
-  // Dropdown UI Component
-  const MultiSelectDropdown = ({
-    options,
-    selectedValues,
-    handleSelect,
-    label,
-  }) => (
-    <div className="w-full">
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        {label}
-      </label>
-      <Listbox value={selectedValues} onChange={() => {}}>
-        <div className="relative">
-          <Listbox.Button className="w-full border border-gray-300 p-2 rounded-md bg-white text-left flex justify-between items-center">
-            <span>
-              {selectedValues.length > 0
-                ? `${selectedValues.length} selected`
-                : "Select permissions"}
-            </span>
-            <ChevronDown className="h-4 w-4" />
-          </Listbox.Button>
-          <Transition
-            as={Fragment}
-            leave="transition ease-in duration-100"
-            leaveFrom="opacity-100"
-            leaveTo="opacity-0"
-          >
-            <Listbox.Options className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 shadow-lg border border-gray-200 focus:outline-none text-sm">
-              {options.map((option) => (
-                <Listbox.Option key={option.value} as={Fragment}>
-                  {({ active }) => (
-                    <li
-                      onClick={() => handleSelect(option.value)}
-                      className={`cursor-pointer select-none relative flex items-center gap-2 px-4 py-2 ${
-                        active ? "bg-gray-100" : ""
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedValues.includes(option.value)}
-                        readOnly
-                      />
-                      <span>{option.label}</span>
-                      {selectedValues.includes(option.value) && (
-                        <Check className="h-4 w-4 text-green-500 ml-auto" />
-                      )}
-                    </li>
-                  )}
-                </Listbox.Option>
-              ))}
-            </Listbox.Options>
-          </Transition>
-        </div>
-      </Listbox>
-    </div>
-  );
-
-  function userPermisionDetails(data) {
-    const customLabels = {
-      a_permission: "Permission Setting",
-      a_sync: "Databases Synchronization",
-      d_category: "Category Wise Dashboard",
-      d_company: "Company Wise Dashboard",
-      d_department: "Department Wise Dashboard",
-      d_invoice: "Invoice Wise Report",
-      d_scategory: "Subcategory Wise Dashboard",
-      d_vendor: "Vendor Wise Dashboard",
-      t_scan: "Scan",
-      t_stock: "Stock Update",
-    };
-
-    for (const [key, value] of Object.entries(data)) {
-      if (value.toUpperCase() === "T") {
-        // Use custom labels for categorization
-        const label = customLabels[key] || key;
-
-        if (key.startsWith("a_")) {
-          Admin.push(label);
-        } else if (key.startsWith("d_")) {
-          Dashboard.push(label);
-        } else if (key.startsWith("t_")) {
-          Transaction.push(label);
-        }
-      }
-    }
-
-  }
 
   const handleButtonClick = (e) => {
     e.preventDefault();
-    setNameErrorNew("");
+    setNameError("");
     let isValid = true;
     setDisableNew(true);
     setLoading(true);
 
-    if (!nameNew) {
-      setNameErrorNew("Username is required.");
+    if (!name) {
+      setNameError("Username is required.");
       isValid = false;
       setDisableNew(false);
       setLoading(false);
@@ -305,7 +143,7 @@ const Reset = () => {
           Authorization: `Bearer ${token}`,
         },
         params: {
-          nameNew, // pass the parameter here instead of in the body
+          name, // pass the parameter here instead of in the body
           debug: true,
         },
       };
@@ -329,8 +167,24 @@ const Reset = () => {
             }, 1000);
           
             const user = response.data.userData[0];
-            setData(user);
-            userPermisionDetails(user);
+            
+            setPermissionSetting(user.a_permission === 'T');
+            setDatabaseSync(user.a_sync === 'T');
+            setCompany(user.d_company === 'T');
+            setCategory(user.d_category === 'T');
+            setDepartment(user.d_department === 'T');
+            setSubCategory(user.d_scategory === 'T');
+            setVendor(user.d_vendor === 'T');
+            setInvoice(user.d_invoice === 'T');
+            setScan(user.t_scan === 'T');
+            setStock(user.t_stock === 'T');
+            setStockUpdate(user.t_stock_update === 'T');
+            setGRN(user.t_grn === 'T');
+            setPRN(user.t_prn === 'T');
+            setTOG(user.t_tog === 'T');
+
+            // setData(user);
+            // userPermisionDetails(user);
           } else {
             setAlert({ message: response.data.message, type: "error" });
             setTimeout(() => setAlert(null), 3000);
@@ -347,110 +201,6 @@ const Reset = () => {
           setTimeout(() => setAlert(null), 3000);
         });
     }
-  };
-
-  const sidePanel = () => {
-    return (
-      <div className="mt-10">
-        <div>
-          <label
-            htmlFor="nameNew"
-            className="block text-sm font-medium text-gray-700"
-          >
-            Username
-          </label>
-          <input
-            type="text"
-            id="nameNew"
-            value={nameNew}
-            onChange={(e) => setNameNew(e.target.value)}
-            className="mt-1 block w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-gray-700"
-            placeholder="Enter Username"
-          />
-          {nameErrorNew && (
-            <p className="text-red-500 text-sm mt-1">{nameErrorNew}</p>
-          )}
-        </div>
-
-        <button
-          onClick={handleButtonClick}
-          disabled={disableNew}
-          className={`bg-black text-white px-4 py-2 rounded-md shadow-md hover:bg-gray-800 mt-6 mx-auto block ${
-            disableNew ? "opacity-50 cursor-not-allowed" : ""
-          }`}
-        >
-          Find User
-        </button>
-
-        {loading && (
-          <div className="mt-10 flex justify-center items-center">
-            <FadeLoader
-              cssOverride={null}
-              height={50}
-              loading
-              margin={30}
-              radius={30}
-              speedMultiplier={1}
-              width={8}
-              color="#ce521a"
-            />
-          </div>
-        )}
-
-        {!loading && data.length !== 0 && (
-  <div className="mb-5 mt-5">
-    <div className="space-y-2">
-    <div className="border-t pt-2">
-  <p className="font-medium text-[#bc4a17] mb-3">
-    Dashboard Permission Available
-  </p>
-
-      
-  {Dashboard.length > 0 ? (
-    Dashboard.map((item, index) => (
-      <p key={index} className="text-gray-700">
-        <strong>{item}</strong>
-      </p>
-    ))
-  ) : (
-    <p>No dashboard permissions available</p>
-  )}
-</div>
-
-      <div className="border-t pt-2">
-        <p className="font-medium text-[#bc4a17] mb-3">
-          Transaction Permission Available
-        </p>
-        {Transaction.length > 0 ? (
-          Transaction.map((item, index) => (
-            <p key={index} className="text-gray-700">
-              <strong>{item}</strong>
-            </p>
-          ))
-        ) : (
-          <p>No transaction permissions available</p>
-        )}
-      </div>
-      <div className="border-t pt-2">
-        <p className="font-medium text-[#bc4a17] mb-3">
-          Administration Permission Available
-        </p>
-        {Admin.length > 0 ? (
-          Admin.map((item, index) => (
-            <p key={index} className="text-gray-700">
-              <strong>{item}</strong>
-            </p>
-          ))
-        ) : (
-          <p>No admin permissions available</p>
-        )}
-      </div>
-    </div>
-  </div>
-)}
-
-      </div>
-    );
   };
 
   return (
@@ -474,135 +224,248 @@ const Reset = () => {
 
           <div className="flex justify-center mt-10 ml-[-50px] md:ml-0">
   <div className="w-full max-w-7xl px-4 md:px-8">
-    <PanelMenu items={sidePanel()} />
+    {/* <PanelMenu items={sidePanel()} /> */}
     <form className="space-y-6" onSubmit={handleSubmit}>
-      {/* Grid Layout for Inputs */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-10">
-        {/* Username */}
-        <div>
-          <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-            Username
-          </label>
-          <input
-            type="text"
-            id="name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="mt-1 block w-full px-4 py-3 bg-gray-100 border border-gray-300 rounded-md text-gray-700"
-            placeholder="Enter Username"
-          />
-          {nameError && <p className="text-red-500 text-sm mt-1">{nameError}</p>}
-        </div>
+     
+     <div className="bg-white p-6 rounded-md shadow-md flex flex-col lg:flex-row lg:justify-between items-center gap-4">
+  {/* Username Field */}
+  <div className="flex flex-col w-full lg:w-auto">
+    <label htmlFor="name" className="text-sm font-medium text-gray-700">
+      Username
+    </label>
+    <input
+      type="text"
+      id="name"
+      value={name}
+      onChange={(e) => setName(e.target.value)}
+      className="mt-1 w-full lg:w-64 px-4 py-3 bg-gray-100 border border-gray-300 rounded-md text-gray-700"
+      placeholder="Enter Username"
+    />
+    {nameError && <p className="text-red-500 text-sm mt-1">{nameError}</p>}
+  </div>
 
-        {/* IP Address */}
-        <div>
-          <label htmlFor="ip" className="block text-sm font-medium text-gray-700">
-            IP Address
-          </label>
-          <input
-            type="text"
-            id="ip"
-            value={ip}
-            onChange={(e) => setIp(e.target.value)}
-            className="mt-1 block w-full px-4 py-3 bg-gray-100 border border-gray-300 rounded-md text-gray-700"
-            placeholder="Enter IP Address"
-          />
-        </div>
+  {/* Buttons Container */}
+  <div className="flex flex-col md:flex-row gap-4 w-full justify-center items-center">
+  {/* Find User Button */}
+  <button
+    onClick={handleButtonClick}
+    disabled={disableNew}
+    className={`px-4 py-3 w-full md:w-1/3 bg-black text-white font-semibold rounded-md shadow-md hover:bg-gray-800 ${
+      disableNew ? "opacity-50 cursor-not-allowed" : ""
+    }`}
+  >
+    Find User
+  </button>
 
-        {/* Port */}
-        <div>
-          <label htmlFor="port" className="block text-sm font-medium text-gray-700">
-            Port
-          </label>
-          <input
-            type="text"
-            id="port"
-            value={port}
-            onChange={(e) => setPort(e.target.value)}
-            className="mt-1 block w-full px-4 py-3 bg-gray-100 border border-gray-300 rounded-md text-gray-700"
-            placeholder="Enter Port"
-          />
-        </div>
+  {/* Reset Button */}
+  <button
+    type="submit"
+    disabled={disable}
+    className={`px-4 py-3 w-full md:w-1/3 bg-black text-white font-semibold rounded-md hover:bg-gray-800 ${
+      disable ? "opacity-50 cursor-not-allowed" : ""
+    }`}
+  >
+    Reset
+  </button>
+</div>
 
-        {/* Customer ID */}
-        <div>
-          <label htmlFor="customerID" className="block text-sm font-medium text-gray-700">
-            Customer ID
-          </label>
-          <input
-            type="number"
-            id="customerID"
-            value={customerID}
-            onChange={(e) => setCustomerID(e.target.value)}
-            className="mt-1 block w-full px-4 py-3 bg-gray-100 border border-gray-300 rounded-md text-gray-700"
-            placeholder="Enter Customer ID"
-          />
-        </div>
+</div>
 
-        {/* Admin Permissions */}
-        <MultiSelectDropdown
-          options={adminPermissionOptions}
-          selectedValues={selectedAdmin}
-          handleSelect={handleAdminSelect}
-          label="Set Admin"
+<div className="flex flex-col md:flex-row flex-wrap gap-4">
+  {/* Card 1 */}
+  <div className="bg-white p-6 rounded-md shadow-md w-full md:w-[calc(25%-1rem)]">
+    <h2 className="text-lg font-semibold text-gray-800 mb-4">Connection</h2>
+
+    {/* IP Address */}
+    <div className="mb-4">
+      <label htmlFor="ip" className="block text-sm font-medium text-gray-700">IP Address</label>
+      <input
+        type="text"
+        id="ip"
+        value={ip}
+        onChange={(e) => setIp(e.target.value)}
+        className="mt-1 block w-full px-4 py-3 bg-gray-100 border border-gray-300 rounded-md text-gray-700"
+        placeholder="Enter IP Address"
+      />
+    </div>
+
+    {/* Port */}
+    <div className="mb-4">
+      <label htmlFor="port" className="block text-sm font-medium text-gray-700">Port</label>
+      <input
+        type="text"
+        id="port"
+        value={port}
+        onChange={(e) => setPort(e.target.value)}
+        className="mt-1 block w-full px-4 py-3 bg-gray-100 border border-gray-300 rounded-md text-gray-700"
+        placeholder="Enter Port"
+      />
+    </div>
+
+    {/* Customer ID */}
+    <div>
+      <label htmlFor="customerID" className="block text-sm font-medium text-gray-700">Customer ID</label>
+      <input
+        type="number"
+        id="customerID"
+        value={customerID}
+        onChange={(e) => setCustomerID(e.target.value)}
+        className="mt-1 block w-full px-4 py-3 bg-gray-100 border border-gray-300 rounded-md text-gray-700"
+        placeholder="Enter Customer ID"
+      />
+    </div>
+  </div>
+
+  {/* Card 2 */}
+  <div className="bg-white p-6 rounded-md shadow-md w-full md:w-[calc(25%-1rem)]">
+    <h2 className="text-lg font-semibold text-gray-800 mb-4">Dashboard</h2>
+    <div className="flex flex-col gap-4">
+      <label className="flex items-center space-x-2">
+        <input
+          type="checkbox"
+          checked={company}
+          onChange={(e) => setCompany(e.target.checked)}
+          className="w-5 h-5"
         />
-
-        {/* Dashboard Permissions */}
-        <MultiSelectDropdown
-          options={dashboardPermissionOptions}
-          selectedValues={selectedDashboard}
-          handleSelect={handleDashboardSelect}
-          label="Set Dashboard"
+        <span className="text-gray-700">Company</span>
+      </label>
+      <label className="flex items-center space-x-2">
+        <input
+          type="checkbox"
+          checked={department}
+          onChange={(e) => setDepartment(e.target.checked)}
+          className="w-5 h-5"
         />
-
-        {/* Stock Update Permissions */}
-        <MultiSelectDropdown
-          options={stockUpdatePermissionOptions}
-          selectedValues={selectedStock}
-          handleSelect={handleStockSelect}
-          label="Set Stock Update"
+        <span className="text-gray-700">Department</span>
+      </label>
+      <label className="flex items-center space-x-2">
+        <input
+          type="checkbox"
+          checked={category}
+          onChange={(e) => setCategory(e.target.checked)}
+          className="w-5 h-5"
         />
-
-        {/* Placeholder for spacing */}
-        <div></div>
-
-        {/* Remove Admin Permissions */}
-        <MultiSelectDropdown
-          options={adminPermissionOptions}
-          selectedValues={removeAdmin}
-          handleSelect={handleRemoveAdmin}
-          label="Remove Admin"
+        <span className="text-gray-700">Category</span>
+      </label>
+      <label className="flex items-center space-x-2">
+        <input
+          type="checkbox"
+          checked={subCategory}
+          onChange={(e) => setSubCategory(e.target.checked)}
+          className="w-5 h-5"
         />
-
-        {/* Remove Dashboard Permissions */}
-        <MultiSelectDropdown
-          options={dashboardPermissionOptions}
-          selectedValues={removeDashboard}
-          handleSelect={handleRemoveDashboard}
-          label="Remove Dashboard"
+        <span className="text-gray-700">Sub Category</span>
+      </label>
+      <label className="flex items-center space-x-2">
+        <input
+          type="checkbox"
+          checked={vendor}
+          onChange={(e) => setVendor(e.target.checked)}
+          className="w-5 h-5"
         />
-
-        {/* Remove Stock Update Permissions */}
-        <MultiSelectDropdown
-          options={stockUpdatePermissionOptions}
-          selectedValues={removeStock}
-          handleSelect={handleRemoveStock}
-          label="Remove Stock Update"
+        <span className="text-gray-700">Vendor</span>
+      </label>
+      <label className="flex items-center space-x-2">
+        <input
+          type="checkbox"
+          checked={invoice}
+          onChange={(e) => setInvoice(e.target.checked)}
+          className="w-5 h-5"
         />
-      </div>
+        <span className="text-gray-700">Invoice</span>
+      </label>
+    </div>
+  </div>
 
-      {/* Reset Button */}
-      <div className="flex justify-center">
-        <button
-          type="submit"
-          disabled={disable}
-          className={`w-1/3 px-4 py-3 bg-black text-white font-semibold rounded-md hover:bg-gray-800 ${
-            disable ? "opacity-50 cursor-not-allowed" : ""
-          }`}
-        >
-          Reset
-        </button>
-      </div>
+  {/* Card 3 */}
+  <div className="bg-white p-6 rounded-md shadow-md w-full md:w-[calc(25%-1rem)]">
+    <h2 className="text-lg font-semibold text-gray-800 mb-4">Transaction</h2>
+    <div className="flex flex-col gap-4">
+      <label className="flex items-center space-x-2">
+        <input
+          type="checkbox"
+          checked={scan}
+          onChange={(e) => setScan(e.target.checked)}
+          className="w-5 h-5"
+        />
+        <span className="text-gray-700">Scan</span>
+      </label>
+      <label className="flex items-center space-x-2">
+        <input
+          type="checkbox"
+          checked={stock}
+          onChange={(e) => setStock(e.target.checked)}
+          className="w-5 h-5"
+        />
+        <span className="text-gray-700">Stock</span>
+      </label>
+      <label className="flex items-center space-x-2">
+        <input
+          type="checkbox"
+          checked={grn}
+          onChange={(e) => setGRN(e.target.checked)}
+          className="w-5 h-5"
+        />
+        <span className="text-gray-700">GRN</span>
+      </label>
+      <label className="flex items-center space-x-2">
+        <input
+          type="checkbox"
+          checked={prn}
+          onChange={(e) => setPRN(e.target.checked)}
+          className="w-5 h-5"
+        />
+        <span className="text-gray-700">PRN</span>
+      </label>
+      <label className="flex items-center space-x-2">
+        <input
+          type="checkbox"
+          checked={tog}
+          onChange={(e) => setTOG(e.target.checked)}
+          className="w-5 h-5"
+        />
+        <span className="text-gray-700">TOG</span>
+      </label>
+      <label className="flex items-center space-x-2">
+        <input
+          type="checkbox"
+          checked={stockUpdate}
+          onChange={(e) => setStockUpdate(e.target.checked)}
+          className="w-5 h-5"
+        />
+        <span className="text-gray-700">Stock Update</span>
+      </label>
+    </div>
+  </div>
+
+  {/* Card 4 */}
+  <div className="bg-white p-6 rounded-md shadow-md w-full md:w-[calc(25%-1rem)]">
+    <h2 className="text-lg font-semibold text-gray-800 mb-4">Administration</h2>
+    <div className="flex flex-col gap-4">
+      <label className="flex items-center space-x-2">
+        <input
+          type="checkbox"
+          checked={permissionSetting}
+          onChange={(e) => setPermissionSetting(e.target.checked)}
+          className="w-5 h-5"
+        />
+        <span className="text-gray-700">Permission Setting</span>
+      </label>
+      <label className="flex items-center space-x-2">
+        <input
+          type="checkbox"
+          checked={databaseSync}
+          onChange={(e) => setDatabaseSync(e.target.checked)}
+          className="w-5 h-5"
+        />
+        <span className="text-gray-700">Database Sync</span>
+      </label>
+    </div>
+  </div>
+</div>
+
+
+    
     </form>
   </div>
 </div>
