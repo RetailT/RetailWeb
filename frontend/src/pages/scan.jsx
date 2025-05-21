@@ -187,6 +187,7 @@ function App() {
             block: "center",
           });
           quantityRef.current.focus(); // Focus after scrolling
+          quantityRef.current.select();
         }
       }, 100);
     } catch (err) {
@@ -639,6 +640,7 @@ const handleScan = (err, result) => {
             }
           );
           if (response.data.message === "Table Updated successfully") {
+            setQuantity(1);
             setAlert({
               message: "Table Updated successfully",
               type: "success",
