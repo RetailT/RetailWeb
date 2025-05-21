@@ -641,6 +641,8 @@ const handleScan = (err, result) => {
           );
           if (response.data.message === "Table Updated successfully") {
             setQuantity(1);
+            setSalesData([]);
+      setAmount("");
             setAlert({
               message: "Table Updated successfully",
               type: "success",
