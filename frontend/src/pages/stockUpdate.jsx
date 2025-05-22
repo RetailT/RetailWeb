@@ -19,7 +19,8 @@ function App() {
   const [alert, setAlert] = useState(null);
   const [loading, setLoading] = useState(false);
   const [headers, setHeaders] = useState([]);
-
+const [repUserFilter, setRepUserFilter] = useState("");
+const [uniqueRepUsers, setUniqueRepUsers] = useState([])
   const [companies, setCompanies] = useState([]);
   const [selectedCompany, setSelectedCompany] = useState("");
   const [companyError, setCompanyError] = useState("");
@@ -29,6 +30,17 @@ function App() {
 
   const token = localStorage.getItem("authToken");
   const editableColumns = [{ index: 10, type: "number", step: "any" }];
+
+  useEffect(() => {
+  if (headers.length > 0 && data.length > 0) {
+    const repUserIndex = headers.indexOf("REPUSER");
+    if (repUserIndex !== -1) {
+      const repUsers = [...new Set(data.map((item) => item.rowData[repUserIndex]?.trim()).filter(Boolean))];
+      setUniqueRepUsers(repUsers);
+    }
+  }
+}, [headers, data]);
+
 
   useEffect(() => {
     if (!token) {
@@ -110,8 +122,13 @@ function App() {
         setData(orderedData1);
         setInitialData(true);
 
+        const repUserIndex = headers.indexOf("REPUSER");
+        const repUsers = [...new Set(orderedData1.map((item) => item.rowData[repUserIndex]?.trim()).filter(Boolean))];
+        setUniqueRepUsers(repUsers);
+
 
       }
+      
       setLoading(false);
     } catch (err) {
       setLoading(false);
@@ -147,16 +164,10 @@ function App() {
     }
   };
 
-  // const handleSidebarToggle = (isOpen) => {
-  //   setIsSidebarOpen(isOpen);
-  // };
-
-  // const handleRowChange = (rowIndex, columnIndex, newValue) => {
-  //   const updatedData = [...data];
-  //   updatedData[rowIndex][columnIndex] = newValue;
-  //   setData(updatedData);
-
-  // };
+  const filteredTableData = data.filter((item) => {
+  const repUser = item.rowData[headers.indexOf("REPUSER")]?.trim();
+  return repUserFilter === "" || repUser === repUserFilter;
+});
 
   const handleDeleteRow = async (rowIndex) => {
     const deletedRow = data[rowIndex];
@@ -279,17 +290,7 @@ function App() {
       <Navbar />
       {/* Main Layout */}
       <div className="flex">
-        {/* Sidebar */}
-        {/* <div
-          className="sidebar bg-gradient-to-t from-[#ce521a] to-[#000000] text-white shadow-md fixed top-24 left-0 z-40"
-          style={{
-            height: "calc(100vh - 96px)", // Sidebar height fills remaining screen below Navbar
-            width: isSidebarOpen ? "15rem" : "4rem", // Adjust width based on state
-            transition: "width 0.3s",
-          }}
-        >
-          <Sidebar onToggle={handleSidebarToggle} />
-        </div> */}
+        
 
         {/* Page Content */}
         <div className="flex-1 p-10 ml-16 mt-24">
@@ -374,10 +375,22 @@ function App() {
                       Enter
                     </button>
                   </div>
+                  <select
+                        value={repUserFilter}
+                        onChange={(e) => setRepUserFilter(e.target.value)}
+                        className="border p-2 rounded mt-5 ml-3 mb-4 w-full md:w-1/4"
+                      >
+                        <option value="">User</option>
+                        {uniqueRepUsers.map((user) => (
+                          <option key={user} value={user}>
+                            {user}
+                          </option>
+                        ))}
+                      </select>
                   <div className="flex justify-start overflow-x-auto">
                     <Table
                       headers={headers}
-                      data={data.map((item) => item.rowData)}
+                      data={filteredTableData.map((item) => item.rowData)}
                       editableColumns={editableColumns}
                       // onRowChange={handleRowChange}
                       onDeleteRow={handleDeleteRow}

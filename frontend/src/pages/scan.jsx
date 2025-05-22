@@ -44,16 +44,19 @@ function App() {
   const [code, setCode] = useState("");
   const [initialData, setInitialData] = useState(false);
   const [hasCameraPermission, setHasCameraPermission] = useState(false);
-  const [scannerEnabled, setScannerEnabled] = useState(true);
+  const [scannerEnabled, setScannerEnabled] = useState(false);
   const [alert, setAlert] = useState(null);
   const [quantityError, setQuantityError] = useState("");
   const [amount, setAmount] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [salesData, setSalesData] = useState([]);
   const [disable, setDisable] = useState(false);
+const [repUserFilter, setRepUserFilter] = useState(""); // empty means no filter
 
+const [uniqueRepUsers, setUniqueRepUsers] = useState([]);
   const quantityRef = useRef(null);
   const codeRef = useRef(null);
+  const streamRef = useRef(null);
 
   const token = localStorage.getItem("authToken");
   const decodedToken = jwtDecode(token);
@@ -67,7 +70,7 @@ function App() {
   const countOptions = ["COUNT 01", "COUNT 02", "COUNT 03"];
   let typeOptions = [];
   const editableColumns = [{ index: 12, type: "number", step: "any" }];
- 
+
   
   if(grn==='T'){
     typeOptions.push('GRN');
@@ -129,24 +132,33 @@ function App() {
     }
   };
 
-  const getCameraStream = async () => {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
-        facingMode: { ideal: "environment" }, // Use ideal instead of forcing it
-      },
-    });
-    console.log("Camera stream obtained", stream);
-    setHasCameraPermission(true);
-  } catch (error) {
-    console.error("Camera Error:", error);
-    setCameraError("Camera access denied or not available.");
-    setHasCameraPermission(false);
-  }
-};
+const getCameraStream = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          facingMode: { ideal: "environment" },
+        },
+      });
+      streamRef.current = stream;
+      setHasCameraPermission(true);
+      console.log("Camera stream obtained", stream);
+      // You can attach stream to a video element if needed
+    } catch (error) {
+      console.error("Camera Error:", error);
+      setCameraError("Camera access denied or not available.");
+      setHasCameraPermission(false);
+    }
+  };
 
+   const stopCameraStream = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+      console.log("Camera stream stopped");
+    }
+  };
 
   useEffect(() => {
     if (!token) {
@@ -157,7 +169,14 @@ function App() {
     }
     fetchCompanies();
     fetchVendors();
-  }, []);
+
+    if (scannerEnabled) {
+    getCameraStream();
+  } else {
+    stopCameraStream();
+  }
+
+  }, [scannerEnabled]);
 
   if (!authToken) {
     return <Navigate to="/login" replace />;
@@ -203,35 +222,33 @@ function App() {
     }
   };
 
-const handleScan = (err, result) => {
-  if (err) {
-    // Only show actual issues, ignore scanning misses
-    if (
-      err.message?.includes("No MultiFormat Readers") ||
-      err.name === "NotFoundException"
-    ) {
-      return; // Expected: no readable code in the current frame
+  const handleScan = (err, result) => {
+    if (err) {
+      // Only show actual issues, ignore scanning misses
+      if (
+        err.message?.includes("No MultiFormat Readers") ||
+        err.name === "NotFoundException"
+      ) {
+        return; // Expected: no readable code in the current frame
+      }
+
+      console.warn("Scanner Error:", err);
+      toast.error("Scanner encountered an issue.");
+      return;
     }
 
-    console.warn("Scanner Error:", err);
-    toast.error("Scanner encountered an issue.");
-    return;
-  }
+    if (result) {
+      const beep = new Audio("https://www.myinstants.com/media/sounds/beep.mp3");
+      beep.play().catch((error) =>
+        console.error("Beep sound error:", error)
+      );
 
-  if (result) {
-    const beep = new Audio("https://www.myinstants.com/media/sounds/beep.mp3");
-    beep.play().catch((error) =>
-      console.error("Beep sound error:", error)
-    );
-
-    setCurrentData(result.text);
-    setCode("");
-    toast.success(`Product scanned: ${result.text}`);
-    requestData(result.text);
-  }
-};
-
-
+      setCurrentData(result.text);
+      setCode("");
+      toast.success(`Product scanned: ${result.text}`);
+      requestData(result.text);
+    }
+  };
 
   const handleCompanyChange = (event) => {
     const selectedCode = event.target.value;
@@ -318,7 +335,7 @@ const handleScan = (err, result) => {
       const grnData = response.data.grnData;
       const prnData = response.data.prnData;
       const togData = response.data.togData;
-      
+     
       if (selectedType === 'GRN' && grnData.length > 0 ) {
         // Extract keys from the first object, excluding "IDX"
         const keys = Object.keys(grnData[0]).filter((key) => key !== "IDX" && key !== "TYPE");
@@ -409,6 +426,9 @@ const handleScan = (err, result) => {
         setEnteredProduct('submitted')
         setTableData(tData);
         setInitialData(true);
+
+
+
       }
       else{
         if(selectedType !== 'STOCK'){
@@ -419,6 +439,9 @@ const handleScan = (err, result) => {
         }
         
       }
+
+      const repUsers = [...new Set((grnData || prnData || togData).map((item) => item.REPUSER?.trim()))];
+      setUniqueRepUsers(repUsers);
       setLoading(false);
 
     } catch (err) {
@@ -434,101 +457,101 @@ const handleScan = (err, result) => {
     }
   };
 
-    const handleDeleteRow = async (rowIndex) => {
-      
-      const deletedRow = newTableData[rowIndex];
-      const idxValue = deletedRow.idx; // Access the IDX value of the row being deleted
+  const handleDeleteRow = async (rowIndex) => {
+    
+    const deletedRow = newTableData[rowIndex];
+    const idxValue = deletedRow.idx; // Access the IDX value of the row being deleted
 
-      try {
-        const response = await axios.delete(
-          `${process.env.REACT_APP_BACKEND_URL}grnprn-delete`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-            params: {
-              idx: idxValue,
-              type: selectedType
-            },
-          }
-        );
-        
-        if (response.data.message === "Data deleted successfully") {
-          tableData();
-          setAlert({
-            message: response.data.message || "Item deleted successfully",
-            type: "success",
-          });
-          // Dismiss alert after 3 seconds
-          setTimeout(() => setAlert(null), 3000);
-        }
-      } catch (err) {
-        // Handle any errors that occur
-        setAlert({
-          message: err.response?.data?.message || "Item deletion failed",
-          type: "error",
-        });
-  
-        // Dismiss alert after 3 seconds
-        setTimeout(() => setAlert(null), 3000);
-      }
-    };
-  
-    const handleTableDataSubmit = async () => {
-      
-      try {
-        setDisable(true);
-        const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}final-grnprn-update`, {
+    try {
+      const response = await axios.delete(
+        `${process.env.REACT_APP_BACKEND_URL}grnprn-delete`,
+        {
           headers: {
             Authorization: `Bearer ${token}`,
           },
           params: {
-            username: username,
-            company: selectedCompany,
-            type: selectedType,
-            remarks: remarks
+            idx: idxValue,
+            type: selectedType
           },
-        });
-  
-        if (response.data.message === "Data moved and deleted successfully") {
-          
-          setDisable(false);
-          setAlert({
-            message: response.data.message || "Data moved successfully",
-            type: "success",
-          });
-          setTimeout(() => {
-            setAlert(null); // Clear the alert
-            setTimeout(() => {
-              setShowTable(false); // Hide the table after 3 seconds
-              window.location.reload(); // Refresh the page
-            }, 200); // Add a small delay before reloading
-          }, 3000);
-        
         }
-        else {
-          // setInitialData(false);
-          // setDisable(false);
-          setAlert({
-            message: response.data.message || "Cannot move data",
-            type: "success",
-          });
-          // Dismiss alert after 3 seconds
-          setTimeout(() => setAlert(null), 3000);
-        }
-        setDisable(false);
-      } catch (err) {
-        setDisable(false);
-        // Handle any errors that occur
+      );
+      
+      if (response.data.message === "Data deleted successfully") {
+        tableData();
         setAlert({
-          message: err.response?.data?.message || "Data deletion failed",
-          type: "error",
+          message: response.data.message || "Item deleted successfully",
+          type: "success",
         });
-  
         // Dismiss alert after 3 seconds
         setTimeout(() => setAlert(null), 3000);
       }
-    };
+    } catch (err) {
+      // Handle any errors that occur
+      setAlert({
+        message: err.response?.data?.message || "Item deletion failed",
+        type: "error",
+      });
+
+      // Dismiss alert after 3 seconds
+      setTimeout(() => setAlert(null), 3000);
+    }
+  };
+
+  const handleTableDataSubmit = async () => {
+    
+    try {
+      setDisable(true);
+      const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}final-grnprn-update`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        params: {
+          username: username,
+          company: selectedCompany,
+          type: selectedType,
+          remarks: remarks
+        },
+      });
+
+      if (response.data.message === "Data moved and deleted successfully") {
+        
+        setDisable(false);
+        setAlert({
+          message: response.data.message || "Data moved successfully",
+          type: "success",
+        });
+        setTimeout(() => {
+          setAlert(null); // Clear the alert
+          setTimeout(() => {
+            setShowTable(false); // Hide the table after 3 seconds
+            window.location.reload(); // Refresh the page
+          }, 200); // Add a small delay before reloading
+        }, 3000);
+      
+      }
+      else {
+        // setInitialData(false);
+        // setDisable(false);
+        setAlert({
+          message: response.data.message || "Cannot move data",
+          type: "success",
+        });
+        // Dismiss alert after 3 seconds
+        setTimeout(() => setAlert(null), 3000);
+      }
+      setDisable(false);
+    } catch (err) {
+      setDisable(false);
+      // Handle any errors that occur
+      setAlert({
+        message: err.response?.data?.message || "Data deletion failed",
+        type: "error",
+      });
+
+      // Dismiss alert after 3 seconds
+      setTimeout(() => setAlert(null), 3000);
+    }
+  };
 
   const handleDataSubmit = async (e) => {
     e.preventDefault();
@@ -604,7 +627,7 @@ const handleScan = (err, result) => {
     if (valid) {
       setInitialData(true);
       setHasCameraPermission(true);
-      getCameraStream();
+      
     }
   };
 
@@ -763,6 +786,12 @@ const handleScan = (err, result) => {
       }
     }
   };
+
+  const filteredTableData = newTableData.filter((item) => {
+  const repUser = item.rowData[headers.indexOf("REPUSER")]?.trim();
+  return repUserFilter === "" || repUser === repUserFilter;
+});
+
 
   return (
     <div>
@@ -1037,6 +1066,7 @@ const handleScan = (err, result) => {
                       >
                         {scannerEnabled ? "Disable Scanner" : "Enable Scanner"}
                       </button>
+
                     </div>
                   ) : (
                     <div className="error">
@@ -1223,15 +1253,31 @@ const handleScan = (err, result) => {
                     </button>
                    
                   </div>
+                 
+                      <select
+                        value={repUserFilter}
+                        onChange={(e) => setRepUserFilter(e.target.value)}
+                        className="border p-2 rounded mt-5 ml-3 mb-4 w-full md:w-1/4"
+                      >
+                        <option value="">User</option>
+                        {uniqueRepUsers.map((user) => (
+                          <option key={user} value={user}>
+                            {user}
+                          </option>
+                        ))}
+                      </select>
+                   
+
+
                   <div className="flex justify-start overflow-x-auto">
-                                    <Table
+                                   <Table
                                       headers={headers}
-                                      data={newTableData.map((item) => item.rowData)}
+                                      data={filteredTableData.map((item) => item.rowData)}
                                       editableColumns={editableColumns}
-                                      // onRowChange={handleRowChange}
                                       onDeleteRow={handleDeleteRow}
-                                      formatColumns={[6,7,8,9]}
+                                      formatColumns={[6, 7, 8, 9]}
                                     />
+
                                   </div>
                 </div>
                  

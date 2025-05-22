@@ -176,7 +176,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
             {t_scan?.toLowerCase() === "t" && transactionOpen && isOpen && (
               <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
                 <NavLink to="/scan" className="w-full">
-                  Scan
+                  Quick Scan
                 </NavLink>
               </li>
             )}
