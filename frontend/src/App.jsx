@@ -14,6 +14,7 @@ import Report from "./pages/report";
 import Scan from "./pages/scan";
 import Reset from "./pages/reset";
 import Profile from "./pages/profile";
+import ProductView from "./pages/productView";
 import Home from "./pages/home";
 import ProtectedRoute from "./ProtectedRoute";
 import { AuthProvider } from './AuthContext';
@@ -39,7 +40,8 @@ function App() {
         <Route path="/stock-update" element={<ProtectedRoute> <StockUpdate /> </ProtectedRoute>}/>
         <Route path="/report" element={<ProtectedRoute> <Report /> </ProtectedRoute>}/>
         <Route path="/vendor-dashboard" element={<ProtectedRoute> <VendorDashboard /> </ProtectedRoute>}/>
-        <Route path="/sync-databases" element={<ProtectedRoute> <SyncDatabase /> </ProtectedRoute>}/>       
+        <Route path="/sync-databases" element={<ProtectedRoute> <SyncDatabase /> </ProtectedRoute>}/> 
+        <Route path="/product-view" element={<ProtectedRoute> <ProductView /> </ProtectedRoute>}/>      
       </Routes>
     </Router>
     </AuthProvider>

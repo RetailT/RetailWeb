@@ -59,7 +59,7 @@ const Navbar = () => {
         </div>
 
         {/* Navigation Links */}
-        <div className="flex items-center ml-auto mr-5 space-x-4">
+        <div className="flex items-center ml-auto mr-8 md:mr-5 space-x-4">
           {/* Profile Link */}
           <Link to="/profile" className="text-[#f17e21] font-semibold transition-colors duration-300 hover:text-white">
             {username}

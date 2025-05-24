@@ -19,6 +19,7 @@ const Report = () => {
   const [selectedDates, setSelectedDates] = useState({});
   const [reportData, setReportData] = useState([]);
   const [reportHeaders, setReportHeaders] = useState([]);
+  const [isChecked, setIsChecked] = useState(true);
   const [invoiceData, setInvoiceData] = useState([]);
   const [invoiceHeaders, setInvoiceHeaders] = useState([]);
   const [currentSale, setCurrentSale] = useState(true);
@@ -68,7 +69,19 @@ const Report = () => {
     };
 
     fetchData();
-  }, []);
+
+    if (isChecked) {
+      // Log the message every 3 seconds when the checkbox is checked
+      const intervalId = setInterval(() => {
+        window.location.reload();
+      }, 180000);
+
+      // Cleanup the interval when the checkbox is unchecked or the component unmounts
+      return () => clearInterval(intervalId);
+    } else {
+      console.log("Checkbox is unchecked.");
+    }
+  }, [isChecked]);
 
   // Separate effect to watch for `userData` changes and send company codes
   useEffect(() => {
@@ -289,6 +302,13 @@ const Report = () => {
     
   };
 
+    const handleCheckboxChange = () => {
+      if(!isChecked){
+        handleOldData();
+      }
+    setIsChecked((prevState) => !prevState); // Toggle the checkbox state
+  };
+
   const handleSubmit = async () => {
     setReportData([]);
     setInvoiceData([]);
@@ -348,35 +368,50 @@ const Report = () => {
               />
             )}
 
-            {currentSale && (
+            {(currentSale && isChecked) && (
+             
+
               <div
-                className="bg-white p-5 mt-10 rounded-md shadow-md"
-                style={{ backgroundColor: "#d8d8d8" }}
-              >
-                <div className="flex justify-center">
-                  <button
-                    onClick={handleOldData}
-                    disabled={loading}
-                    className={`bg-black text-white px-4 py-2 rounded-md shadow-md hover:bg-gray-800 ${
-                      loading ? "opacity-50 cursor-not-allowed" : ""
-                    }`}
-                  >
-                    Old Data
-                  </button>
-                  <button
-                    onClick={handleRefresh}
-                    disabled={loading}
-                    className={`bg-black text-white px-4 py-2 rounded-md shadow-md hover:bg-gray-800 ml-5 ${
-                      loading ? "opacity-50 cursor-not-allowed" : ""
-                    }`}
-                  >
-                    Refresh
-                  </button>
-                </div>
-              </div>
+  className="bg-white p-5 mt-10 rounded-md shadow-md"
+  style={{ backgroundColor: "#d8d8d8" }}
+>
+  <div className="flex items-center w-full">
+    {/* Checkbox + Label */}
+    <div className="flex items-center">
+      <input
+        type="checkbox"
+        checked={isChecked}
+        onChange={handleCheckboxChange}
+        id="checkbox"
+      />
+      <label htmlFor="checkbox" className="ml-3">
+        <strong>Current Invoice Report</strong>
+      </label>
+    </div>
+
+    {/* Centered Title */}
+    <div className="flex font-bold mb-3 text-2xl flex-grow justify-center">
+      Invoice Report
+    </div>
+
+    {/* Button(s) */}
+    <div>
+      <button
+        onClick={handleRefresh}
+        disabled={loading}
+        className={`bg-black text-white px-4 py-2 rounded-md shadow-md hover:bg-gray-800 ${
+          loading ? "opacity-50 cursor-not-allowed" : ""
+        }`}
+      >
+        Refresh
+      </button>
+    </div>
+  </div>
+            </div>
+
             )}
 
-            {!currentSale && (
+            {!isChecked && (
               <div
                 className="bg-white p-5 mt-10 rounded-md shadow-md"
                 style={{ backgroundColor: "#d8d8d8" }}

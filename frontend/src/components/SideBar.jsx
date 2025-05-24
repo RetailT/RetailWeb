@@ -22,6 +22,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
   let d_scategory = "";
   let d_vendor = "";
   let d_invoice = "";
+  let d_productView = "";
   let t_scan = "";
   let t_stock_update = "";
 
@@ -35,8 +36,11 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
     d_scategory = decodedToken.d_scategory;
     d_vendor = decodedToken.d_vendor;
     d_invoice = decodedToken.d_invoice;
+    d_productView = decodedToken.d_productView;
+    d_productView = decodedToken.d_productView;
     t_scan = decodedToken.t_scan;
     t_stock_update = decodedToken.t_stock_update;
+
   } else {
     console.error("No token found in localStorage");
   }
@@ -71,7 +75,8 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
             (d_category && d_category.toLowerCase() === "t") ||
             (d_scategory && d_scategory.toLowerCase() === "t") ||
             (d_vendor && d_vendor.toLowerCase() === "t") ||
-            (d_invoice && d_invoice.toLowerCase() === "t")) && (
+            (d_invoice && d_invoice.toLowerCase() === "t")||
+            (d_productView && d_productView.toLowerCase() === "t")) && (
             <li
               className="flex items-center p-2 hover:bg-[#000000] cursor-pointer"
               onClick={toggleDashboard}
@@ -140,6 +145,13 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
               <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
                 <NavLink to="/report" className="w-full">
                   Invoice Wise Report
+                </NavLink>
+              </li>
+            )}
+            {d_productView?.toLowerCase() === "t" && dashboardOpen && isOpen && (
+              <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
+                <NavLink to="/product-view" className="w-full">
+                  Product View
                 </NavLink>
               </li>
             )}

@@ -32,6 +32,7 @@ const Reset = () => {
   const [subCategory, setSubCategory] = useState(false);
   const [vendor, setVendor] = useState(false);
   const [invoice, setInvoice] = useState(false);
+  const [productView, setProductView] = useState(false);
   const [scan, setScan] = useState(false);
   const [stock, setStock] = useState(false);
   const [stockUpdate, setStockUpdate] = useState(false);
@@ -73,7 +74,7 @@ const Reset = () => {
         username,
         customerID,
         admin: [{ a_permission: permissionSetting, a_sync: databaseSync }],
-        dashboard: [{d_company: company, d_category:category, d_department:department, d_scategory:subCategory, d_vendor:vendor, d_invoice:invoice}],
+        dashboard: [{d_company: company, d_category:category, d_department:department, d_scategory:subCategory, d_vendor:vendor, d_invoice:invoice, d_productView:productView}],
         stock: [{t_scan:scan, t_stock:stock, t_stock_update:stockUpdate, t_grn:grn, t_prn:prn, t_tog:tog}]
       };
 
@@ -176,6 +177,7 @@ const Reset = () => {
             setSubCategory(user.d_scategory === 'T');
             setVendor(user.d_vendor === 'T');
             setInvoice(user.d_invoice === 'T');
+            setProductView(user.d_productView === 'T');
             setScan(user.t_scan === 'T');
             setStock(user.t_stock === 'T');
             setStockUpdate(user.t_stock_update === 'T');
@@ -374,6 +376,15 @@ const Reset = () => {
         />
         <span className="text-gray-700">Invoice</span>
       </label>
+      <label className="flex items-center space-x-2">
+        <input
+          type="checkbox"
+          checked={productView}
+          onChange={(e) => setProductView(e.target.checked)}
+          className="w-5 h-5"
+        />
+        <span className="text-gray-700">Product View</span>
+      </label>
     </div>
   </div>
 
@@ -464,8 +475,6 @@ const Reset = () => {
   </div>
 </div>
 
-
-    
     </form>
   </div>
 </div>
