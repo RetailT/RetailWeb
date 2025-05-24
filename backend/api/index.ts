@@ -37,6 +37,7 @@ app.get('/final-stock-update', authenticateToken, authController.finalStockUpdat
 app.get('/final-grnprn-update', authenticateToken, authController.finalGrnPrnUpdate);
 app.get('/sync-databases', authenticateToken, authController.syncDatabases);
 app.get('/find-user-connection', authenticateToken, authController.findUserConnection);
+app.get('/product-view', authenticateToken, authController.productView);
 
 app.post("/login", authController.login);
 app.post('/register', authController.register);

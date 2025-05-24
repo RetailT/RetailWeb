@@ -3,15 +3,15 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const moment = require("moment");
 const mssql = require("mssql");
-const crypto = require('crypto');
+const crypto = require("crypto");
 const nodemailer = require("nodemailer");
 const { sendPasswordResetEmail } = require("../utils/nodemailer");
 const { promisify } = require("util");
 const verifyToken = promisify(jwt.verify);
-const axios = require('axios');
+const axios = require("axios");
 
 function buildSqlInClause(array) {
-  return array.map(code => `'${code}'`).join(', ');
+  return array.map((code) => `'${code}'`).join(", ");
 }
 
 const dbConfig1 = {
@@ -26,10 +26,10 @@ const dbConfig1 = {
   port: 1443, // Default MSSQL port (1433)
 };
 
-const buildSqlInClause2 = (arr) => arr.map(code => `'${code}'`).join(",");
+const buildSqlInClause2 = (arr) => arr.map((code) => `'${code}'`).join(",");
 
-//report data, current report, company dashboard, 
-// department dashboard, category dashboard, 
+//report data, current report, company dashboard,
+// department dashboard, category dashboard,
 // sub category dashboard, vendor dashboard
 function formatDate(dateString) {
   // Convert the input string to a Date object
@@ -303,7 +303,9 @@ async function syncDB() {
         };
 
         await mssql.connect(syncdbConfig);
-        console.log(`Successfully connected to sync database at ${syncdbIp}:${syncdbPort}`);
+        console.log(
+          `Successfully connected to sync database at ${syncdbIp}:${syncdbPort}`
+        );
 
         const users = await userDetails();
         if (!users || users.length === 0) {
@@ -347,8 +349,9 @@ async function syncDB() {
               .toLocaleDateString("en-GB")
               .replace(/\//g, "/");
 
-            const formattedTime = new Date(payment.ReceiptTime)
-              .toLocaleTimeString("en-GB", { hour12: false });
+            const formattedTime = new Date(
+              payment.ReceiptTime
+            ).toLocaleTimeString("en-GB", { hour12: false });
 
             const newPaymentDetails = {
               PropertyCode: filteredUser.PropertyCode,
@@ -358,7 +361,10 @@ async function syncDB() {
               ReceiptTime: formattedTime,
             };
 
-            const items = await userItemsDetails(payment.ReceiptDate, payment.ReceiptNo);
+            const items = await userItemsDetails(
+              payment.ReceiptDate,
+              payment.ReceiptNo
+            );
             if (items.error) {
               errors.push(items.error);
             }
@@ -379,7 +385,11 @@ async function syncDB() {
             continue; // skip this user, move on to next
           }
 
-          const requestBody = JSON.stringify(trimObjectStrings(userResult), null, 2);
+          const requestBody = JSON.stringify(
+            trimObjectStrings(userResult),
+            null,
+            2
+          );
           console.log("Sending JSON Payload:", requestBody);
 
           try {
@@ -394,10 +404,15 @@ async function syncDB() {
               timeout: 10000,
             });
 
-            console.log(`API Call Successful for user ${user.AppCode}:`, response.data);
+            console.log(
+              `API Call Successful for user ${user.AppCode}:`,
+              response.data
+            );
             apiResponses.push(response.data);
           } catch (error) {
-            const errorMessage = `API Call Failed for user ${user.AppCode}: ${error.response?.data || error.message}`;
+            const errorMessage = `API Call Failed for user ${user.AppCode}: ${
+              error.response?.data || error.message
+            }`;
             console.error(errorMessage);
             errors.push(errorMessage);
             apiResponses.push({ error: errorMessage });
@@ -429,14 +444,18 @@ exports.login = async (req, res) => {
     const date = moment().format("YYYY-MM-DD HH:mm:ss");
 
     if (!username || !password) {
-      return res.status(400).json({ message: "Username and password are required" });
+      return res
+        .status(400)
+        .json({ message: "Username and password are required" });
     }
 
     // Get user info
     const userResult = await pool
       .request()
       .input("username", mssql.VarChar, username)
-      .query("USE [RTPOS_MAIN]; SELECT * FROM tb_USERS WHERE username = @username");
+      .query(
+        "USE [RTPOS_MAIN]; SELECT * FROM tb_USERS WHERE username = @username"
+      );
 
     if (userResult.recordset.length === 0) {
       return res.status(400).json({ message: "Invalid username or password" });
@@ -447,7 +466,8 @@ exports.login = async (req, res) => {
 
     if (!port || !ip_address) {
       return res.status(400).json({
-        message: "Connection hasn't been established yet! Please contact system support.",
+        message:
+          "Connection hasn't been established yet! Please contact system support.",
       });
     }
 
@@ -462,8 +482,7 @@ exports.login = async (req, res) => {
         .request()
         .input("username", mssql.VarChar, username)
         .input("ip", mssql.VarChar, ip)
-        .input("datetime", mssql.VarChar, date)
-        .query(`
+        .input("datetime", mssql.VarChar, date).query(`
           USE [RTPOS_MAIN];
           INSERT INTO tb_LOG (username, ip, datetime)
           VALUES (@username, @ip, @datetime)
@@ -487,8 +506,8 @@ exports.login = async (req, res) => {
         trustServerCertificate: true,
       },
       port: parseInt(port.trim()),
-      connectionTimeout: 5000,  // << timeout in ms
-      requestTimeout: 5000
+      connectionTimeout: 5000, // << timeout in ms
+      requestTimeout: 5000,
     };
 
     const dynamicPool = await mssql.connect(dynamicDbConfig);
@@ -497,7 +516,9 @@ exports.login = async (req, res) => {
     const companyResult = await dynamicPool
       .request()
       .input("CUSTOMER_ID", mssql.Int, CUSTOMERID)
-      .query("USE [RT_WEB]; SELECT * FROM tb_COMPANY WHERE CUSTOMERID = @CUSTOMER_ID");
+      .query(
+        "USE [RT_WEB]; SELECT * FROM tb_COMPANY WHERE CUSTOMERID = @CUSTOMER_ID"
+      );
 
     if (companyResult.recordset.length === 0) {
       return res.status(400).json({ message: "Invalid customer ID" });
@@ -517,6 +538,7 @@ exports.login = async (req, res) => {
         d_scategory: user.d_scategory,
         d_vendor: user.d_vendor,
         d_invoice: user.d_invoice,
+        d_productView: user.d_productView,
         t_scan: user.t_scan,
         t_stock: user.t_stock,
         t_grn: user.t_grn,
@@ -555,8 +577,7 @@ exports.register = async (req, res) => {
     const checkUserResult = await pool
       .request()
       .input("username", mssql.VarChar, username)
-      .input("email", mssql.VarChar, email)
-      .query(`
+      .input("email", mssql.VarChar, email).query(`
         USE [RTPOS_MAIN];
         SELECT * FROM tb_USERS WHERE username = @username OR email = @email
       `);
@@ -578,8 +599,7 @@ exports.register = async (req, res) => {
       .request()
       .input("username", mssql.VarChar, username)
       .input("email", mssql.VarChar, email)
-      .input("password", mssql.VarChar, hashedPassword)
-      .query(`
+      .input("password", mssql.VarChar, hashedPassword).query(`
         USE [RTPOS_MAIN];
         INSERT INTO tb_USERS (username, email, password)
         VALUES (@username, @email, @password)
@@ -603,16 +623,16 @@ exports.resetPassword = async (req, res) => {
   const { token, newPassword } = req.body;
 
   if (!token || !newPassword) {
-    return res.status(400).json({ message: "Token and new password are required" });
+    return res
+      .status(400)
+      .json({ message: "Token and new password are required" });
   }
 
   try {
     pool = await connectToDatabase();
 
     // Find user by reset token
-    const result = await pool
-      .request()
-      .input("token", mssql.VarChar, token)
+    const result = await pool.request().input("token", mssql.VarChar, token)
       .query(`
         USE [RTPOS_MAIN];
         SELECT * FROM tb_USERS WHERE resetToken = @token
@@ -634,16 +654,16 @@ exports.resetPassword = async (req, res) => {
     await pool
       .request()
       .input("hashedPassword", mssql.VarChar, hashedPassword)
-      .input("token", mssql.VarChar, token)
-      .query(`
+      .input("token", mssql.VarChar, token).query(`
         USE [RTPOS_MAIN];
         UPDATE tb_USERS
         SET password = @hashedPassword, resetToken = NULL, resetTokenExpiry = NULL
         WHERE resetToken = @token
       `);
 
-    return res.status(200).json({ message: "Password has been reset successfully" });
-
+    return res
+      .status(200)
+      .json({ message: "Password has been reset successfully" });
   } catch (error) {
     console.error("Error resetting password:", error);
     if (!res.headersSent) {
@@ -669,14 +689,15 @@ exports.forgotPassword = async (req, res) => {
     // Check if user exists
     const result = await pool
       .request()
-      .input("username", mssql.VarChar, username)
-      .query(`
+      .input("username", mssql.VarChar, username).query(`
         USE [RTPOS_MAIN];
         SELECT * FROM tb_USERS WHERE username = @username
       `);
 
     if (result.recordset.length === 0) {
-      return res.status(400).json({ message: "No user found with this username" });
+      return res
+        .status(400)
+        .json({ message: "No user found with this username" });
     }
 
     const user = result.recordset[0];
@@ -688,8 +709,7 @@ exports.forgotPassword = async (req, res) => {
       .request()
       .input("resetToken", mssql.VarChar, resetToken)
       .input("resetTokenExpiry", mssql.BigInt, resetTokenExpiry)
-      .input("username", mssql.VarChar, username)
-      .query(`
+      .input("username", mssql.VarChar, username).query(`
         USE [RTPOS_MAIN];
         UPDATE tb_USERS
         SET resetToken = @resetToken, resetTokenExpiry = @resetTokenExpiry
@@ -700,11 +720,12 @@ exports.forgotPassword = async (req, res) => {
     await sendPasswordResetEmail(user.email, resetToken);
 
     return res.status(200).json({ message: "Password reset email sent" });
-
   } catch (error) {
     console.error("Forgot password error:", error);
     if (!res.headersSent) {
-      return res.status(500).json({ message: "Failed to send password reset email" });
+      return res
+        .status(500)
+        .json({ message: "Failed to send password reset email" });
     }
   } finally {
     if (mssql.connected) await mssql.close();
@@ -732,7 +753,9 @@ exports.updateTempSalesTable = async (req, res) => {
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(403).json({ message: "No authorization token provided" });
+      return res
+        .status(403)
+        .json({ message: "No authorization token provided" });
     }
 
     const token = authHeader.split(" ")[1];
@@ -791,7 +814,9 @@ exports.updateTempGrnTable = async (req, res) => {
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(403).json({ message: "No authorization token provided" });
+      return res
+        .status(403)
+        .json({ message: "No authorization token provided" });
     }
 
     const token = authHeader.split(" ")[1];
@@ -835,7 +860,9 @@ exports.updateTempGrnTable = async (req, res) => {
         VALUES (@company, @vendor_code, @vendor_name, @invoice_no, @type, @productCode, @productName, @costPrice, @scalePrice, @stock, @quantity, @username)
       `;
     } else {
-      return res.status(400).json({ message: "Invalid type. Must be GRN or PRN." });
+      return res
+        .status(400)
+        .json({ message: "Invalid type. Must be GRN or PRN." });
     }
 
     const insertRequest = new mssql.Request();
@@ -868,7 +895,9 @@ exports.updateTempTogTable = async (req, res) => {
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(403).json({ message: "No authorization token provided" });
+      return res
+        .status(403)
+        .json({ message: "No authorization token provided" });
     }
 
     const token = authHeader.split(" ")[1];
@@ -891,7 +920,7 @@ exports.updateTempTogTable = async (req, res) => {
       costPrice,
       scalePrice,
       stock,
-      quantity
+      quantity,
     } = req.body;
 
     const insertQuery = `
@@ -928,7 +957,9 @@ exports.stockUpdateDelete = async (req, res) => {
     const idx = parseInt(req.query.idx, 10);
 
     if (isNaN(idx)) {
-      return res.status(400).json({ message: "Invalid or missing 'idx' parameter" });
+      return res
+        .status(400)
+        .json({ message: "Invalid or missing 'idx' parameter" });
     }
 
     const request = new mssql.Request();
@@ -957,7 +988,9 @@ exports.grnprnDelete = async (req, res) => {
     const { idx, type } = req.query;
 
     if (!idx || isNaN(parseInt(idx, 10))) {
-      return res.status(400).json({ message: "Invalid or missing 'idx' parameter" });
+      return res
+        .status(400)
+        .json({ message: "Invalid or missing 'idx' parameter" });
     }
 
     const tableMap = {
@@ -1006,7 +1039,7 @@ exports.resetDatabaseConnection = async (req, res) => {
     removeStock = [],
     removeDashboard = [],
   } = req.body;
-console.log('req',admin)
+  console.log("req", admin);
   const trimmedName = name?.trim();
   const trimmedIP = ip?.trim();
   const trimmedPort = port?.trim();
@@ -1014,7 +1047,10 @@ console.log('req',admin)
   try {
     // Auth validation
     const authHeader = req.headers.authorization;
-    if (!authHeader) return res.status(403).json({ message: "No authorization token provided" });
+    if (!authHeader)
+      return res
+        .status(403)
+        .json({ message: "No authorization token provided" });
 
     const token = authHeader.split(" ")[1];
     if (!token) return res.status(403).json({ message: "Token is missing" });
@@ -1071,41 +1107,47 @@ console.log('req',admin)
         UPDATE tb_USERS SET CUSTOMERID = @customerID WHERE username = @newName;
       `);
       if (result.rowsAffected[0] === 0) {
-        return res.status(404).json({ message: "Customer ID was not updated." });
+        return res
+          .status(404)
+          .json({ message: "Customer ID was not updated." });
       }
     }
 
     // Utility function to update permissions
     const updatePermissions = async (permissionArray) => {
-  if (!Array.isArray(permissionArray)) return;
+      if (!Array.isArray(permissionArray)) return;
 
-  for (const permissionObject of permissionArray) {
-    for (const column in permissionObject) {
-      const columnValue = permissionObject[column] ? "T" : "F";
+      for (const permissionObject of permissionArray) {
+        for (const column in permissionObject) {
+          const columnValue = permissionObject[column] ? "T" : "F";
 
-      if (!/^[a-zA-Z0-9_]+$/.test(column)) {
-        return res.status(400).json({ message: `Invalid column name: ${column}` });
-      }
+          if (!/^[a-zA-Z0-9_]+$/.test(column)) {
+            return res
+              .status(400)
+              .json({ message: `Invalid column name: ${column}` });
+          }
 
-      const query = `
+          const query = `
         USE [RTPOS_MAIN];
         UPDATE tb_USERS 
         SET ${column} = @value, registered_by = @registeredBy
         WHERE username = @username;
       `;
 
-      const req2 = new mssql.Request();
-      req2.input("value", columnValue);
-      req2.input("registeredBy", username);
-      req2.input("username", trimmedName);
+          const req2 = new mssql.Request();
+          req2.input("value", columnValue);
+          req2.input("registeredBy", username);
+          req2.input("username", trimmedName);
 
-      const result = await req2.query(query);
-      if (result.rowsAffected[0] === 0) {
-        return res.status(404).json({ message: `Failed to update permission for ${column}` });
+          const result = await req2.query(query);
+          if (result.rowsAffected[0] === 0) {
+            return res
+              .status(404)
+              .json({ message: `Failed to update permission for ${column}` });
+          }
+        }
       }
-    }
-  }
-};
+    };
 
     await updatePermissions(admin);
     await updatePermissions(dashboard);
@@ -1113,36 +1155,42 @@ console.log('req',admin)
 
     // Check if nothing was sent
     const isEmptyOrAllFalse = (arr) => {
-  return (
-    !Array.isArray(arr) ||
-    arr.length === 0 ||
-    arr.every(obj => 
-      typeof obj === 'object' &&
-      Object.values(obj).every(value => value === false)
-    )
-  );
-};
+      return (
+        !Array.isArray(arr) ||
+        arr.length === 0 ||
+        arr.every(
+          (obj) =>
+            typeof obj === "object" &&
+            Object.values(obj).every((value) => value === false)
+        )
+      );
+    };
 
-const nothingToUpdate =
-  !ip &&
-  !port &&
-  !customerID &&
-  isEmptyOrAllFalse(admin) &&
-  isEmptyOrAllFalse(dashboard) &&
-  isEmptyOrAllFalse(stock) &&
-  isEmptyOrAllFalse(removeAdmin) &&
-  isEmptyOrAllFalse(removeDashboard) &&
-  isEmptyOrAllFalse(removeStock);
+    const nothingToUpdate =
+      !ip &&
+      !port &&
+      !customerID &&
+      isEmptyOrAllFalse(admin) &&
+      isEmptyOrAllFalse(dashboard) &&
+      isEmptyOrAllFalse(stock) &&
+      isEmptyOrAllFalse(removeAdmin) &&
+      isEmptyOrAllFalse(removeDashboard) &&
+      isEmptyOrAllFalse(removeStock);
 
-if (nothingToUpdate) {
-  return res.status(400).json({ message: "Please provide details to update." });
-}
+    if (nothingToUpdate) {
+      return res
+        .status(400)
+        .json({ message: "Please provide details to update." });
+    }
 
-
-    return res.status(200).json({ message: "Database connection updated successfully" });
+    return res
+      .status(200)
+      .json({ message: "Database connection updated successfully" });
   } catch (err) {
     console.error("Error:", err);
-    return res.status(500).json({ message: "Failed to update the database connection." });
+    return res
+      .status(500)
+      .json({ message: "Failed to update the database connection." });
   }
 };
 
@@ -1185,7 +1233,9 @@ exports.dashboardOptions = async (req, res) => {
     });
   } catch (error) {
     console.error("Error retrieving dashboard data:", error);
-    return res.status(500).json({ message: "Failed to retrieve dashboard data" });
+    return res
+      .status(500)
+      .json({ message: "Failed to retrieve dashboard data" });
   }
 };
 
@@ -1198,7 +1248,7 @@ exports.vendorOptions = async (req, res) => {
         user: process.env.DB_USER,
         password: process.env.DB_PASSWORD,
         server: process.env.DB_SERVER,
-        database: process.env.DB_DATABASE3 || 'POSBACK_SYSTEM',
+        database: process.env.DB_DATABASE3 || "POSBACK_SYSTEM",
         options: {
           encrypt: false,
           trustServerCertificate: true,
@@ -1237,7 +1287,9 @@ exports.reportData = async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader) {
-      return res.status(403).json({ message: "No authorization token provided" });
+      return res
+        .status(403)
+        .json({ message: "No authorization token provided" });
     }
 
     const token = authHeader.split(" ")[1];
@@ -1249,14 +1301,20 @@ exports.reportData = async (req, res) => {
     const username = decoded.username;
 
     // Normalize selectedOptions from query string
-    let selectedOptions = req.query.selectedOptions || req.query["selectedOptions[]"];
+    let selectedOptions =
+      req.query.selectedOptions || req.query["selectedOptions[]"];
     if (typeof selectedOptions === "string") {
       selectedOptions = [selectedOptions];
     }
 
     const { fromDate, toDate, invoiceNo } = req.query;
 
-    if (!fromDate || !toDate || !Array.isArray(selectedOptions) || selectedOptions.length === 0) {
+    if (
+      !fromDate ||
+      !toDate ||
+      !Array.isArray(selectedOptions) ||
+      selectedOptions.length === 0
+    ) {
       return res.status(400).json({ message: "Missing required parameters" });
     }
 
@@ -1330,7 +1388,6 @@ exports.reportData = async (req, res) => {
       reportData: reportQuery.recordset || [],
       invoiceData: invoiceData || [],
     });
-
   } catch (error) {
     console.error("Error generating report:", error);
     res.status(500).json({ message: "Failed to generate report" });
@@ -1342,7 +1399,9 @@ exports.currentReportData = async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader) {
-      return res.status(403).json({ message: "No authorization token provided" });
+      return res
+        .status(403)
+        .json({ message: "No authorization token provided" });
     }
 
     const token = authHeader.split(" ")[1];
@@ -1361,7 +1420,11 @@ exports.currentReportData = async (req, res) => {
 
     const { currentDate, invoiceNo } = req.query;
 
-    if (!Array.isArray(companyCodes) || companyCodes.length === 0 || !currentDate) {
+    if (
+      !Array.isArray(companyCodes) ||
+      companyCodes.length === 0 ||
+      !currentDate
+    ) {
       return res.status(400).json({ message: "Missing or invalid parameters" });
     }
 
@@ -1434,20 +1497,21 @@ exports.currentReportData = async (req, res) => {
       reportData: reportQuery.recordset || [],
       invoiceData,
     });
-
   } catch (error) {
     console.error("Error retrieving current report data:", error);
     res.status(500).json({ message: "Failed to retrieve current report data" });
   }
 };
 
-
 //company dashboard
 exports.loadingDashboard = async (req, res) => {
   try {
     // Auth
     const authHeader = req.headers.authorization;
-    if (!authHeader) return res.status(403).json({ message: "No authorization token provided" });
+    if (!authHeader)
+      return res
+        .status(403)
+        .json({ message: "No authorization token provided" });
 
     const token = authHeader.split(" ")[1];
     if (!token) return res.status(403).json({ message: "Token is missing" });
@@ -1458,13 +1522,17 @@ exports.loadingDashboard = async (req, res) => {
     const { currentDate, fromDate, toDate, selectedOptions } = req.query;
 
     if (!Array.isArray(selectedOptions) || selectedOptions.length === 0) {
-      return res.status(400).json({ message: "Invalid or missing company codes" });
+      return res
+        .status(400)
+        .json({ message: "Invalid or missing company codes" });
     }
 
     // Optional: Validate company codes are alphanumeric (prevent SQL injection)
-    const isSafe = selectedOptions.every(code => /^[a-zA-Z0-9]+$/.test(code));
+    const isSafe = selectedOptions.every((code) => /^[a-zA-Z0-9]+$/.test(code));
     if (!isSafe) {
-      return res.status(400).json({ message: "Invalid characters in company codes" });
+      return res
+        .status(400)
+        .json({ message: "Invalid characters in company codes" });
     }
 
     const formattedCurrentDate = formatDate(currentDate);
@@ -1472,7 +1540,12 @@ exports.loadingDashboard = async (req, res) => {
     const formattedToDate = formatDate(toDate);
     const reportType = "SALESSUM1";
 
-    console.log(formattedCurrentDate, formattedFromDate, formattedToDate, selectedOptions);
+    console.log(
+      formattedCurrentDate,
+      formattedFromDate,
+      formattedToDate,
+      selectedOptions
+    );
 
     // Clear previous dashboard view data
     await mssql.query`USE RT_WEB; DELETE FROM tb_SALES_DASHBOARD_VIEW WHERE REPUSER = ${username};`;
@@ -1488,7 +1561,6 @@ exports.loadingDashboard = async (req, res) => {
             @REPUSER = '${username}', 
             @REPORT_TYPE = ${reportType};
         `;
-     
       } else {
         await mssql.query`
           EXEC RT_WEB.dbo.Sp_SalesCurView 
@@ -1497,17 +1569,20 @@ exports.loadingDashboard = async (req, res) => {
             @REPUSER = ${username}, 
             @REPORT_TYPE = ${reportType};
         `;
-        
       }
     }
 
     // Properly formatted IN clause (quoted string literals)
-    const companyCodesList = selectedOptions.map(code => `'${code}'`).join(", ");
+    const companyCodesList = selectedOptions
+      .map((code) => `'${code}'`)
+      .join(", ");
 
     // One row summary
-    const loadingDashboardResult = await new mssql.Request()
-  .input('username', mssql.VarChar, username)
-  .query(`
+    const loadingDashboardResult = await new mssql.Request().input(
+      "username",
+      mssql.VarChar,
+      username
+    ).query(`
     USE [RT_WEB];
     SELECT 
       SUM(NETSALES) AS NETSALES,
@@ -1523,9 +1598,11 @@ exports.loadingDashboard = async (req, res) => {
   `);
 
     // Per company summary
-    const record = await new mssql.Request()
-  .input('username', mssql.VarChar, username)
-  .query(`
+    const record = await new mssql.Request().input(
+      "username",
+      mssql.VarChar,
+      username
+    ).query(`
     USE [RT_WEB];
     SELECT 
       COMPANY_CODE,      
@@ -1543,9 +1620,11 @@ exports.loadingDashboard = async (req, res) => {
   `);
 
     // Per unit summary
-    const cashierPointRecord = await new mssql.Request()
-  .input('username', mssql.VarChar, username)
-  .query(`
+    const cashierPointRecord = await new mssql.Request().input(
+      "username",
+      mssql.VarChar,
+      username
+    ).query(`
     USE [RT_WEB];
     SELECT 
       COMPANY_CODE, 
@@ -1563,25 +1642,25 @@ exports.loadingDashboard = async (req, res) => {
     GROUP BY COMPANY_CODE, UNITNO;
   `);
 
-
     // Format results
-    const formattedResult = (loadingDashboardResult && Array.isArray(loadingDashboardResult.recordset))
-      ? loadingDashboardResult.recordset.map(row => ({
-          NETSALES: parseFloat(row.NETSALES || 0).toFixed(2),
-          CASHSALES: parseFloat(row.CASHSALES || 0).toFixed(2),
-          CARDSALES: parseFloat(row.CARDSALES || 0).toFixed(2),
-          CREDITSALES: parseFloat(row.CREDITSALES || 0).toFixed(2),
-          OTHER_PAYMENT: parseFloat(row.OTHER_PAYMENT || 0).toFixed(2),
-          GIFT_VOUCHER: parseFloat(row.GIFT_VOUCHER || 0).toFixed(2),
-          PAIDOUT: parseFloat(row.PAIDOUT || 0).toFixed(2),
-          CASHINHAND: parseFloat(row.CASHINHAND || 0).toFixed(2),
-        }))
-      : [];
+    const formattedResult =
+      loadingDashboardResult && Array.isArray(loadingDashboardResult.recordset)
+        ? loadingDashboardResult.recordset.map((row) => ({
+            NETSALES: parseFloat(row.NETSALES || 0).toFixed(2),
+            CASHSALES: parseFloat(row.CASHSALES || 0).toFixed(2),
+            CARDSALES: parseFloat(row.CARDSALES || 0).toFixed(2),
+            CREDITSALES: parseFloat(row.CREDITSALES || 0).toFixed(2),
+            OTHER_PAYMENT: parseFloat(row.OTHER_PAYMENT || 0).toFixed(2),
+            GIFT_VOUCHER: parseFloat(row.GIFT_VOUCHER || 0).toFixed(2),
+            PAIDOUT: parseFloat(row.PAIDOUT || 0).toFixed(2),
+            CASHINHAND: parseFloat(row.CASHINHAND || 0).toFixed(2),
+          }))
+        : [];
 
-    console.log('formattedResult:', formattedResult);
-    console.log('loadingDashboardResult:', loadingDashboardResult);
-    console.log('record:', record?.recordset);
-    console.log('cashierPointRecord:', cashierPointRecord?.recordset);
+    console.log("formattedResult:", formattedResult);
+    console.log("loadingDashboardResult:", loadingDashboardResult);
+    console.log("record:", record?.recordset);
+    console.log("cashierPointRecord:", cashierPointRecord?.recordset);
 
     // Send response
     res.status(200).json({
@@ -1591,7 +1670,6 @@ exports.loadingDashboard = async (req, res) => {
       record: record?.recordset ?? [],
       cashierPointRecord: cashierPointRecord?.recordset ?? [],
     });
-
   } catch (error) {
     console.error("Error loading dashboard:", error);
     res.status(500).json({ message: "Failed to load dashboard data" });
@@ -1603,7 +1681,9 @@ exports.departmentDashboard = async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader) {
-      return res.status(403).json({ message: "No authorization token provided" });
+      return res
+        .status(403)
+        .json({ message: "No authorization token provided" });
     }
 
     const token = authHeader.split(" ")[1];
@@ -1640,7 +1720,7 @@ exports.departmentDashboard = async (req, res) => {
           } catch (err) {
             if (err.originalError?.number === 1205 && i < retries - 1) {
               console.warn(`Deadlock occurred. Retrying attempt ${i + 1}...`);
-              await new Promise(resolve => setTimeout(resolve, 1000));
+              await new Promise((resolve) => setTimeout(resolve, 1000));
             } else {
               throw err;
             }
@@ -1660,14 +1740,15 @@ exports.departmentDashboard = async (req, res) => {
       // Step 2: Run stored procedures for each company
       for (const companyCode of selectedOptions) {
         try {
-          const queryFn = fromDate && toDate
-            ? () => mssql.query`
+          const queryFn =
+            fromDate && toDate
+              ? () => mssql.query`
                 EXEC Sp_SalesView @COMPANY_CODE = ${companyCode}, 
                                   @DATE1 = ${formattedFromDate}, 
                                   @DATE2 = ${formattedToDate}, 
                                   @REPUSER = ${username}, 
                                   @REPORT_TYPE = ${reportType}`
-            : () => mssql.query`
+              : () => mssql.query`
                 EXEC Sp_SalesCurView @COMPANY_CODE = ${companyCode}, 
                                      @DATE = ${formattedCurrentDate}, 
                                      @REPUSER = ${username}, 
@@ -1675,16 +1756,20 @@ exports.departmentDashboard = async (req, res) => {
 
           await executeWithRetry(queryFn);
         } catch (spErr) {
-          console.error(`Error executing stored procedure for ${companyCode}:`, spErr);
+          console.error(
+            `Error executing stored procedure for ${companyCode}:`,
+            spErr
+          );
         }
       }
 
       // Step 3: Fetch department data
-      const inClause = selectedOptions.map(code => `'${code}'`).join(","); // safe, string literals
+      const inClause = selectedOptions.map((code) => `'${code}'`).join(","); // safe, string literals
 
       try {
-        const [tableRecords, amountBarChart, quantityBarChart] = await Promise.all([
-          mssql.query(`
+        const [tableRecords, amountBarChart, quantityBarChart] =
+          await Promise.all([
+            mssql.query(`
             USE [RT_WEB];
             SELECT   
               LTRIM(RTRIM(COMPANY_CODE)) AS COMPANY_CODE,
@@ -1696,20 +1781,20 @@ exports.departmentDashboard = async (req, res) => {
             WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause})
             GROUP BY COMPANY_CODE, DEPTCODE, DEPTNAME`),
 
-          mssql.query(`
+            mssql.query(`
             USE [RT_WEB];
             SELECT DEPTNAME, SUM(AMOUNT) AS AMOUNT
             FROM tb_SALESVIEW
             WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause})
             GROUP BY DEPTNAME`),
 
-          mssql.query(`
+            mssql.query(`
             USE [RT_WEB];
             SELECT DEPTNAME, SUM(QTY) AS QUANTITY
             FROM tb_SALESVIEW
             WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause})
-            GROUP BY DEPTNAME`)
-        ]);
+            GROUP BY DEPTNAME`),
+          ]);
 
         return res.status(200).json({
           message: "Processed parameters for company codes",
@@ -1720,12 +1805,16 @@ exports.departmentDashboard = async (req, res) => {
         });
       } catch (fetchErr) {
         console.error("Error fetching department data:", fetchErr);
-        return res.status(500).json({ message: "Failed to fetch department data" });
+        return res
+          .status(500)
+          .json({ message: "Failed to fetch department data" });
       }
     });
   } catch (error) {
     console.error("Unhandled error in departmentDashboard:", error);
-    return res.status(500).json({ message: "Failed to load department dashboard" });
+    return res
+      .status(500)
+      .json({ message: "Failed to load department dashboard" });
   }
 };
 
@@ -1733,20 +1822,24 @@ exports.departmentDashboard = async (req, res) => {
 exports.categoryDashboard = async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    if (!authHeader) return res.status(403).json({ message: "No authorization token provided" });
+    if (!authHeader)
+      return res
+        .status(403)
+        .json({ message: "No authorization token provided" });
 
     const token = authHeader.split(" ")[1];
     if (!token) return res.status(403).json({ message: "Token is missing" });
 
     jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
-      if (err) return res.status(403).json({ message: "Invalid or expired token" });
+      if (err)
+        return res.status(403).json({ message: "Invalid or expired token" });
 
       const username = decoded.username;
       let { currentDate, fromDate, toDate, selectedOptions } = req.query;
 
       // Ensure selectedOptions is always an array
       if (typeof selectedOptions === "string") {
-        selectedOptions = selectedOptions.split(",").map(code => code.trim());
+        selectedOptions = selectedOptions.split(",").map((code) => code.trim());
       }
 
       if (!Array.isArray(selectedOptions) || selectedOptions.length === 0) {
@@ -1790,10 +1883,14 @@ exports.categoryDashboard = async (req, res) => {
       }
 
       // Safely construct SQL IN clause
-      const inClause = selectedOptions.map(code => `'${code}'`).join(", ");
+      const inClause = selectedOptions.map((code) => `'${code}'`).join(", ");
 
       // Run summary queries
-      const [categoryTableRecords, categoryAmountBarChart, categoryQuantityBarChart] = await Promise.all([
+      const [
+        categoryTableRecords,
+        categoryAmountBarChart,
+        categoryQuantityBarChart,
+      ] = await Promise.all([
         mssql.query(`
           USE [RT_WEB];
           SELECT
@@ -1839,20 +1936,24 @@ exports.categoryDashboard = async (req, res) => {
 exports.subCategoryDashboard = async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    if (!authHeader) return res.status(403).json({ message: "No authorization token provided" });
+    if (!authHeader)
+      return res
+        .status(403)
+        .json({ message: "No authorization token provided" });
 
     const token = authHeader.split(" ")[1];
     if (!token) return res.status(403).json({ message: "Token is missing" });
 
     jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
-      if (err) return res.status(403).json({ message: "Invalid or expired token" });
+      if (err)
+        return res.status(403).json({ message: "Invalid or expired token" });
 
       const username = decoded.username;
       let { currentDate, fromDate, toDate, selectedOptions } = req.query;
 
       // Ensure selectedOptions is parsed to an array
       if (typeof selectedOptions === "string") {
-        selectedOptions = selectedOptions.split(",").map(code => code.trim());
+        selectedOptions = selectedOptions.split(",").map((code) => code.trim());
       }
 
       if (!Array.isArray(selectedOptions) || selectedOptions.length === 0) {
@@ -1896,10 +1997,14 @@ exports.subCategoryDashboard = async (req, res) => {
       }
 
       // Safely construct IN clause
-      const inClause = selectedOptions.map(code => `'${code}'`).join(", ");
+      const inClause = selectedOptions.map((code) => `'${code}'`).join(", ");
 
       // Perform summary queries
-      const [subCategoryTableRecords, subCategoryAmountBarChart, subCategoryQuantityBarChart] = await Promise.all([
+      const [
+        subCategoryTableRecords,
+        subCategoryAmountBarChart,
+        subCategoryQuantityBarChart,
+      ] = await Promise.all([
         mssql.query(`
           USE [RT_WEB];
           SELECT
@@ -1924,7 +2029,7 @@ exports.subCategoryDashboard = async (req, res) => {
           SELECT SCATNAME, SUM(QTY) AS QUANTITY
           FROM tb_SALESVIEW
           WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause})
-          GROUP BY SCATNAME`)
+          GROUP BY SCATNAME`),
       ]);
 
       return res.status(200).json({
@@ -1932,7 +2037,8 @@ exports.subCategoryDashboard = async (req, res) => {
         success: true,
         subCategoryTableRecords: subCategoryTableRecords.recordset || [],
         subCategoryAmountBarChart: subCategoryAmountBarChart.recordset || [],
-        subCategoryQuantityBarChart: subCategoryQuantityBarChart.recordset || [],
+        subCategoryQuantityBarChart:
+          subCategoryQuantityBarChart.recordset || [],
       });
     });
   } catch (error) {
@@ -1945,20 +2051,24 @@ exports.subCategoryDashboard = async (req, res) => {
 exports.vendorDashboard = async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    if (!authHeader) return res.status(403).json({ message: "No authorization token provided" });
+    if (!authHeader)
+      return res
+        .status(403)
+        .json({ message: "No authorization token provided" });
 
     const token = authHeader.split(" ")[1];
     if (!token) return res.status(403).json({ message: "Token is missing" });
 
     jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
-      if (err) return res.status(403).json({ message: "Invalid or expired token" });
+      if (err)
+        return res.status(403).json({ message: "Invalid or expired token" });
 
       const username = decoded.username;
       let { currentDate, fromDate, toDate, selectedOptions } = req.query;
 
       if (typeof selectedOptions === "string") {
-  selectedOptions = selectedOptions.split(",").map((code) => code.trim());
-}
+        selectedOptions = selectedOptions.split(",").map((code) => code.trim());
+      }
 
       if (!Array.isArray(selectedOptions) || selectedOptions.length === 0) {
         return res.status(400).json({ message: "No company codes provided" });
@@ -1999,8 +2109,9 @@ exports.vendorDashboard = async (req, res) => {
         }
       }
 
-      const [vendorTableRecords, vendorAmountBarChart, vendorQuantityBarChart] = await Promise.all([
-        mssql.query(`
+      const [vendorTableRecords, vendorAmountBarChart, vendorQuantityBarChart] =
+        await Promise.all([
+          mssql.query(`
           USE [RT_WEB];
           SELECT
             LTRIM(RTRIM(COMPANY_CODE)) AS COMPANY_CODE,
@@ -2012,20 +2123,20 @@ exports.vendorDashboard = async (req, res) => {
           WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause})
           GROUP BY COMPANY_CODE, VENDORCODE, VENDORNAME`),
 
-        mssql.query(`
+          mssql.query(`
           USE [RT_WEB];
           SELECT VENDORNAME, SUM(AMOUNT) AS AMOUNT
           FROM tb_SALESVIEW
           WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause})
           GROUP BY VENDORNAME`),
 
-        mssql.query(`
+          mssql.query(`
           USE [RT_WEB];
           SELECT VENDORNAME, SUM(QTY) AS QUANTITY
           FROM tb_SALESVIEW
           WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause})
           GROUP BY VENDORNAME`),
-      ]);
+        ]);
 
       return res.status(200).json({
         message: "Processed parameters for company codes",
@@ -2047,7 +2158,9 @@ exports.scan = async (req, res) => {
   const company = req.query.company?.trim();
 
   if (!codeData || codeData === "No result") {
-    return res.status(400).json({ message: "Please provide a valid barcode or product code" });
+    return res
+      .status(400)
+      .json({ message: "Please provide a valid barcode or product code" });
   }
 
   if (!company) {
@@ -2104,7 +2217,6 @@ exports.scan = async (req, res) => {
       salesData,
       amount: stockQty,
     });
-
   } catch (error) {
     console.error("Error retrieving barcode data:", error);
     return res.status(500).json({ message: "Failed to retrieve barcode data" });
@@ -2117,7 +2229,9 @@ exports.stockUpdate = async (req, res) => {
 
   // Validate required query parameters
   if (!name || !code) {
-    return res.status(400).json({ message: "Missing required query parameters: name and/or code" });
+    return res
+      .status(400)
+      .json({ message: "Missing required query parameters: name and/or code" });
   }
 
   const username = String(name).trim();
@@ -2164,7 +2278,9 @@ exports.grnprnTableData = async (req, res) => {
 
   // Validate input
   if (!name || !code) {
-    return res.status(400).json({ message: "Missing required query parameters: name and/or code" });
+    return res
+      .status(400)
+      .json({ message: "Missing required query parameters: name and/or code" });
   }
 
   const username = String(name).trim();
@@ -2240,8 +2356,7 @@ exports.finalStockUpdate = async (req, res) => {
     // Step 1: Retrieve data
     const selectResult = await new mssql.Request(transaction)
       .input("REPUSER", mssql.NVarChar(10), username)
-      .input("COMPANY_CODE", mssql.NChar(10), company)
-      .query(`
+      .input("COMPANY_CODE", mssql.NChar(10), company).query(`
         SELECT * FROM [RT_WEB].dbo.tb_STOCKRECONCILATION_DATAENTRYTEMP 
         WHERE REPUSER = @REPUSER AND COMPANY_CODE = @COMPANY_CODE
       `);
@@ -2295,8 +2410,7 @@ exports.finalStockUpdate = async (req, res) => {
     // Step 3: Delete original data
     const deleteResult = await new mssql.Request(transaction)
       .input("REPUSER", mssql.NVarChar(10), username)
-      .input("COMPANY_CODE", mssql.NChar(10), company)
-      .query(`
+      .input("COMPANY_CODE", mssql.NChar(10), company).query(`
         DELETE FROM [RT_WEB].dbo.tb_STOCKRECONCILATION_DATAENTRYTEMP
         WHERE REPUSER = @REPUSER AND COMPANY_CODE = @COMPANY_CODE
       `);
@@ -2305,13 +2419,16 @@ exports.finalStockUpdate = async (req, res) => {
       await transaction.rollback();
       return res.status(404).json({
         success: false,
-        message: "Insert succeeded but no records were deleted from temp table.",
+        message:
+          "Insert succeeded but no records were deleted from temp table.",
       });
     }
 
     // Step 4: Commit transaction
     await transaction.commit();
-    console.log(`✅ Transaction committed: ${insertCount} rows inserted and temp rows deleted.`);
+    console.log(
+      `✅ Transaction committed: ${insertCount} rows inserted and temp rows deleted.`
+    );
 
     return res.status(200).json({
       success: true,
@@ -2377,7 +2494,9 @@ exports.finalGrnPrnUpdate = async (req, res) => {
     const records = selectResult.recordset;
     if (records.length === 0) {
       await transaction.rollback();
-      return res.status(404).json({ success: false, message: "No data found in temp table" });
+      return res
+        .status(404)
+        .json({ success: false, message: "No data found in temp table" });
     }
 
     // Step 3: Fetch or insert document row
@@ -2388,7 +2507,9 @@ exports.finalGrnPrnUpdate = async (req, res) => {
       SELECT * FROM [RT_WEB].dbo.tb_DOCUMENT WHERE COMPANY_CODE = @COMPANY_CODE
     `);
 
-    let grn = "00", prn = "00", tog = "00";
+    let grn = "00",
+      prn = "00",
+      tog = "00";
 
     if (documentResult.recordset.length === 0) {
       const insertDocReq = new mssql.Request(transaction);
@@ -2403,7 +2524,8 @@ exports.finalGrnPrnUpdate = async (req, res) => {
         INSERT INTO [RT_WEB].dbo.tb_DOCUMENT (COMPANY_CODE, GRN, PRN, TOG, REPUSER)
         VALUES (@COMPANY_CODE, @GRN, @PRN, @TOG, @REPUSER)
       `);
-      if (insertDoc.rowsAffected[0] === 0) throw new Error("Document insert failed");
+      if (insertDoc.rowsAffected[0] === 0)
+        throw new Error("Document insert failed");
     } else {
       const doc = documentResult.recordset[0];
       grn = doc.GRN || "00";
@@ -2424,7 +2546,8 @@ exports.finalGrnPrnUpdate = async (req, res) => {
     updateDocReq.input("COMPANY_CODE", mssql.NChar(10), company.trim());
 
     if (type === "GRN") updateDocReq.input("GRN", mssql.NVarChar(2), newGrn);
-    else if (type === "PRN") updateDocReq.input("PRN", mssql.NVarChar(2), newPrn);
+    else if (type === "PRN")
+      updateDocReq.input("PRN", mssql.NVarChar(2), newPrn);
     else updateDocReq.input("TOG", mssql.NVarChar(2), newTog);
 
     const updateQuery = `
@@ -2444,9 +2567,21 @@ exports.finalGrnPrnUpdate = async (req, res) => {
 
       // Common inputs
       insertReq.input("DOCUMENT_NO", mssql.NVarChar(20), documentNo);
-      insertReq.input("COMPANY_CODE", mssql.NChar(10), record.COMPANY_CODE.trim());
-      insertReq.input("PRODUCT_CODE", mssql.NChar(30), record.PRODUCT_CODE.trim());
-      insertReq.input("PRODUCT_NAMELONG", mssql.NVarChar(50), record.PRODUCT_NAMELONG.trim());
+      insertReq.input(
+        "COMPANY_CODE",
+        mssql.NChar(10),
+        record.COMPANY_CODE.trim()
+      );
+      insertReq.input(
+        "PRODUCT_CODE",
+        mssql.NChar(30),
+        record.PRODUCT_CODE.trim()
+      );
+      insertReq.input(
+        "PRODUCT_NAMELONG",
+        mssql.NVarChar(50),
+        record.PRODUCT_NAMELONG.trim()
+      );
       insertReq.input("COSTPRICE", mssql.Money, record.COSTPRICE);
       insertReq.input("UNITPRICE", mssql.Money, record.UNITPRICE);
       insertReq.input("CUR_STOCK", mssql.Float, record.CUR_STOCK);
@@ -2474,7 +2609,11 @@ exports.finalGrnPrnUpdate = async (req, res) => {
         `;
       } else if (type === "TOG") {
         insertReq
-          .input("COMPANY_TO_CODE", mssql.NChar(10), record.COMPANY_TO_CODE.trim())
+          .input(
+            "COMPANY_TO_CODE",
+            mssql.NChar(10),
+            record.COMPANY_TO_CODE.trim()
+          )
           .input("TYPE", mssql.NChar(10), record.TYPE.trim());
 
         insertQuery = `
@@ -2510,7 +2649,6 @@ exports.finalGrnPrnUpdate = async (req, res) => {
       message: "Data moved successfully",
       documentNo,
     });
-
   } catch (error) {
     console.error("Error in finalGrnPrnUpdate:", error.message);
     if (transaction && !transaction._aborted) {
@@ -2559,14 +2697,84 @@ exports.syncDatabases = async (req, res) => {
   }
 };
 
+// product view
+exports.productView = async (req, res) => {
+  const codeData = req.query.data?.trim();
+
+  if (!codeData || codeData === "No result") {
+    return res
+      .status(400)
+      .json({ message: "Please provide a valid barcode or product code" });
+  }
+
+  try {
+    let productCode = null;
+
+    // Try finding a product code via barcode link table
+    const barcodeResult = await mssql.query`
+      USE [POSBACK_SYSTEM];
+      SELECT PRODUCT_CODE FROM tb_BARCODELINK WHERE BARCODE = ${codeData};
+    `;
+
+    if (barcodeResult.recordset.length > 0) {
+      productCode = barcodeResult.recordset[0].PRODUCT_CODE;
+    }
+
+    // If not found in barcode link, use product table directly
+    const productQuery = productCode
+      ? mssql.query`
+        USE [POSBACK_SYSTEM];
+        SELECT PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE 
+        FROM tb_PRODUCT WHERE PRODUCT_CODE = ${productCode};`
+      : mssql.query`
+        USE [POSBACK_SYSTEM];
+        SELECT PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE 
+        FROM tb_PRODUCT 
+        WHERE PRODUCT_CODE = ${codeData} OR BARCODE = ${codeData} OR BARCODE2 = ${codeData};`;
+
+    const salesDataResult = await productQuery;
+    const salesData = salesDataResult.recordset;
+
+    if (!salesData || salesData.length === 0) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+
+    const foundCode = salesData[0].PRODUCT_CODE;
+
+    const stockResult = await mssql.query`
+      USE [POSBACK_SYSTEM];
+      SELECT 
+    P.PRODUCT_CODE,P.BARCODE,P.BARCODE2,P.PRODUCT_NAMELONG,P.DEPTCODE,D.DEPTNAME,P.CATCODE,C.CATNAME,
+    P.SCATCODE,S.SCATNAME,P.VENDORCODE,V.VENDORNAME,P.COSTPRICE,P.MINPRICE, P.SCALEPRICE,P.WPRICE,P.PRICE1,P.PRICE2,P.PRICE3
+    FROM tb_PRODUCT P
+    LEFT JOIN tb_DEPARTMENT D ON P.DEPTCODE = D.DEPTCODE
+    LEFT JOIN tb_CATEGORY C ON P.CATCODE = C.CATCODE
+    LEFT JOIN tb_SUBCATEGORY S ON P.SCATCODE = S.SCATCODE
+    LEFT JOIN tb_VENDOR V ON P.VENDORCODE = V.VENDORCODE
+    WHERE P.PRODUCT_CODE  = ${foundCode}
+    `;
+
+    const result = stockResult.recordset[0];
+    console.log('result',result)
+
+    return res.status(200).json({
+      message: "Item Found Successfully",
+      result: result,
+    });
+  } catch (error) {
+    console.error("Error retrieving barcode data:", error);
+    return res.status(500).json({ message: "Failed to retrieve barcode data" });
+  }
+};
 
 // Get user connection details
 exports.findUserConnection = async (req, res) => {
-
   const name = req.query.name;
 
   if (!name || typeof name !== "string") {
-    return res.status(400).json({ message: "Invalid or missing username parameter" });
+    return res
+      .status(400)
+      .json({ message: "Invalid or missing username parameter" });
   }
 
   try {
@@ -2589,7 +2797,7 @@ exports.findUserConnection = async (req, res) => {
     const userPermissionResult = await mssql.query`
       USE [RTPOS_MAIN];
       SELECT [a_permission], [a_sync], [d_company], [d_department], [d_category], [d_scategory], 
-             [d_vendor], [d_invoice], [t_scan], [t_stock], [t_grn], [t_prn], [t_tog],[t_stock_update]
+             [d_vendor], [d_invoice],[d_productView], [t_scan], [t_stock], [t_grn], [t_prn], [t_tog],[t_stock_update]
       FROM tb_USERS
       WHERE username = ${name};
     `;
@@ -2610,4 +2818,3 @@ exports.findUserConnection = async (req, res) => {
     res.status(500).json({ message: "Failed to retrieve dashboard data" });
   }
 };
-
