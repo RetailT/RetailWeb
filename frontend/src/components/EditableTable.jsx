@@ -1,7 +1,15 @@
 import { FaTrash } from "react-icons/fa";
 import { useRef, useEffect } from "react";
 
-const ScrollableTable = ({ headers, data, editableColumns, onRowChange, onDeleteRow, formatColumns = [] }) => {
+const ScrollableTable = ({
+  headers,
+  data,
+  editableColumns,
+  onRowChange,
+  onDeleteRow,
+  formatColumns = [],
+  bin,
+}) => {
   const shouldScrollVertically = data.length > 7; // Enable vertical scroll if more than 7 rows
   const tableRef = useRef(null);
 
@@ -14,7 +22,9 @@ const ScrollableTable = ({ headers, data, editableColumns, onRowChange, onDelete
 
   // Function to get the input type for a specific column
   const getInputType = (columnIndex) => {
-    const editableColumn = editableColumns.find((col) => col.index === columnIndex);
+    const editableColumn = editableColumns.find(
+      (col) => col.index === columnIndex
+    );
     return editableColumn ? editableColumn.type : "text"; // Default to 'text' if not defined
   };
 
@@ -45,7 +55,7 @@ const ScrollableTable = ({ headers, data, editableColumns, onRowChange, onDelete
                     {header}
                   </th>
                 ))}
-                {data.length > 0 && (
+                {data.length > 0 && !bin && (
                   <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border border-gray-300">
                     Actions
                   </th>
@@ -59,27 +69,40 @@ const ScrollableTable = ({ headers, data, editableColumns, onRowChange, onDelete
                   {row.map((cell, cellIndex) => (
                     <td
                       key={cellIndex}
-                      className={`px-6 py-3 whitespace-nowrap text-sm ${getColumnAlignment(cellIndex)} text-gray-900 border border-gray-300`}
+                      className={`px-6 py-3 whitespace-nowrap text-sm ${getColumnAlignment(
+                        cellIndex
+                      )} text-gray-900 border border-gray-300`}
                     >
-                      {editableColumns.some((col) => col.index === cellIndex) ? (
+                      {editableColumns.some(
+                        (col) => col.index === cellIndex
+                      ) ? (
                         <input
                           type={getInputType(cellIndex)}
                           value={cell || ""}
-                          onChange={(e) => onRowChange(rowIndex, cellIndex, e.target.value)}
+                          onChange={(e) =>
+                            onRowChange(rowIndex, cellIndex, e.target.value)
+                          }
                           className="w-full"
                         />
-                      ) : formatColumns.includes(cellIndex) && cell !== undefined && cell !== null ? (
+                      ) : formatColumns.includes(cellIndex) &&
+                        cell !== undefined &&
+                        cell !== null ? (
                         `${parseFloat(cell).toFixed(2)}`
                       ) : (
                         cell
                       )}
                     </td>
                   ))}
-                  <td className="px-6 py-3 text-center">
-                    <button onClick={() => onDeleteRow(rowIndex)} className="text-red-600 hover:text-red-800 p-2">
-                      <FaTrash size={16} />
-                    </button>
-                  </td>
+                  {!bin && (
+                    <td className="px-6 py-3 text-center">
+                      <button
+                        onClick={() => onDeleteRow(rowIndex)}
+                        className="text-red-600 hover:text-red-800 p-2"
+                      >
+                        <FaTrash size={16} />
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

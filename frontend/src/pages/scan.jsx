@@ -52,6 +52,10 @@ function App() {
   const [salesData, setSalesData] = useState([]);
   const [disable, setDisable] = useState(false);
 const [repUserFilter, setRepUserFilter] = useState(""); // empty means no filter
+const [inputValue, setInputValue] = useState("");
+  const [filteredSuggestions, setFilteredSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [names, setNames] = useState([]);
 
 const [uniqueRepUsers, setUniqueRepUsers] = useState([]);
   const quantityRef = useRef(null);
@@ -175,14 +179,14 @@ const getCameraStream = async () => {
   } else {
     stopCameraStream();
   }
-
+requestProductNames();
   }, [scannerEnabled]);
 
   if (!authToken) {
     return <Navigate to="/login" replace />;
   }
 
-  const requestData = async (data) => {
+  const requestData = async (data,name) => {
     setLoading(true);
     try {
       const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}scan`, {
@@ -192,6 +196,7 @@ const getCameraStream = async () => {
         params: {
           data: data,
           company: selectedCompany,
+          name: name,
         },
       });
 
@@ -209,6 +214,8 @@ const getCameraStream = async () => {
           quantityRef.current.select();
         }
       }, 100);
+      setCode("");
+      setInputValue("");
     } catch (err) {
       setSalesData([]);
       setAmount("");
@@ -246,7 +253,7 @@ const getCameraStream = async () => {
       setCurrentData(result.text);
       setCode("");
       toast.success(`Product scanned: ${result.text}`);
-      requestData(result.text);
+      requestData(result.text,"");
     }
   };
 
@@ -308,19 +315,44 @@ const getCameraStream = async () => {
     e.preventDefault();
     setCodeError("");
 
-    if (!code) {
-      setCodeError("Code is required.");
+    if (!code && !inputValue) {
+      setCodeError("Code or name is required.");
       valid = false;
     }
     if (valid) {
-      setCurrentData("");
-      requestData(code);
+      requestData(code, inputValue);
+    }
+  };
+
+     const requestProductNames = async () => {
+    try {
+      const response = await axios.get(
+        `${process.env.REACT_APP_BACKEND_URL}product-names`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          }
+        }
+      );
+      if (response.data.message === "Product names found") {
+        
+        const productNames = response.data.names.map(
+          (item) => item.PRODUCT_NAMELONG
+        );
+        setNames(productNames);
+      }
+    } catch (err) {
+      setAlert({
+        message: err.response?.data?.message || "Product name finding failed",
+        type: "error",
+      });
+      setTimeout(() => setAlert(null), 3000);
     }
   };
 
   const tableData = async () => {
     try {
-      
+      console.log('helooo',username, selectedCompany);
       setLoading(true);
       const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}grnprn-table-data`, {
         headers: {
@@ -396,6 +428,7 @@ const getCameraStream = async () => {
         }));
         setEnteredProduct('submitted')
         setTableData(pData);
+        // console.log('pData',pData);
         setInitialData(true);
       }
       else if (selectedType === 'TOG' && togData.length > 0 ) {
@@ -787,6 +820,27 @@ const getCameraStream = async () => {
     }
   };
 
+    const handleChange = (e) => {
+    const value = e.target.value;
+    setInputValue(value);
+
+    if (value.length > 0) {
+      const filtered = names.filter((name) =>
+        name.toLowerCase().startsWith(value.toLowerCase())
+      );
+      setFilteredSuggestions(filtered);
+      setShowSuggestions(true);
+    } else {
+      setShowSuggestions(false);
+    }
+  };
+
+  const handleSelect = (name) => {
+    setInputValue(name);
+    setShowSuggestions(false);
+   
+  };
+
   const filteredTableData = newTableData.filter((item) => {
   const repUser = item.rowData[headers.indexOf("REPUSER")]?.trim();
   return repUserFilter === "" || repUser === repUserFilter;
@@ -1009,6 +1063,30 @@ const getCameraStream = async () => {
                       onSubmit={handleSubmit}
                       className="flex items-center space-x-2"
                     >
+                      <div className="relative w-full md:w-auto">
+    <input
+      type="text"
+      value={inputValue}
+      onChange={handleChange}
+      onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+      onFocus={() => inputValue && setShowSuggestions(true)}
+      placeholder="Enter Product Name"
+      className="px-3 py-2 w-full md:w-64 bg-gray-100 border border-gray-300 rounded-md text-gray-700 focus:outline-none"
+    />
+    {showSuggestions && filteredSuggestions.length > 0 && (
+      <ul className="absolute z-10 w-full bg-white border border-gray-300 rounded-md mt-1 shadow-md">
+        {filteredSuggestions.map((name, index) => (
+          <li
+            key={index}
+            onClick={() => handleSelect(name)}
+            className="p-2 hover:bg-gray-100 cursor-pointer"
+          >
+            {name}
+          </li>
+        ))}
+      </ul>
+    )}
+  </div>
                       <input
                         type="text"
                         id="code"

@@ -4,6 +4,7 @@ import toast, { Toaster } from "react-hot-toast";
 import { Navigate } from "react-router-dom";
 import Navbar from "../components/NavBar";
 import { AuthContext } from "../AuthContext";
+import Table from "../components/EditableTable";
 import Heading from "../components/Heading";
 import Alert from "../components/Alert";
 import { CameraOff } from "lucide-react";
@@ -18,11 +19,19 @@ function App() {
   const [scannerEnabled, setScannerEnabled] = useState(false);
   const [alert, setAlert] = useState(null);
   const [productData, setProductData] = useState({});
+  const [tableData, setTableData] = useState([]);
+  const [headers, setHeaders] = useState([]);
+  const [repUserFilter, setRepUserFilter] = useState("");
   const [isData, setIsData] = useState(false);
   const codeRef = useRef(null);
   const streamRef = useRef(null);
   const token = localStorage.getItem("authToken");
- 
+
+  const [inputValue, setInputValue] = useState("");
+  const [filteredSuggestions, setFilteredSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [names, setNames] = useState([]);
+
   const getCameraStream = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -61,13 +70,59 @@ function App() {
     } else {
       stopCameraStream();
     }
+    requestProductNames();
   }, [scannerEnabled]);
 
   if (!authToken) {
     return <Navigate to="/login" replace />;
   }
 
-  const requestData = async (data) => {
+  const requestProductNames = async () => {
+    try {
+      const response = await axios.get(
+        `${process.env.REACT_APP_BACKEND_URL}product-names`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      if (response.data.message === "Product names found") {
+        const productNames = response.data.names.map(
+          (item) => item.PRODUCT_NAMELONG
+        );
+        setNames(productNames);
+      }
+    } catch (err) {
+      setAlert({
+        message: err.response?.data?.message || "Product name finding failed",
+        type: "error",
+      });
+      setTimeout(() => setAlert(null), 3000);
+    }
+  };
+
+  const handleChange = (e) => {
+    const value = e.target.value;
+    setInputValue(value);
+
+    if (value.length > 0) {
+      const filtered = names.filter((name) =>
+        name.toLowerCase().startsWith(value.toLowerCase())
+      );
+      setFilteredSuggestions(filtered);
+      setShowSuggestions(true);
+    } else {
+      setShowSuggestions(false);
+    }
+  };
+
+  const handleSelect = (name) => {
+    setInputValue(name);
+    setShowSuggestions(false);
+  };
+
+  const requestData = async (data, inputValue) => {
     try {
       const response = await axios.get(
         `${process.env.REACT_APP_BACKEND_URL}product-view`,
@@ -77,17 +132,60 @@ function App() {
           },
           params: {
             data: data,
+            inputValue: inputValue,
           },
         }
       );
       if (response.data.message === "Item Found Successfully") {
+        setCode("");
+        setInputValue("");
         setProductData(response.data.result);
         setIsData(true);
+        const stockData = response.data.stockData;
+        const companies = response.data.companies;
+
+        // Step 1: Merge each stock item with its company name
+        const mergedData = stockData.map((stockItem) => {
+          const matchingCompany = companies.find(
+            (company) =>
+              company.COMPANY_CODE.trim() === stockItem.COMPANY_CODE.trim()
+          );
+
+          return {
+            ...stockItem,
+            COMPANY_NAME: matchingCompany?.COMPANY_NAME || "Unknown",
+          };
+        });
+
+        const customOrder = [
+          "COMPANY_CODE",
+          "COMPANY_NAME",
+          "PRODUCT_CODE",
+          "QTY",
+        ];
+        const customHeadingMap = {
+          COMPANY_CODE: "Company Code",
+          COMPANY_NAME: "Company Name",
+          PRODUCT_CODE: "Product Code",
+          QTY: "Quantity",
+        };
+
+        const customHeaders = customOrder.map(
+          (key) => customHeadingMap[key] || key
+        );
+        setHeaders(customHeaders);
+
+        const finalArray = mergedData.map((item) =>
+          customOrder.map((key) => item[key])
+        );
+
+        setTableData(finalArray);
+
         setAlert({
-        message: "Product Found Successfully",
-        type: "success",
-      });
-      setTimeout(() => setAlert(null), 3000);
+          message: "Product Found Successfully",
+          type: "success",
+        });
+        setTimeout(() => setAlert(null), 3000);
       }
     } catch (err) {
       setAlert({
@@ -130,12 +228,12 @@ function App() {
     e.preventDefault();
     setCodeError("");
 
-    if (!code) {
-      setCodeError("Code is required.");
+    if (!code && !inputValue) {
+      setCodeError("Code or name is required.");
       valid = false;
     }
     if (valid) {
-      requestData(code);
+      requestData(code, inputValue);
     }
   };
 
@@ -170,20 +268,51 @@ function App() {
                 <div className="flex items-center  mb-3">
                   <form
                     onSubmit={handleSubmit}
-                    className="flex items-center space-x-2"
+                    className="flex flex-col md:flex-row md:items-center md:space-x-2 space-y-3 md:space-y-0 w-full"
                   >
+                    {/* Autocomplete Input */}
+                    <div className="relative w-full md:w-auto">
+                      <input
+                        type="text"
+                        value={inputValue}
+                        onChange={handleChange}
+                        onBlur={() =>
+                          setTimeout(() => setShowSuggestions(false), 150)
+                        }
+                        onFocus={() => inputValue && setShowSuggestions(true)}
+                        placeholder="Enter Product Name"
+                        className="px-3 py-2 w-full md:w-64 bg-gray-100 border border-gray-300 rounded-md text-gray-700 focus:outline-none"
+                      />
+                      {showSuggestions && filteredSuggestions.length > 0 && (
+                        <ul className="absolute z-10 w-full bg-white border border-gray-300 rounded-md mt-1 shadow-md">
+                          {filteredSuggestions.map((name, index) => (
+                            <li
+                              key={index}
+                              onClick={() => handleSelect(name)}
+                              className="p-2 hover:bg-gray-100 cursor-pointer"
+                            >
+                              {name}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+
+                    {/* Code Input */}
                     <input
                       type="text"
                       id="code"
                       ref={codeRef}
                       value={code}
                       onChange={(e) => setCode(e.target.value)}
-                      className="px-3 py-2 w-64 bg-gray-100 border border-gray-300 rounded-md text-gray-700 focus:outline-none"
-                      placeholder="Enter Code"
+                      className="px-3 py-2 w-full md:w-64 bg-gray-100 border border-gray-300 rounded-md text-gray-700 focus:outline-none"
+                      placeholder="Enter Product Code"
                     />
+
+                    {/* Submit Button */}
                     <button
                       type="submit"
-                      className="bg-[#f17e21] hover:bg-[#efa05f] text-white px-4 py-2 rounded-lg"
+                      className="bg-[#f17e21] hover:bg-[#efa05f] text-white px-4 py-2 rounded-lg w-full md:w-auto"
                     >
                       Search
                     </button>
@@ -235,146 +364,159 @@ function App() {
                 )}
 
                 {isData && (
+                  <div className="p-4 bg-white rounded-xl shadow-md mt-6">
                     <div className="p-4 bg-white rounded-xl shadow-md mt-6">
-                <div className="p-4 bg-white rounded-xl shadow-md mt-6">
-                  <p className="text-center text-[#bc4a17] text-xl font-bold mb-6">
-                    Product Details
-                  </p>
+                      <p className="text-center text-[#bc4a17] text-xl font-bold mb-6">
+                        Product Details
+                      </p>
 
-                  {/* Product */}
-                  <div className="mb-6">
-                    <p className="text-[#bc4a17] font-semibold text-lg mb-2">
-                      Product
-                    </p>
-                    <div className="grid sm:grid-cols-2 gap-y-2  text-gray-800">
-                      <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
-                        <span className="font-medium">Code:</span>
-                        <span>{productData.PRODUCT_CODE}</span>
-                        <span className="font-medium">Barcode:</span>
-                        <span>{productData.BARCODE}</span>
+                      {/* Product */}
+                      <div className="mb-6">
+                        <p className="text-[#bc4a17] font-semibold text-lg mb-2">
+                          Product
+                        </p>
+                        <div className="grid sm:grid-cols-2 gap-y-2  text-gray-800">
+                          <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
+                            <span className="font-medium">Code:</span>
+                            <span>{productData.PRODUCT_CODE}</span>
+                            <span className="font-medium">Barcode:</span>
+                            <span>{productData.BARCODE}</span>
+                          </div>
+                          <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
+                            <span className="font-medium">Name:</span>
+                            <span>{productData.PRODUCT_NAMELONG}</span>
+                            <span className="font-medium">Barcode 2:</span>
+                            <span>{productData.BARCODE2}</span>
+                          </div>
+                        </div>
                       </div>
-                      <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
-                        <span className="font-medium">Name:</span>
-                        <span>{productData.PRODUCT_NAMELONG}</span>
-                        <span className="font-medium">Barcode 2:</span>
-                        <span>{productData.BARCODE2}</span>
+
+                      {/* Department */}
+                      <div className="mb-6">
+                        <p className="text-[#bc4a17] font-semibold text-lg mb-2">
+                          Department
+                        </p>
+                        <div className="grid sm:grid-cols-2  text-gray-800">
+                          <div className="grid grid-cols-[auto_1fr] gap-x-4">
+                            <span className="font-medium">Code:</span>
+                            <span>{productData.DEPTCODE}</span>
+                          </div>
+                          <div className="grid grid-cols-[auto_1fr] gap-x-4">
+                            <span className="font-medium">Name:</span>
+                            <span>{productData.DEPTNAME}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Category */}
+                      <div className="mb-6">
+                        <p className="text-[#bc4a17] font-semibold text-lg mb-2">
+                          Category
+                        </p>
+                        <div className="grid sm:grid-cols-2  text-gray-800">
+                          <div className="grid grid-cols-[auto_1fr] gap-x-4">
+                            <span className="font-medium">Code:</span>
+                            <span>{productData.CATCODE}</span>
+                          </div>
+                          <div className="grid grid-cols-[auto_1fr] gap-x-4">
+                            <span className="font-medium">Name:</span>
+                            <span>{productData.CATNAME}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Sub Category */}
+                      <div className="mb-6">
+                        <p className="text-[#bc4a17] font-semibold text-lg mb-2">
+                          Sub Category
+                        </p>
+                        <div className="grid sm:grid-cols-2  text-gray-800">
+                          <div className="grid grid-cols-[auto_1fr] gap-x-4">
+                            <span className="font-medium">Code:</span>
+                            <span>{productData.SCATCODE}</span>
+                          </div>
+                          <div className="grid grid-cols-[auto_1fr] gap-x-4">
+                            <span className="font-medium">Name:</span>
+                            <span>{productData.SCATNAME}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Vendor */}
+                      <div className="mb-6">
+                        <p className="text-[#bc4a17] font-semibold text-lg mb-2">
+                          Vendor
+                        </p>
+                        <div className="grid sm:grid-cols-2  text-gray-800">
+                          <div className="grid grid-cols-[auto_1fr] gap-x-4">
+                            <span className="font-medium">Code:</span>
+                            <span>{productData.VENDORCODE}</span>
+                          </div>
+                          <div className="grid grid-cols-[auto_1fr] gap-x-4">
+                            <span className="font-medium">Name:</span>
+                            <span>{productData.VENDORNAME}</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Department */}
-                  <div className="mb-6">
-                    <p className="text-[#bc4a17] font-semibold text-lg mb-2">
-                      Department
-                    </p>
-                    <div className="grid sm:grid-cols-2  text-gray-800">
-                      <div className="grid grid-cols-[auto_1fr] gap-x-4">
-                        <span className="font-medium">Code:</span>
-                        <span>{productData.DEPTCODE}</span>
+                    <div className="p-4 bg-white rounded-xl shadow-md mt-6">
+                      <p className="text-center text-[#bc4a17] text-xl font-bold mb-6">
+                        Price Details
+                      </p>
+
+                      {/* Price */}
+                      <div>
+                        <p className="text-[#bc4a17] font-semibold text-lg mb-2">
+                          Price
+                        </p>
+                        <div className="grid sm:grid-cols-2  text-gray-800">
+                          <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
+                            <span className="font-medium">Cost Price:</span>
+                            <span>{productData.COSTPRICE}</span>
+                            <span className="font-medium">Unit Price:</span>
+                            <span>{productData.SCALEPRICE}</span>
+                          </div>
+                          <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
+                            <span className="font-medium">Minimum Price:</span>
+                            <span>{productData.MINPRICE}</span>
+                            <span className="font-medium">
+                              Wholesale Price:
+                            </span>
+                            <span>{productData.WPRICE}</span>
+                          </div>
+                        </div>
                       </div>
-                      <div className="grid grid-cols-[auto_1fr] gap-x-4">
-                        <span className="font-medium">Name:</span>
-                        <span>{productData.DEPTNAME}</span>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-y-4  text-gray-700 mt-8">
+                        <p>
+                          <strong>Price 1:</strong> {productData.PRICE1}
+                        </p>
+                        <p>
+                          <strong>Price 2:</strong> {productData.PRICE2}
+                        </p>
+                        <p>
+                          <strong>Price 3:</strong> {productData.PRICE3}
+                        </p>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Category */}
-                  <div className="mb-6">
-                    <p className="text-[#bc4a17] font-semibold text-lg mb-2">
-                      Category
-                    </p>
-                    <div className="grid sm:grid-cols-2  text-gray-800">
-                      <div className="grid grid-cols-[auto_1fr] gap-x-4">
-                        <span className="font-medium">Code:</span>
-                        <span>{productData.CATCODE}</span>
-                      </div>
-                      <div className="grid grid-cols-[auto_1fr] gap-x-4">
-                        <span className="font-medium">Name:</span>
-                        <span>{productData.CATNAME}</span>
-                      </div>
+                    <div className="p-4 bg-white rounded-xl shadow-md mt-6">
+                      <p className="text-center text-[#bc4a17] text-xl font-bold mb-6">
+                        Company Wise Stock
+                      </p>
+                      <Table
+                        headers={headers}
+                        data={tableData}
+                        editableColumns={[]}
+                        bin={true}
+                        formatColumns = {[3]}
+                      />
                     </div>
+
+                    
                   </div>
-
-                  {/* Sub Category */}
-                  <div className="mb-6">
-                    <p className="text-[#bc4a17] font-semibold text-lg mb-2">
-                      Sub Category
-                    </p>
-                    <div className="grid sm:grid-cols-2  text-gray-800">
-                      <div className="grid grid-cols-[auto_1fr] gap-x-4">
-                        <span className="font-medium">Code:</span>
-                        <span>{productData.SCATCODE}</span>
-                      </div>
-                      <div className="grid grid-cols-[auto_1fr] gap-x-4">
-                        <span className="font-medium">Name:</span>
-                        <span>{productData.SCATNAME}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Vendor */}
-                  <div className="mb-6">
-                    <p className="text-[#bc4a17] font-semibold text-lg mb-2">
-                      Vendor
-                    </p>
-                    <div className="grid sm:grid-cols-2  text-gray-800">
-                      <div className="grid grid-cols-[auto_1fr] gap-x-4">
-                        <span className="font-medium">Code:</span>
-                        <span>{productData.VENDORCODE}</span>
-                      </div>
-                      <div className="grid grid-cols-[auto_1fr] gap-x-4">
-                        <span className="font-medium">Name:</span>
-                        <span>{productData.VENDORNAME}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                </div>
-
-                <div className="p-4 bg-white rounded-xl shadow-md mt-6">
-                  <p className="text-center text-[#bc4a17] text-xl font-bold mb-6">
-                    Price Details
-                  </p>
-
-
-                  {/* Price */}
-                  <div>
-                    <p className="text-[#bc4a17] font-semibold text-lg mb-2">
-                      Price
-                    </p>
-                    <div className="grid sm:grid-cols-2  text-gray-800">
-                      <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
-                        <span className="font-medium">Cost Price:</span>
-                        <span>{productData.COSTPRICE}</span>
-                        <span className="font-medium">Unit Price:</span>
-                        <span>{productData.SCALEPRICE}</span>
-                      </div>
-                      <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
-                        <span className="font-medium">Minimum Price:</span>
-                        <span>{productData.MINPRICE}</span>
-                        <span className="font-medium">Wholesale Price:</span>
-                        <span>{productData.WPRICE}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-y-4  text-gray-700 mt-8">
-                    <p>
-                      <strong>Price 1:</strong> {productData.PRICE1}
-                    </p>
-                    <p>
-                      <strong>Price 2:</strong> {productData.PRICE2}
-                    </p>
-                    <p>
-                      <strong>Price 3:</strong> {productData.PRICE3}
-                    </p>
-                  </div>
-                </div>
-                </div>
                 )}
-
-
               </div>
             </div>
           </div>

@@ -18,7 +18,7 @@ const Reset = () => {
   const [name, setName] = useState("");
   const [ip, setIp] = useState("");
   const [port, setPort] = useState("");
-  const [customerID, setCustomerID] = useState("");
+  const [CustomerID1, setCustomerID1] = useState("");
   const [nameError, setNameError] = useState("");
   const [disable, setDisable] = useState(false);
   const [disableNew, setDisableNew] = useState(false);
@@ -72,7 +72,7 @@ const Reset = () => {
         ip,
         port,
         username,
-        customerID,
+        CustomerID1,
         admin: [{ a_permission: permissionSetting, a_sync: databaseSync }],
         dashboard: [{d_company: company, d_category:category, d_department:department, d_scategory:subCategory, d_vendor:vendor, d_invoice:invoice, d_productView:productView}],
         stock: [{t_scan:scan, t_stock:stock, t_stock_update:stockUpdate, t_grn:grn, t_prn:prn, t_tog:tog}]
@@ -169,6 +169,9 @@ const Reset = () => {
           
             const user = response.data.userData[0];
             
+            setIp(user.ip_address);
+            setPort(user.port);
+            setCustomerID1(user.CUSTOMERID);
             setPermissionSetting(user.a_permission === 'T');
             setDatabaseSync(user.a_sync === 'T');
             setCompany(user.d_company === 'T');
@@ -306,12 +309,12 @@ const Reset = () => {
 
     {/* Customer ID */}
     <div>
-      <label htmlFor="customerID" className="block text-sm font-medium text-gray-700">Customer ID</label>
+      <label htmlFor="CustomerID1" className="block text-sm font-medium text-gray-700">Customer ID</label>
       <input
         type="number"
-        id="customerID"
-        value={customerID}
-        onChange={(e) => setCustomerID(e.target.value)}
+        id="CustomerID1"
+        value={CustomerID1}
+        onChange={(e) => setCustomerID1(e.target.value)}
         className="mt-1 block w-full px-4 py-3 bg-gray-100 border border-gray-300 rounded-md text-gray-700"
         placeholder="Enter Customer ID"
       />
