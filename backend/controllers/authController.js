@@ -2156,11 +2156,12 @@ exports.vendorDashboard = async (req, res) => {
 exports.scan = async (req, res) => {
   const codeData = req.query.data?.trim();
   const company = req.query.company?.trim();
-
-  if (!codeData || codeData === "No result") {
+  const name = req.query.name?.trim();
+console.log("Scan request data:", codeData, company, name);
+    if ((!codeData || codeData === "No result") && !name) {
     return res
       .status(400)
-      .json({ message: "Please provide a valid barcode or product code" });
+      .json({ message: "Please provide a valid barcode or product code or name" });
   }
 
   if (!company) {
@@ -2169,8 +2170,10 @@ exports.scan = async (req, res) => {
 
   try {
     let productCode = null;
-
-    // Try finding a product code via barcode link table
+let stockQty;
+let salesData = [];
+if((codeData || codeData !== "No result")){
+ // Try finding a product code via barcode link table
     const barcodeResult = await mssql.query`
       USE [POSBACK_SYSTEM];
       SELECT PRODUCT_CODE FROM tb_BARCODELINK WHERE BARCODE = ${codeData};
@@ -2193,7 +2196,7 @@ exports.scan = async (req, res) => {
         WHERE PRODUCT_CODE = ${codeData} OR BARCODE = ${codeData} OR BARCODE2 = ${codeData};`;
 
     const salesDataResult = await productQuery;
-    const salesData = salesDataResult.recordset;
+    salesData = salesDataResult.recordset;
 
     if (!salesData || salesData.length === 0) {
       return res.status(404).json({ message: "Product not found" });
@@ -2210,7 +2213,37 @@ exports.scan = async (req, res) => {
         AND PRODUCT_CODE = ${foundCode};
     `;
 
-    const stockQty = stockResult.recordset[0]?.STOCK ?? 0;
+    stockQty = stockResult.recordset[0]?.STOCK ?? 0;
+}
+  if(name && name !== ""){
+ 
+    // If not found in barcode link, use product table directly
+    const productQuery =  mssql.query`
+        USE [POSBACK_SYSTEM];
+        SELECT PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE 
+        FROM tb_PRODUCT 
+        WHERE PRODUCT_NAMELONG = ${name} ;`;
+
+    const salesDataResult = await productQuery;
+    salesData = salesDataResult.recordset;
+
+    if (!salesData || salesData.length === 0) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+
+    const foundCode = salesData[0].PRODUCT_CODE;
+
+    const stockResult = await mssql.query`
+      USE [POSBACK_SYSTEM];
+      SELECT ISNULL(SUM(STOCK), 0) AS STOCK 
+      FROM tb_STOCK 
+      WHERE COMPANY_CODE = ${company} 
+        AND (BIN = 'F' OR BIN IS NULL) 
+        AND PRODUCT_CODE = ${foundCode};
+    `;
+
+    stockQty = stockResult.recordset[0]?.STOCK ?? 0;
+}
 
     return res.status(200).json({
       message: "Item Found Successfully",
@@ -2700,17 +2733,20 @@ exports.syncDatabases = async (req, res) => {
 // product view
 exports.productView = async (req, res) => {
   const codeData = req.query.data?.trim();
-
-  if (!codeData || codeData === "No result") {
+  const name = req.query.inputValue?.trim();
+ 
+  if ((!codeData || codeData === "No result") && !name) {
     return res
       .status(400)
-      .json({ message: "Please provide a valid barcode or product code" });
+      .json({ message: "Please provide a valid barcode or product code or name" });
   }
 
   try {
     let productCode = null;
+    let result = null;
 
-    // Try finding a product code via barcode link table
+   if( codeData && codeData !== "No result") {
+     // Try finding a product code via barcode link table
     const barcodeResult = await mssql.query`
       USE [POSBACK_SYSTEM];
       SELECT PRODUCT_CODE FROM tb_BARCODELINK WHERE BARCODE = ${codeData};
@@ -2754,12 +2790,90 @@ exports.productView = async (req, res) => {
     WHERE P.PRODUCT_CODE  = ${foundCode}
     `;
 
-    const result = stockResult.recordset[0];
-    console.log('result',result)
+    result = stockResult.recordset[0];
+   }
+  
+   if( name && name !== "") {
+    const stockResult = await mssql.query`
+      USE [POSBACK_SYSTEM];
+      SELECT 
+    P.PRODUCT_CODE,P.BARCODE,P.BARCODE2,P.PRODUCT_NAMELONG,P.DEPTCODE,D.DEPTNAME,P.CATCODE,C.CATNAME,
+    P.SCATCODE,S.SCATNAME,P.VENDORCODE,V.VENDORNAME,P.COSTPRICE,P.MINPRICE, P.SCALEPRICE,P.WPRICE,P.PRICE1,P.PRICE2,P.PRICE3
+    FROM tb_PRODUCT P
+    LEFT JOIN tb_DEPARTMENT D ON P.DEPTCODE = D.DEPTCODE
+    LEFT JOIN tb_CATEGORY C ON P.CATCODE = C.CATCODE
+    LEFT JOIN tb_SUBCATEGORY S ON P.SCATCODE = S.SCATCODE
+    LEFT JOIN tb_VENDOR V ON P.VENDORCODE = V.VENDORCODE
+    WHERE P.PRODUCT_NAMELONG  = ${name}
+    `;
+
+    result = stockResult.recordset[0];
+    
+   }
+
+   const new_code = result.PRODUCT_CODE;
+    await mssql.query`USE RT_WEB`;
+    const stockQtyResult = await mssql.query(`
+ALTER VIEW vw_STOCK AS 
+SELECT 
+  [COMPANY_CODE], 
+  [PRODUCT_CODE],
+  ISNULL(SUM([STOCK]), 0) AS QTY
+FROM POSBACK_SYSTEM.dbo.tb_STOCK
+WHERE (BIN = 'F' OR BIN IS NULL)
+GROUP BY [COMPANY_CODE], [PRODUCT_CODE];
+    `);
+
+  
+    const stockQty = await mssql.query`
+      USE [RT_WEB];
+      SELECT * FROM vw_STOCK WHERE PRODUCT_CODE = ${new_code};`
+
+      const stockData = stockQty.recordset;
+      const companyCodes = stockQty.recordset.map(row => row.COMPANY_CODE);
+
+      const formattedCodes = companyCodes.map(code => `'${code.trim()}'`).join(', ');
+
+const query = `
+  SELECT COMPANY_CODE, COMPANY_NAME 
+  FROM POSBACK_SYSTEM.dbo.tb_COMPANY 
+  WHERE COMPANY_CODE IN (${formattedCodes});
+`;
+
+const company_names = await mssql.query(query);
+
+const companies = company_names.recordset;
+console.log("Companies found:", companies);
 
     return res.status(200).json({
       message: "Item Found Successfully",
       result: result,
+      stockData: stockData || [],
+  companies: companies || [],
+    });
+  } catch (error) {
+    console.error("Error retrieving barcode data:", error);
+    return res.status(500).json({ message: "Failed to retrieve barcode data" });
+  }
+};
+
+// product name
+exports.productName = async (req, res) => {
+  try {
+    console.log("Retrieving product names...");
+    // Try finding a product code via barcode link table
+    const productNames = await mssql.query`
+      USE [POSBACK_SYSTEM];
+      SELECT PRODUCT_NAMELONG FROM tb_PRODUCT;
+    `;
+    const productNamesData = productNames.recordset;
+    if (!productNamesData || productNamesData.length === 0) {
+      return res.status(404).json({ message: "Product names not found" });
+    }
+
+    return res.status(200).json({
+      message: "Product names found",
+      names: productNamesData,
     });
   } catch (error) {
     console.error("Error retrieving barcode data:", error);
@@ -2796,7 +2910,7 @@ exports.findUserConnection = async (req, res) => {
 
     const userPermissionResult = await mssql.query`
       USE [RTPOS_MAIN];
-      SELECT [a_permission], [a_sync], [d_company], [d_department], [d_category], [d_scategory], 
+      SELECT [ip_address], [port], [CUSTOMERID], [a_permission], [a_sync], [d_company], [d_department], [d_category], [d_scategory], 
              [d_vendor], [d_invoice],[d_productView], [t_scan], [t_stock], [t_grn], [t_prn], [t_tog],[t_stock_update]
       FROM tb_USERS
       WHERE username = ${name};
@@ -2806,7 +2920,7 @@ exports.findUserConnection = async (req, res) => {
 
     if (userPermissionResult.recordset.length === 0) {
       console.log("No results found for username:", name);
-      return res.status(404).json({ message: "User details not found" });
+      return res.status(404).json({ message: "User details not found for the given username" });
     }
 
     res.status(200).json({

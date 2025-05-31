@@ -38,6 +38,7 @@ app.get('/final-grnprn-update', authenticateToken, authController.finalGrnPrnUpd
 app.get('/sync-databases', authenticateToken, authController.syncDatabases);
 app.get('/find-user-connection', authenticateToken, authController.findUserConnection);
 app.get('/product-view', authenticateToken, authController.productView);
+app.get('/product-names', authenticateToken, authController.productName);
 
 app.post("/login", authController.login);
 app.post('/register', authController.register);
