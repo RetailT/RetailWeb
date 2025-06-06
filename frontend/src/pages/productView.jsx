@@ -21,6 +21,8 @@ function App() {
   const [productData, setProductData] = useState({});
   const [tableData, setTableData] = useState([]);
   const [headers, setHeaders] = useState([]);
+  const [priceTableData, setPriceTableData] = useState([]);
+  const [priceHeaders, setPriceHeaders] = useState([]);
   const [repUserFilter, setRepUserFilter] = useState("");
   const [isData, setIsData] = useState(false);
   const codeRef = useRef(null);
@@ -120,6 +122,8 @@ function App() {
   const handleSelect = (name) => {
     setInputValue(name);
     setShowSuggestions(false);
+    console.log("Selected name:", name);
+    requestData(code, name);
   };
 
   const requestData = async (data, inputValue) => {
@@ -143,9 +147,22 @@ function App() {
         setIsData(true);
         const stockData = response.data.stockData;
         const companies = response.data.companies;
+        const prices = response.data.prices;
 
         // Step 1: Merge each stock item with its company name
         const mergedData = stockData.map((stockItem) => {
+          const matchingCompany = companies.find(
+            (company) =>
+              company.COMPANY_CODE.trim() === stockItem.COMPANY_CODE.trim()
+          );
+
+          return {
+            ...stockItem,
+            COMPANY_NAME: matchingCompany?.COMPANY_NAME || "Unknown",
+          };
+        });
+
+        const priceMergedData = prices.map((stockItem) => {
           const matchingCompany = companies.find(
             (company) =>
               company.COMPANY_CODE.trim() === stockItem.COMPANY_CODE.trim()
@@ -170,16 +187,59 @@ function App() {
           QTY: "Quantity",
         };
 
+        const customPriceOrder = [
+          "COMPANY_CODE",
+          "COMPANY_NAME",
+          "PRODUCT_CODE",
+          "COST_PRICE",
+          "UNIT_PRICE",
+          "WPRICE",
+          "MIN_PRICE"
+        ];
+        const customPriceHeadingMap = {
+          COMPANY_CODE: "Company Code",
+          COMPANY_NAME: "Company Name",
+          PRODUCT_CODE: "Product Code",
+          COST_PRICE: "Cost Price",
+          UNIT_PRICE: "Unit Price",
+          WPRICE: "Wholesale Price",
+          MIN_PRICE: "Minimum Price"
+        };
+
         const customHeaders = customOrder.map(
           (key) => customHeadingMap[key] || key
         );
         setHeaders(customHeaders);
 
+        const customPriceHeaders = customPriceOrder.map(
+          (key) => customPriceHeadingMap[key] || key
+        );
+        setPriceHeaders(customPriceHeaders);
+
         const finalArray = mergedData.map((item) =>
-          customOrder.map((key) => item[key])
+          customOrder.map((key) => {
+            const value = item[key];
+            if (key === "QTY" && typeof value === "number") {
+              return value.toFixed(3); // format to 3 decimal places
+            }
+            return value;
+          })
         );
 
         setTableData(finalArray);
+
+        const finalPriceArray = priceMergedData.map((item) =>
+          customPriceOrder.map((key) => {
+            const value = item[key];
+            if ((key === "COST_PRICE" || key==="UNIT_PRICE" || key==="WPRICE" || key ==="MIN_PRICE") && typeof value === "number") {
+              return value.toFixed(2); // format to 3 decimal places
+            }
+           
+            return value;
+          })
+        );
+
+        setPriceTableData(finalPriceArray);
 
         setAlert({
           message: "Product Found Successfully",
@@ -249,7 +309,7 @@ function App() {
             marginTop: "96px", // Space for Navbar
           }}
         >
-          <div className="ml-[-60px] sm:ml-[-50px]">
+          <div className="ml-[-50px]">
             <Heading text="Product View" />
           </div>
 
@@ -473,48 +533,56 @@ function App() {
                         <div className="grid sm:grid-cols-2  text-gray-800">
                           <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
                             <span className="font-medium">Cost Price:</span>
-                            <span>{productData.COSTPRICE}</span>
+                            <span>{productData.COSTPRICE.toFixed(2)}</span>
                             <span className="font-medium">Unit Price:</span>
-                            <span>{productData.SCALEPRICE}</span>
+                            <span>{productData.SCALEPRICE.toFixed(2)}</span>
                           </div>
                           <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
                             <span className="font-medium">Minimum Price:</span>
-                            <span>{productData.MINPRICE}</span>
+                            <span>{productData.MINPRICE.toFixed(2)}</span>
                             <span className="font-medium">
                               Wholesale Price:
                             </span>
-                            <span>{productData.WPRICE}</span>
+                            <span>{productData.WPRICE.toFixed(2)}</span>
+                          </div>
+                          <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 mt-2">
+                            <span className="font-medium">Average Price:</span>
+                            <span>{productData.AVGCOST.toFixed(2)}</span>
                           </div>
                         </div>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-y-4  text-gray-700 mt-8">
                         <p>
-                          <strong>Price 1:</strong> {productData.PRICE1}
+                          <strong>Price 1:</strong>{" "}
+                          {productData.PRICE1.toFixed(2)}
                         </p>
                         <p>
-                          <strong>Price 2:</strong> {productData.PRICE2}
+                          <strong>Price 2:</strong>{" "}
+                          {productData.PRICE2.toFixed(2)}
                         </p>
                         <p>
-                          <strong>Price 3:</strong> {productData.PRICE3}
+                          <strong>Price 3:</strong>{" "}
+                          {productData.PRICE3.toFixed(2)}
                         </p>
                       </div>
                     </div>
+                  </div>
+                )}
 
+                {isData && (
+                  <div>
                     <div className="p-4 bg-white rounded-xl shadow-md mt-6">
                       <p className="text-center text-[#bc4a17] text-xl font-bold mb-6">
-                        Company Wise Stock
+                        Company Wise Price Details
                       </p>
                       <Table
-                        headers={headers}
-                        data={tableData}
+                        headers={priceHeaders}
+                        data={priceTableData}
                         editableColumns={[]}
                         bin={true}
-                        formatColumns = {[3]}
                       />
                     </div>
-
-                    
                   </div>
                 )}
               </div>

@@ -19,8 +19,8 @@ function App() {
   const [alert, setAlert] = useState(null);
   const [loading, setLoading] = useState(false);
   const [headers, setHeaders] = useState([]);
-const [repUserFilter, setRepUserFilter] = useState("");
-const [uniqueRepUsers, setUniqueRepUsers] = useState([])
+  const [repUserFilter, setRepUserFilter] = useState("");
+  const [uniqueRepUsers, setUniqueRepUsers] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [selectedCompany, setSelectedCompany] = useState("");
   const [companyError, setCompanyError] = useState("");
@@ -30,17 +30,24 @@ const [uniqueRepUsers, setUniqueRepUsers] = useState([])
 
   const token = localStorage.getItem("authToken");
   const editableColumns = [{ index: 10, type: "number", step: "any" }];
+  const decodedToken = jwtDecode(token);
+  const username = decodedToken.username;
 
   useEffect(() => {
-  if (headers.length > 0 && data.length > 0) {
-    const repUserIndex = headers.indexOf("REPUSER");
-    if (repUserIndex !== -1) {
-      const repUsers = [...new Set(data.map((item) => item.rowData[repUserIndex]?.trim()).filter(Boolean))];
-      setUniqueRepUsers(repUsers);
+    if (headers.length > 0 && data.length > 0) {
+      const repUserIndex = headers.indexOf("REPUSER");
+      if (repUserIndex !== -1) {
+        const repUsers = [
+          ...new Set(
+            data
+              .map((item) => item.rowData[repUserIndex]?.trim())
+              .filter(Boolean)
+          ),
+        ];
+        setUniqueRepUsers(repUsers);
+      }
     }
-  }
-}, [headers, data]);
-
+  }, [headers, data]);
 
   useEffect(() => {
     if (!token) {
@@ -75,28 +82,28 @@ const [uniqueRepUsers, setUniqueRepUsers] = useState([])
 
   const requestData = async () => {
     try {
-      const decodedToken = jwtDecode(token);
-      const username = decodedToken.username;
       setLoading(true);
-      const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}stock-update`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        params: {
-          name: username,
-          code: selectedCompany,
-        },
-      });
-      
+      const response = await axios.get(
+        `${process.env.REACT_APP_BACKEND_URL}stock-update`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          params: {
+            name: username,
+            code: selectedCompany,
+          },
+        }
+      );
+
       const stockData = response.data.stockData;
-      
 
-      
-
-      if (stockData.length > 0 ) {
+      if (stockData.length > 0) {
         // Extract keys from the first object, excluding "IDX"
-        const keys = Object.keys(stockData[0]).filter((key) => key !== "IDX" && key !== "TYPE");
-        
+        const keys = Object.keys(stockData[0]).filter(
+          (key) => key !== "IDX" && key !== "TYPE"
+        );
+
         // Custom heading mapping
         const customHeadingMap = {
           COMPANY_CODE: "Company Code",
@@ -123,12 +130,16 @@ const [uniqueRepUsers, setUniqueRepUsers] = useState([])
         setInitialData(true);
 
         const repUserIndex = headers.indexOf("REPUSER");
-        const repUsers = [...new Set(orderedData1.map((item) => item.rowData[repUserIndex]?.trim()).filter(Boolean))];
+        const repUsers = [
+          ...new Set(
+            orderedData1
+              .map((item) => item.rowData[repUserIndex]?.trim())
+              .filter(Boolean)
+          ),
+        ];
         setUniqueRepUsers(repUsers);
-
-
       }
-      
+
       setLoading(false);
     } catch (err) {
       setLoading(false);
@@ -138,17 +149,23 @@ const [uniqueRepUsers, setUniqueRepUsers] = useState([])
       });
 
       // Dismiss alert after 3 seconds
-      setTimeout(() => setAlert(null), 3000);
+      setTimeout(() => {
+  setAlert(null);
+  window.location.reload(); // Full page reload
+}, 3000);
     }
   };
 
   const fetchCompanies = async () => {
     try {
-      const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}companies`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const response = await axios.get(
+        `${process.env.REACT_APP_BACKEND_URL}companies`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
       if (response.data.userData && response.data.userData.length > 0) {
         // Map through all userData and get all options
         const companies = response.data.userData.map((data) => ({
@@ -165,9 +182,9 @@ const [uniqueRepUsers, setUniqueRepUsers] = useState([])
   };
 
   const filteredTableData = data.filter((item) => {
-  const repUser = item.rowData[headers.indexOf("REPUSER")]?.trim();
-  return repUserFilter === "" || repUser === repUserFilter;
-});
+    const repUser = item.rowData[headers.indexOf("REPUSER")]?.trim();
+    return repUserFilter === "" || repUser === repUserFilter;
+  });
 
   const handleDeleteRow = async (rowIndex) => {
     const deletedRow = data[rowIndex];
@@ -182,19 +199,22 @@ const [uniqueRepUsers, setUniqueRepUsers] = useState([])
           },
           params: {
             idx: idxValue,
+            username: username,
           },
         }
       );
 
       if (response.data.message === "Stock data deleted successfully") {
-        requestData();
         setAlert({
           message: response.data.message || "Stock item deleted successfully",
           type: "success",
         });
-        // Dismiss alert after 3 seconds
-        setTimeout(() => setAlert(null), 3000);
+        setTimeout(() => {
+          setAlert(null);
+          requestData(); // Now it runs after the alert is dismissed
+        }, 3000);
       }
+      // requestData();
     } catch (err) {
       // Handle any errors that occur
       setAlert({
@@ -210,19 +230,24 @@ const [uniqueRepUsers, setUniqueRepUsers] = useState([])
   const handleSubmit = async () => {
     try {
       setDisable(true);
-      const decodedToken = jwtDecode(token);
-      const username = decodedToken.username;
-      const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}final-stock-update`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        params: {
-          username: username,
-          company: selectedCompany,
-        },
-      });
 
-      if (response.data.message === "Data moved and deleted successfully") {
+      const response = await axios.get(
+        `${process.env.REACT_APP_BACKEND_URL}final-stock-update`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          params: {
+            username: username,
+            company: selectedCompany,
+          },
+        }
+      );
+
+      if (
+        response.data.message ===
+        "Data moved, backed up, and deleted successfully"
+      ) {
         setInitialData(false);
         setDisable(false);
         setAlert({
@@ -231,8 +256,7 @@ const [uniqueRepUsers, setUniqueRepUsers] = useState([])
         });
         // Dismiss alert after 3 seconds
         setTimeout(() => setAlert(null), 3000);
-      }
-      else {
+      } else {
         // setInitialData(false);
         // setDisable(false);
         setAlert({
@@ -290,26 +314,21 @@ const [uniqueRepUsers, setUniqueRepUsers] = useState([])
       <Navbar />
       {/* Main Layout */}
       <div className="flex">
-        
-
         {/* Page Content */}
         <div className="flex-1 p-10 ml-16 mt-24">
-
           <div className="ml-[-50px] ">
             <Heading text="Stock Update" />
           </div>
           <div className="mt-2 ">
             <div className=" mt-2 ml-[-60px] sm:ml-[-50px]">
-            
-            {alert && (
-              <Alert
-                message={alert.message}
-                type={alert.type}
-                onClose={() => setAlert(null)}
-              />
-            )}
+              {alert && (
+                <Alert
+                  message={alert.message}
+                  type={alert.type}
+                  onClose={() => setAlert(null)}
+                />
+              )}
             </div>
-            
 
             <div className="p-4 ml-[-60px] sm:ml-[-50px]">
               {!initialData && (
@@ -363,42 +382,40 @@ const [uniqueRepUsers, setUniqueRepUsers] = useState([])
                 <div>
                   {/* stock data */}
                   <div>
-                  <div className="flex flex-col items-start p-3 gap-2">
-                    
-                    <button
-                      onClick={handleSubmit}
-                      disabled={disable}
-                      className={`bg-[#f17e21] hover:bg-[#efa05f] text-white px-4 py-2 rounded-lg w-1/4 text-center ${
-                        disable ? "opacity-50 cursor-not-allowed" : ""
-                      }`}
-                    >
-                      Enter
-                    </button>
-                  </div>
-                  <select
-                        value={repUserFilter}
-                        onChange={(e) => setRepUserFilter(e.target.value)}
-                        className="border p-2 rounded mt-5 ml-3 mb-4 w-full md:w-1/4"
+                    <div className="flex flex-col items-start p-3 gap-2">
+                      <button
+                        onClick={handleSubmit}
+                        disabled={disable}
+                        className={`bg-[#f17e21] hover:bg-[#efa05f] text-white px-4 py-2 rounded-lg w-1/4 text-center ${
+                          disable ? "opacity-50 cursor-not-allowed" : ""
+                        }`}
                       >
-                        <option value="">User</option>
-                        {uniqueRepUsers.map((user) => (
-                          <option key={user} value={user}>
-                            {user}
-                          </option>
-                        ))}
-                      </select>
-                  <div className="flex justify-start overflow-x-auto">
-                    <Table
-                      headers={headers}
-                      data={filteredTableData.map((item) => item.rowData)}
-                      editableColumns={editableColumns}
-                      // onRowChange={handleRowChange}
-                      onDeleteRow={handleDeleteRow}
-                      formatColumns={[4,5]}
-                    />
+                        Approve
+                      </button>
+                    </div>
+                    <select
+                      value={repUserFilter}
+                      onChange={(e) => setRepUserFilter(e.target.value)}
+                      className="border p-2 rounded mt-5 ml-3 mb-4 w-full md:w-1/4"
+                    >
+                      <option value="">User</option>
+                      {uniqueRepUsers.map((user) => (
+                        <option key={user} value={user}>
+                          {user}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="flex justify-start overflow-x-auto">
+                      <Table
+                        headers={headers}
+                        data={filteredTableData.map((item) => item.rowData)}
+                        editableColumns={editableColumns}
+                        // onRowChange={handleRowChange}
+                        onDeleteRow={handleDeleteRow}
+                        formatColumns={[4, 5]}
+                      />
+                    </div>
                   </div>
-                  </div>
-                 
                 </div>
               )}
             </div>

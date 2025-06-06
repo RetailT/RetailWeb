@@ -676,6 +676,10 @@ requestProductNames();
       try {
 
         if (selectedType === "STOCK") {
+          const now = new Date();
+          const date = now.toISOString().split("T")[0];
+          const time = now.toTimeString().split(":").slice(0, 2).join(":");
+
           const response = await axios.post(
             `${process.env.REACT_APP_BACKEND_URL}update-temp-sales-table`,
             {
@@ -687,7 +691,9 @@ requestProductNames();
               costPrice: salesData.COSTPRICE,
               scalePrice: salesData.SCALEPRICE,
               stock: amount,
-              quantity: quantity
+              quantity: quantity,
+              date:date,
+              time:time
             },
             {
               headers: {
@@ -1244,8 +1250,9 @@ requestProductNames();
                           Amount
                         </p>
                         <p className="text-gray-700">
-                          <strong>Stock: </strong> {amount}
-                        </p>
+                            <strong>Stock: </strong> {isNaN(Number(amount)) ? "0.000" : Number(amount).toFixed(3)}
+                          </p>
+
                         <form
                           onSubmit={handleSubmit}
                           className="flex flex-col space-y-4"

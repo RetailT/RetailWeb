@@ -55,7 +55,7 @@ const Navbar = () => {
 
         {/* Logo */}
         <div className="flex items-center">
-          <img src={RTLogo} alt="Logo" className="w-24 h-auto ml-5" />
+          <img src={RTLogo} alt="Logo" className=" w-16 md:w-24 h-auto ml-5" />
         </div>
 
         {/* Navigation Links */}
