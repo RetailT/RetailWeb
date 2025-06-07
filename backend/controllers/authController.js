@@ -10,6 +10,8 @@ const { promisify } = require("util");
 const verifyToken = promisify(jwt.verify);
 const axios = require("axios");
 
+
+
 function buildSqlInClause(array) {
   return array.map((code) => `'${code}'`).join(", ");
 }
@@ -25,8 +27,6 @@ const dbConfig1 = {
   },
   port: 1443, // Default MSSQL port (1433)
 };
-
-const buildSqlInClause2 = (arr) => arr.map((code) => `'${code}'`).join(",");
 
 //report data, current report, company dashboard,
 // department dashboard, category dashboard,
@@ -780,11 +780,27 @@ exports.updateTempSalesTable = async (req, res) => {
       quantity,
     } = req.body;
 
+    const now = new Date();
+const trDate = new Date(
+  Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
+);
+const trTime = new Date(
+  Date.UTC(
+    1900,
+    0,
+    1,
+    now.getHours(),
+    now.getMinutes(),
+    now.getSeconds(),
+    now.getMilliseconds()
+  )
+);
+
     const insertQuery = `
       USE [RT_WEB];
       INSERT INTO tb_STOCKRECONCILATION_DATAENTRYTEMP 
-      (COMPANY_CODE, COUNT_STATUS, TYPE, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE, CUR_STOCK, PHY_STOCK, REPUSER)
-      VALUES (@company, @count, @type, @productCode, @productName, @costPrice, @scalePrice, @stock, @quantity, @username)
+      (COMPANY_CODE, COUNT_STATUS, TYPE, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE, CUR_STOCK, PHY_STOCK, REPUSER, TRDATE, TRTIME)
+      VALUES (@company, @count, @type, @productCode, @productName, @costPrice, @scalePrice, @stock, @quantity, @username , @trDate, @trTime)
     `;
 
     const insertRequest = new mssql.Request();
@@ -797,7 +813,9 @@ exports.updateTempSalesTable = async (req, res) => {
     insertRequest.input("scalePrice", mssql.Money, scalePrice);
     insertRequest.input("stock", mssql.Float, stock);
     insertRequest.input("quantity", mssql.Float, quantity);
-    insertRequest.input("username", mssql.NChar(10), username);
+    insertRequest.input("username", mssql.NChar(50), username);
+    insertRequest.input("trDate", mssql.DateTime, trDate);
+    insertRequest.input("trTime", mssql.DateTime, trTime);
 
     await insertRequest.query(insertQuery);
 
@@ -877,7 +895,7 @@ exports.updateTempGrnTable = async (req, res) => {
     insertRequest.input("scalePrice", mssql.Money, scalePrice);
     insertRequest.input("stock", mssql.Float, stock);
     insertRequest.input("quantity", mssql.Float, quantity);
-    insertRequest.input("username", mssql.NChar(10), username);
+    insertRequest.input("username", mssql.NVarChar(50), username);
 
     await insertRequest.query(insertQuery);
 
@@ -940,7 +958,7 @@ exports.updateTempTogTable = async (req, res) => {
     insertRequest.input("scalePrice", mssql.Money, scalePrice);
     insertRequest.input("stock", mssql.Float, stock);
     insertRequest.input("quantity", mssql.Float, quantity);
-    insertRequest.input("username", mssql.NChar(10), username);
+    insertRequest.input("username", mssql.NVarChar(50), username);
 
     await insertRequest.query(insertQuery);
 
@@ -953,32 +971,53 @@ exports.updateTempTogTable = async (req, res) => {
 
 //stock update delete
 exports.stockUpdateDelete = async (req, res) => {
+  const idx = parseInt(req.query.idx, 10);
+  const username = req.query.username;
+
+  if (isNaN(idx) || !username) {
+    return res.status(400).json({ message: "Invalid or missing 'idx' or 'username' parameter" });
+  }
+
+  const transaction = new mssql.Transaction();
+
   try {
-    const idx = parseInt(req.query.idx, 10);
+    await transaction.begin();
 
-    if (isNaN(idx)) {
-      return res
-        .status(400)
-        .json({ message: "Invalid or missing 'idx' parameter" });
-    }
+    const backupRequest = new mssql.Request(transaction);
+    await backupRequest
+      .input("DELETED_USER", mssql.NVarChar(50), username)
+      .input("idx", mssql.Int, idx)
+      .query(`
+        INSERT INTO tb_STOCKRECONCILATION_DATAENTRYTEMP_BACKUP (
+          COMPANY_CODE, COUNT_STATUS, TYPE, PRODUCT_CODE, PRODUCT_NAMELONG,
+          COSTPRICE, UNITPRICE, CUR_STOCK, PHY_STOCK, TRDATE, TRTIME, REPUSER, DELETED_USER
+        )
+        SELECT 
+          COMPANY_CODE, COUNT_STATUS, TYPE, PRODUCT_CODE, PRODUCT_NAMELONG,
+          COSTPRICE, UNITPRICE, CUR_STOCK, PHY_STOCK, TRDATE, TRTIME, REPUSER, @DELETED_USER
+        FROM tb_STOCKRECONCILATION_DATAENTRYTEMP
+        WHERE IDX = @idx
+      `);
 
-    const request = new mssql.Request();
-    request.input("idx", mssql.Int, idx);
+    const deleteRequest = new mssql.Request(transaction);
+    const deleteResult = await deleteRequest
+      .input("idx", mssql.Int, idx)
+      .query(`DELETE FROM tb_STOCKRECONCILATION_DATAENTRYTEMP WHERE IDX = @idx`);
 
-    const result = await request.query(`
-      USE [RT_WEB]
-      DELETE FROM tb_STOCKRECONCILATION_DATAENTRYTEMP WHERE IDX = @idx
-    `);
-
-    if (result.rowsAffected[0] === 0) {
-      console.log("No stock data found to delete");
+    if (deleteResult.rowsAffected[0] === 0) {
+      await transaction.rollback();
       return res.status(404).json({ message: "Stock data not found" });
     }
 
+    await transaction.commit();
     res.status(200).json({ message: "Stock data deleted successfully" });
+
   } catch (error) {
+    if (transaction._aborted === false) {
+      await transaction.rollback();
+    }
     console.error("Error deleting stock data:", error);
-    res.status(500).json({ message: "Failed to delete stock data" });
+    res.status(500).json({ message: "Failed to delete stock data", error: error.message });
   }
 };
 
@@ -2157,11 +2196,13 @@ exports.scan = async (req, res) => {
   const codeData = req.query.data?.trim();
   const company = req.query.company?.trim();
   const name = req.query.name?.trim();
-console.log("Scan request data:", codeData, company, name);
-    if ((!codeData || codeData === "No result") && !name) {
+  console.log("Scan request data:", codeData, company, name);
+  if ((!codeData || codeData === "No result") && !name) {
     return res
       .status(400)
-      .json({ message: "Please provide a valid barcode or product code or name" });
+      .json({
+        message: "Please provide a valid barcode or product code or name",
+      });
   }
 
   if (!company) {
@@ -2170,41 +2211,41 @@ console.log("Scan request data:", codeData, company, name);
 
   try {
     let productCode = null;
-let stockQty;
-let salesData = [];
-if((codeData || codeData !== "No result")){
- // Try finding a product code via barcode link table
-    const barcodeResult = await mssql.query`
+    let stockQty;
+    let salesData = [];
+    if (codeData || codeData !== "No result") {
+      // Try finding a product code via barcode link table
+      const barcodeResult = await mssql.query`
       USE [POSBACK_SYSTEM];
       SELECT PRODUCT_CODE FROM tb_BARCODELINK WHERE BARCODE = ${codeData};
     `;
 
-    if (barcodeResult.recordset.length > 0) {
-      productCode = barcodeResult.recordset[0].PRODUCT_CODE;
-    }
+      if (barcodeResult.recordset.length > 0) {
+        productCode = barcodeResult.recordset[0].PRODUCT_CODE;
+      }
 
-    // If not found in barcode link, use product table directly
-    const productQuery = productCode
-      ? mssql.query`
+      // If not found in barcode link, use product table directly
+      const productQuery = productCode
+        ? mssql.query`
         USE [POSBACK_SYSTEM];
         SELECT PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE 
         FROM tb_PRODUCT WHERE PRODUCT_CODE = ${productCode};`
-      : mssql.query`
+        : mssql.query`
         USE [POSBACK_SYSTEM];
         SELECT PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE 
         FROM tb_PRODUCT 
         WHERE PRODUCT_CODE = ${codeData} OR BARCODE = ${codeData} OR BARCODE2 = ${codeData};`;
 
-    const salesDataResult = await productQuery;
-    salesData = salesDataResult.recordset;
+      const salesDataResult = await productQuery;
+      salesData = salesDataResult.recordset;
 
-    if (!salesData || salesData.length === 0) {
-      return res.status(404).json({ message: "Product not found" });
-    }
+      if (!salesData || salesData.length === 0) {
+        return res.status(404).json({ message: "Product not found" });
+      }
 
-    const foundCode = salesData[0].PRODUCT_CODE;
+      const foundCode = salesData[0].PRODUCT_CODE;
 
-    const stockResult = await mssql.query`
+      const stockResult = await mssql.query`
       USE [POSBACK_SYSTEM];
       SELECT ISNULL(SUM(STOCK), 0) AS STOCK 
       FROM tb_STOCK 
@@ -2213,27 +2254,26 @@ if((codeData || codeData !== "No result")){
         AND PRODUCT_CODE = ${foundCode};
     `;
 
-    stockQty = stockResult.recordset[0]?.STOCK ?? 0;
-}
-  if(name && name !== ""){
- 
-    // If not found in barcode link, use product table directly
-    const productQuery =  mssql.query`
+      stockQty = stockResult.recordset[0]?.STOCK ?? 0;
+    }
+    if (name && name !== "") {
+      // If not found in barcode link, use product table directly
+      const productQuery = mssql.query`
         USE [POSBACK_SYSTEM];
         SELECT PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE 
         FROM tb_PRODUCT 
         WHERE PRODUCT_NAMELONG = ${name} ;`;
 
-    const salesDataResult = await productQuery;
-    salesData = salesDataResult.recordset;
+      const salesDataResult = await productQuery;
+      salesData = salesDataResult.recordset;
 
-    if (!salesData || salesData.length === 0) {
-      return res.status(404).json({ message: "Product not found" });
-    }
+      if (!salesData || salesData.length === 0) {
+        return res.status(404).json({ message: "Product not found" });
+      }
 
-    const foundCode = salesData[0].PRODUCT_CODE;
+      const foundCode = salesData[0].PRODUCT_CODE;
 
-    const stockResult = await mssql.query`
+      const stockResult = await mssql.query`
       USE [POSBACK_SYSTEM];
       SELECT ISNULL(SUM(STOCK), 0) AS STOCK 
       FROM tb_STOCK 
@@ -2242,8 +2282,8 @@ if((codeData || codeData !== "No result")){
         AND PRODUCT_CODE = ${foundCode};
     `;
 
-    stockQty = stockResult.recordset[0]?.STOCK ?? 0;
-}
+      stockQty = stockResult.recordset[0]?.STOCK ?? 0;
+    }
 
     return res.status(200).json({
       message: "Item Found Successfully",
@@ -2252,7 +2292,7 @@ if((codeData || codeData !== "No result")){
     });
   } catch (error) {
     console.error("Error retrieving barcode data:", error);
-    return res.status(500).json({ message: "Failed to retrieve barcode data" });
+    return res.status(500).json({ message: "Failed to scan data" });
   }
 };
 
@@ -2380,40 +2420,39 @@ exports.finalStockUpdate = async (req, res) => {
     });
   }
 
-  let transaction;
-
   try {
-    transaction = new mssql.Transaction();
+    const pool = await mssql.connect();
+    const transaction = new mssql.Transaction(pool);
     await transaction.begin();
 
-    // Step 1: Retrieve data
     const selectResult = await new mssql.Request(transaction)
-      .input("REPUSER", mssql.NVarChar(10), username)
-      .input("COMPANY_CODE", mssql.NChar(10), company).query(`
-        SELECT * FROM [RT_WEB].dbo.tb_STOCKRECONCILATION_DATAENTRYTEMP 
-        WHERE REPUSER = @REPUSER AND COMPANY_CODE = @COMPANY_CODE
+      .input("COMPANY_CODE", mssql.NChar(10), company)
+      .query(`
+        SELECT * FROM tb_STOCKRECONCILATION_DATAENTRYTEMP
+        WHERE COMPANY_CODE = @COMPANY_CODE
       `);
 
     const dataRows = selectResult.recordset;
 
     if (dataRows.length === 0) {
       await transaction.rollback();
-      return res.status(404).json({ success: false, message: "No data found" });
+      return res.status(404).json({
+        message: "No data found for the selected company",
+      });
     }
 
-    // Step 2: Insert data into main table
+    let insertCount = 0;
+
     const insertQuery = `
-      INSERT INTO [RT_WEB].dbo.tb_STOCKRECONCILATION_DATAENTRY (
+      INSERT INTO tb_STOCKRECONCILATION_DATAENTRY (
         COMPANY_CODE, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE,
-        CUR_STOCK, PHY_STOCK, TYPE, COUNT_STATUS, REPUSER
+        CUR_STOCK, PHY_STOCK, TYPE, COUNT_STATUS, REPUSER, TRDATE, TRTIME
       )
       VALUES (
         @COMPANY_CODE, @PRODUCT_CODE, @PRODUCT_NAMELONG, @COSTPRICE, @UNITPRICE,
-        @CUR_STOCK, @PHY_STOCK, @TYPE, @COUNT_STATUS, @REPUSER
+        @CUR_STOCK, @PHY_STOCK, @TYPE, @COUNT_STATUS, @REPUSER, @trDate, @trTime
       )
     `;
-
-    let insertCount = 0;
 
     for (const row of dataRows) {
       const insert = await new mssql.Request(transaction)
@@ -2426,7 +2465,9 @@ exports.finalStockUpdate = async (req, res) => {
         .input("PHY_STOCK", mssql.Float, row.PHY_STOCK)
         .input("TYPE", mssql.NChar(10), row.TYPE)
         .input("COUNT_STATUS", mssql.NChar(10), row.COUNT_STATUS)
-        .input("REPUSER", mssql.NVarChar(10), row.REPUSER)
+        .input("REPUSER", mssql.NVarChar(50), row.REPUSER)
+        .input("trDate", mssql.DateTime, row.TRDATE)
+        .input("trTime", mssql.DateTime, row.TRTIME)
         .query(insertQuery);
 
       if (insert.rowsAffected?.[0] > 0) insertCount += insert.rowsAffected[0];
@@ -2434,38 +2475,49 @@ exports.finalStockUpdate = async (req, res) => {
 
     if (insertCount === 0) {
       await transaction.rollback();
-      return res.status(400).json({
-        success: false,
-        message: "No records were inserted into final table.",
-      });
+      return res.status(400).json({ message: "No records were inserted." });
     }
 
-    // Step 3: Delete original data
+    const deleteBackup = await new mssql.Request(transaction)
+      .input("APPROVED_USER", mssql.NVarChar(50), username)
+      .input("COMPANY_CODE", mssql.NChar(10), company)
+      .query(`
+        INSERT INTO tb_STOCKRECONCILATION_DATAENTRYTEMP_BACKUP (
+          COMPANY_CODE, COUNT_STATUS, TYPE, PRODUCT_CODE, PRODUCT_NAMELONG,
+          COSTPRICE, UNITPRICE, CUR_STOCK, PHY_STOCK, TRDATE, TRTIME, REPUSER, APPROVED_USER
+        )
+        SELECT 
+          COMPANY_CODE, COUNT_STATUS, TYPE, PRODUCT_CODE, PRODUCT_NAMELONG,
+          COSTPRICE, UNITPRICE, CUR_STOCK, PHY_STOCK, TRDATE, TRTIME, REPUSER, @APPROVED_USER
+        FROM tb_STOCKRECONCILATION_DATAENTRYTEMP
+        WHERE COMPANY_CODE = @COMPANY_CODE
+      `);
+
+    if (deleteBackup.rowsAffected[0] === 0) {
+      await transaction.rollback();
+      return res.status(400).json({ message: "Couldn't back up records before delete." });
+    }
+
     const deleteResult = await new mssql.Request(transaction)
-      .input("REPUSER", mssql.NVarChar(10), username)
-      .input("COMPANY_CODE", mssql.NChar(10), company).query(`
-        DELETE FROM [RT_WEB].dbo.tb_STOCKRECONCILATION_DATAENTRYTEMP
-        WHERE REPUSER = @REPUSER AND COMPANY_CODE = @COMPANY_CODE
+      .input("COMPANY_CODE", mssql.NChar(10), company)
+      .query(`
+        DELETE FROM tb_STOCKRECONCILATION_DATAENTRYTEMP
+        WHERE COMPANY_CODE = @COMPANY_CODE
       `);
 
     if (deleteResult.rowsAffected?.[0] === 0) {
       await transaction.rollback();
       return res.status(404).json({
         success: false,
-        message:
-          "Insert succeeded but no records were deleted from temp table.",
+        message: "Insert and backup succeeded but nothing was deleted.",
       });
     }
 
-    // Step 4: Commit transaction
     await transaction.commit();
-    console.log(
-      `✅ Transaction committed: ${insertCount} rows inserted and temp rows deleted.`
-    );
 
     return res.status(200).json({
       success: true,
-      message: "Data moved and deleted successfully",
+      message: "Data moved, backed up, and deleted successfully",
       inserted: insertCount,
     });
   } catch (error) {
@@ -2516,7 +2568,7 @@ exports.finalGrnPrnUpdate = async (req, res) => {
     const request = new mssql.Request(transaction);
 
     // Step 2: Retrieve temp data
-    request.input("REPUSER", mssql.NVarChar(10), username.trim());
+    request.input("REPUSER", mssql.NVarChar(50), username.trim());
     request.input("COMPANY_CODE", mssql.NChar(10), company.trim());
 
     const selectResult = await request.query(`
@@ -2551,7 +2603,7 @@ exports.finalGrnPrnUpdate = async (req, res) => {
         .input("GRN", mssql.NVarChar(2), "00")
         .input("PRN", mssql.NVarChar(2), "00")
         .input("TOG", mssql.NVarChar(2), "00")
-        .input("REPUSER", mssql.NVarChar(10), username.trim());
+        .input("REPUSER", mssql.NVarChar(50), username.trim());
 
       const insertDoc = await insertDocReq.query(`
         INSERT INTO [RT_WEB].dbo.tb_DOCUMENT (COMPANY_CODE, GRN, PRN, TOG, REPUSER)
@@ -2619,7 +2671,7 @@ exports.finalGrnPrnUpdate = async (req, res) => {
       insertReq.input("UNITPRICE", mssql.Money, record.UNITPRICE);
       insertReq.input("CUR_STOCK", mssql.Float, record.CUR_STOCK);
       insertReq.input("PHY_STOCK", mssql.Float, record.PHY_STOCK);
-      insertReq.input("REPUSER", mssql.NVarChar(10), username.trim());
+      insertReq.input("REPUSER", mssql.NVarChar(50), username.trim());
       insertReq.input("REMARKS", mssql.NVarChar(255), remarks);
 
       let insertQuery = "";
@@ -2666,7 +2718,7 @@ exports.finalGrnPrnUpdate = async (req, res) => {
 
     // Step 7: Delete temp data
     const deleteReq = new mssql.Request(transaction);
-    deleteReq.input("REPUSER", mssql.NVarChar(10), username.trim());
+    deleteReq.input("REPUSER", mssql.NVarChar(50), username.trim());
     deleteReq.input("COMPANY_CODE", mssql.NChar(10), company.trim());
 
     await deleteReq.query(`
@@ -2734,54 +2786,58 @@ exports.syncDatabases = async (req, res) => {
 exports.productView = async (req, res) => {
   const codeData = req.query.data?.trim();
   const name = req.query.inputValue?.trim();
- 
+
+  console.log("Product view request data:", codeData, name);
+
   if ((!codeData || codeData === "No result") && !name) {
     return res
       .status(400)
-      .json({ message: "Please provide a valid barcode or product code or name" });
+      .json({
+        message: "Please provide a valid barcode or product code or name",
+      });
   }
 
   try {
     let productCode = null;
     let result = null;
 
-   if( codeData && codeData !== "No result") {
-     // Try finding a product code via barcode link table
-    const barcodeResult = await mssql.query`
+    if (codeData && codeData !== "No result") {
+      // Try finding a product code via barcode link table
+      const barcodeResult = await mssql.query`
       USE [POSBACK_SYSTEM];
       SELECT PRODUCT_CODE FROM tb_BARCODELINK WHERE BARCODE = ${codeData};
     `;
 
-    if (barcodeResult.recordset.length > 0) {
-      productCode = barcodeResult.recordset[0].PRODUCT_CODE;
-    }
+      if (barcodeResult.recordset.length > 0) {
+        productCode = barcodeResult.recordset[0].PRODUCT_CODE;
+      }
 
-    // If not found in barcode link, use product table directly
-    const productQuery = productCode
-      ? mssql.query`
+      // If not found in barcode link, use product table directly
+      const productQuery = productCode
+        ? mssql.query`
         USE [POSBACK_SYSTEM];
         SELECT PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE 
         FROM tb_PRODUCT WHERE PRODUCT_CODE = ${productCode};`
-      : mssql.query`
+        : mssql.query`
         USE [POSBACK_SYSTEM];
         SELECT PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE 
         FROM tb_PRODUCT 
         WHERE PRODUCT_CODE = ${codeData} OR BARCODE = ${codeData} OR BARCODE2 = ${codeData};`;
 
-    const salesDataResult = await productQuery;
-    const salesData = salesDataResult.recordset;
+      const salesDataResult = await productQuery;
+      const salesData = salesDataResult.recordset;
 
-    if (!salesData || salesData.length === 0) {
-      return res.status(404).json({ message: "Product not found" });
-    }
+      if (!salesData || salesData.length === 0) {
+        return res.status(404).json({ message: "Product not found" });
+      }
 
-    const foundCode = salesData[0].PRODUCT_CODE;
+      const foundCode = salesData[0].PRODUCT_CODE;
 
-    const stockResult = await mssql.query`
+      const stockResult = await mssql.query`
       USE [POSBACK_SYSTEM];
       SELECT 
     P.PRODUCT_CODE,P.BARCODE,P.BARCODE2,P.PRODUCT_NAMELONG,P.DEPTCODE,D.DEPTNAME,P.CATCODE,C.CATNAME,
-    P.SCATCODE,S.SCATNAME,P.VENDORCODE,V.VENDORNAME,P.COSTPRICE,P.MINPRICE, P.SCALEPRICE,P.WPRICE,P.PRICE1,P.PRICE2,P.PRICE3
+    P.SCATCODE,S.SCATNAME,P.VENDORCODE,V.VENDORNAME,P.COSTPRICE,P.MINPRICE, P.AVGCOST, P.SCALEPRICE,P.WPRICE,P.PRICE1,P.PRICE2,P.PRICE3
     FROM tb_PRODUCT P
     LEFT JOIN tb_DEPARTMENT D ON P.DEPTCODE = D.DEPTCODE
     LEFT JOIN tb_CATEGORY C ON P.CATCODE = C.CATCODE
@@ -2790,15 +2846,15 @@ exports.productView = async (req, res) => {
     WHERE P.PRODUCT_CODE  = ${foundCode}
     `;
 
-    result = stockResult.recordset[0];
-   }
-  
-   if( name && name !== "") {
-    const stockResult = await mssql.query`
+      result = stockResult.recordset[0];
+    }
+
+    if (name && name !== "") {
+      const stockResult = await mssql.query`
       USE [POSBACK_SYSTEM];
       SELECT 
     P.PRODUCT_CODE,P.BARCODE,P.BARCODE2,P.PRODUCT_NAMELONG,P.DEPTCODE,D.DEPTNAME,P.CATCODE,C.CATNAME,
-    P.SCATCODE,S.SCATNAME,P.VENDORCODE,V.VENDORNAME,P.COSTPRICE,P.MINPRICE, P.SCALEPRICE,P.WPRICE,P.PRICE1,P.PRICE2,P.PRICE3
+    P.SCATCODE,S.SCATNAME,P.VENDORCODE,V.VENDORNAME,P.COSTPRICE,P.MINPRICE, P.AVGCOST,P.SCALEPRICE,P.WPRICE,P.PRICE1,P.PRICE2,P.PRICE3
     FROM tb_PRODUCT P
     LEFT JOIN tb_DEPARTMENT D ON P.DEPTCODE = D.DEPTCODE
     LEFT JOIN tb_CATEGORY C ON P.CATCODE = C.CATCODE
@@ -2807,53 +2863,71 @@ exports.productView = async (req, res) => {
     WHERE P.PRODUCT_NAMELONG  = ${name}
     `;
 
-    result = stockResult.recordset[0];
-    
-   }
+      result = stockResult.recordset[0];
+    }
 
-   const new_code = result.PRODUCT_CODE;
+    const new_code = result.PRODUCT_CODE;
     await mssql.query`USE RT_WEB`;
     const stockQtyResult = await mssql.query(`
 ALTER VIEW vw_STOCK AS 
 SELECT 
-  [COMPANY_CODE], 
-  [PRODUCT_CODE],
+  [PRODUCT_CODE], 
+  [COMPANY_CODE],
   ISNULL(SUM([STOCK]), 0) AS QTY
 FROM POSBACK_SYSTEM.dbo.tb_STOCK
 WHERE (BIN = 'F' OR BIN IS NULL)
 GROUP BY [COMPANY_CODE], [PRODUCT_CODE];
     `);
 
-  
     const stockQty = await mssql.query`
       USE [RT_WEB];
-      SELECT * FROM vw_STOCK WHERE PRODUCT_CODE = ${new_code};`
+      SELECT * FROM vw_STOCK WHERE PRODUCT_CODE = ${new_code};`;
 
-      const stockData = stockQty.recordset;
-      const companyCodes = stockQty.recordset.map(row => row.COMPANY_CODE);
+    const stockData = stockQty.recordset;
+    const companyCodes = stockQty.recordset.map((row) => row.COMPANY_CODE);
 
-      const formattedCodes = companyCodes.map(code => `'${code.trim()}'`).join(', ');
+    await mssql.query`USE RT_WEB`;
+    const priceResult = await mssql.query(`
+ALTER VIEW vw_PRICE_DETAILS AS 
+SELECT 
+  [PRODUCT_CODE], 
+  [COMPANY_CODE],
+  [COST_PRICE],
+[UNIT_PRICE],
+[WPRICE],
+[MIN_PRICE]
+FROM POSBACK_SYSTEM.dbo.tb_PRICEDETAILS;
+    `);
 
-const query = `
+    const priceDetails = await mssql.query`
+      USE [RT_WEB];
+      SELECT * FROM vw_PRICE_DETAILS WHERE PRODUCT_CODE = ${new_code};`;
+    const prices = priceDetails.recordset;
+
+    const formattedCodes = companyCodes
+      .map((code) => `'${code.trim()}'`)
+      .join(", ");
+
+    const query = `
   SELECT COMPANY_CODE, COMPANY_NAME 
   FROM POSBACK_SYSTEM.dbo.tb_COMPANY 
   WHERE COMPANY_CODE IN (${formattedCodes});
 `;
 
-const company_names = await mssql.query(query);
+    const company_names = await mssql.query(query);
 
-const companies = company_names.recordset;
-console.log("Companies found:", companies);
+    const companies = company_names.recordset;
 
     return res.status(200).json({
       message: "Item Found Successfully",
       result: result,
+      prices: prices || [],
       stockData: stockData || [],
-  companies: companies || [],
+      companies: companies || [],
     });
   } catch (error) {
     console.error("Error retrieving barcode data:", error);
-    return res.status(500).json({ message: "Failed to retrieve barcode data" });
+    return res.status(500).json({ message: "Failed to product view data" });
   }
 };
 
@@ -2877,7 +2951,9 @@ exports.productName = async (req, res) => {
     });
   } catch (error) {
     console.error("Error retrieving barcode data:", error);
-    return res.status(500).json({ message: "Failed to retrieve barcode data" });
+    return res
+      .status(500)
+      .json({ message: "Failed to retrieve product names" });
   }
 };
 
@@ -2920,7 +2996,9 @@ exports.findUserConnection = async (req, res) => {
 
     if (userPermissionResult.recordset.length === 0) {
       console.log("No results found for username:", name);
-      return res.status(404).json({ message: "User details not found for the given username" });
+      return res
+        .status(404)
+        .json({ message: "User details not found for the given username" });
     }
 
     res.status(200).json({
