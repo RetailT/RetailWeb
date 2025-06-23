@@ -10,8 +10,6 @@ const { promisify } = require("util");
 const verifyToken = promisify(jwt.verify);
 const axios = require("axios");
 
-
-
 function buildSqlInClause(array) {
   return array.map((code) => `'${code}'`).join(", ");
 }
@@ -263,7 +261,6 @@ async function syncDB() {
     const dbConnectionData = await syncDBConnection();
 
     if (!dbConnectionData || dbConnectionData.length === 0) {
-      console.log("No customer data found.");
       return { responses: [], errors: ["No customer data found."] };
     }
 
@@ -390,7 +387,7 @@ async function syncDB() {
             null,
             2
           );
-          console.log("Sending JSON Payload:", requestBody);
+          
 
           try {
             const response = await axios.post(user.API_ENDPOINT, requestBody, {
@@ -434,6 +431,26 @@ async function syncDB() {
   }
 }
 
+function currentDateTime(){
+  const now = new Date();
+    const trDate = new Date(
+      Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
+    );
+    const trTime = new Date(
+      Date.UTC(
+        1900,
+        0,
+        1,
+        now.getHours(),
+        now.getMinutes(),
+        now.getSeconds(),
+        now.getMilliseconds()
+      )
+    );
+
+     return { trDate, trTime };
+}
+
 //login
 exports.login = async (req, res) => {
   let pool;
@@ -464,10 +481,19 @@ exports.login = async (req, res) => {
     const user = userResult.recordset[0];
     const { port, ip_address, CUSTOMERID, password: hashedPassword } = user;
 
-    if (!port || !ip_address) {
+    if (
+      !port ||
+      !ip_address ||
+      port.trim() === "" ||
+      ip_address.trim() === "" ||
+      ip_address.trim() === null ||
+      ip_address.trim() === undefined ||
+      port.trim() === null ||
+      port.trim() === undefined
+    ) {
       return res.status(400).json({
         message:
-          "Connection hasn't been established yet! Please contact system support.",
+          "Connection hasn't been established yet! Please contact system support team.",
       });
     }
 
@@ -487,7 +513,7 @@ exports.login = async (req, res) => {
           INSERT INTO tb_LOG (username, ip, datetime)
           VALUES (@username, @ip, @datetime)
         `);
-      console.log("Login log inserted.");
+      
     } catch (logErr) {
       console.error("Failed to insert login log:", logErr);
     }
@@ -511,7 +537,6 @@ exports.login = async (req, res) => {
     };
 
     const dynamicPool = await mssql.connect(dynamicDbConfig);
-    console.log("Connected to dynamic DB");
 
     const companyResult = await dynamicPool
       .request()
@@ -601,8 +626,9 @@ exports.register = async (req, res) => {
       .input("email", mssql.VarChar, email)
       .input("password", mssql.VarChar, hashedPassword).query(`
         USE [RTPOS_MAIN];
-        INSERT INTO tb_USERS (username, email, password)
-        VALUES (@username, @email, @password)
+        INSERT INTO tb_USERS (username, email, password, resetToken, resetTokenExpiry, ip_address, port, CUSTOMERID, a_permission,
+        a_sync, d_company, d_department, d_category, d_scategory, d_vendor, d_invoice, d_productView, t_scan, t_stock, t_grn, t_prn, t_tog, t_stock_update)
+        VALUES (@username, @email, @password, '', '', '', '', NULL, 'F', 'F', 'F', 'F','F', 'F','F', 'F','F', 'F','F', 'F','F', 'F', 'F')
       `);
 
     return res.status(201).json({ message: "User added successfully" });
@@ -737,7 +763,7 @@ exports.closeConnection = async (req, res) => {
   try {
     if (mssql.connected) {
       await mssql.close();
-      console.log("MSSQL connection closed");
+      
     }
 
     res.status(200).json({ message: "Connection Closed successfully" });
@@ -780,21 +806,7 @@ exports.updateTempSalesTable = async (req, res) => {
       quantity,
     } = req.body;
 
-    const now = new Date();
-const trDate = new Date(
-  Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
-);
-const trTime = new Date(
-  Date.UTC(
-    1900,
-    0,
-    1,
-    now.getHours(),
-    now.getMinutes(),
-    now.getSeconds(),
-    now.getMilliseconds()
-  )
-);
+    const {trDate, trTime} = currentDateTime();
 
     const insertQuery = `
       USE [RT_WEB];
@@ -862,20 +874,24 @@ exports.updateTempGrnTable = async (req, res) => {
       invoice_no,
     } = req.body;
 
+    const invoice_number = String(invoice_no);
+
+    const {trDate, trTime} = currentDateTime();
+
     let insertQuery;
     if (type === "GRN") {
       insertQuery = `
         USE [RT_WEB]
         INSERT INTO tb_GRN_TEMP 
-        (COMPANY_CODE, VENDOR_CODE, VENDOR_NAME, INVOICE_NO, TYPE, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE, CUR_STOCK, PHY_STOCK, REPUSER)
-        VALUES (@company, @vendor_code, @vendor_name, @invoice_no, @type, @productCode, @productName, @costPrice, @scalePrice, @stock, @quantity, @username)
+        (COMPANY_CODE, VENDOR_CODE, VENDOR_NAME, INVOICE_NO, TYPE, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE, CUR_STOCK, PHY_STOCK, REPUSER, TRDATE, TRTIME)
+        VALUES (@company, @vendor_code, @vendor_name, @invoice_number, @type, @productCode, @productName, @costPrice, @scalePrice, @stock, @quantity, @username, @trDate, @trTime)
       `;
     } else if (type === "PRN") {
       insertQuery = `
         USE [RT_WEB]
         INSERT INTO tb_PRN_TEMP 
-        (COMPANY_CODE, VENDOR_CODE, VENDOR_NAME, INVOICE_NO, TYPE, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE, CUR_STOCK, PHY_STOCK, REPUSER)
-        VALUES (@company, @vendor_code, @vendor_name, @invoice_no, @type, @productCode, @productName, @costPrice, @scalePrice, @stock, @quantity, @username)
+        (COMPANY_CODE, VENDOR_CODE, VENDOR_NAME, INVOICE_NO, TYPE, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE, CUR_STOCK, PHY_STOCK, REPUSER,TRDATE, TRTIME)
+        VALUES (@company, @vendor_code, @vendor_name, @invoice_number, @type, @productCode, @productName, @costPrice, @scalePrice, @stock, @quantity, @username, @trDate, @trTime)
       `;
     } else {
       return res
@@ -887,7 +903,7 @@ exports.updateTempGrnTable = async (req, res) => {
     insertRequest.input("company", mssql.NChar(10), company);
     insertRequest.input("vendor_code", mssql.NChar(10), vendor_code);
     insertRequest.input("vendor_name", mssql.NChar(50), vendor_name);
-    insertRequest.input("invoice_no", mssql.NChar(10), invoice_no);
+    insertRequest.input("invoice_number", mssql.NChar(10), invoice_number);
     insertRequest.input("type", mssql.NChar(10), type);
     insertRequest.input("productCode", mssql.NChar(30), productCode);
     insertRequest.input("productName", mssql.NChar(50), productName);
@@ -896,6 +912,8 @@ exports.updateTempGrnTable = async (req, res) => {
     insertRequest.input("stock", mssql.Float, stock);
     insertRequest.input("quantity", mssql.Float, quantity);
     insertRequest.input("username", mssql.NVarChar(50), username);
+    insertRequest.input("trDate", mssql.DateTime, trDate);
+    insertRequest.input("trTime", mssql.DateTime, trTime);
 
     await insertRequest.query(insertQuery);
 
@@ -908,7 +926,7 @@ exports.updateTempGrnTable = async (req, res) => {
 
 //temp tog table
 exports.updateTempTogTable = async (req, res) => {
-  console.log(req.body);
+  
   try {
     const authHeader = req.headers.authorization;
 
@@ -941,11 +959,13 @@ exports.updateTempTogTable = async (req, res) => {
       quantity,
     } = req.body;
 
+    const {trDate, trTime} = currentDateTime();
+
     const insertQuery = `
       USE [RT_WEB]
       INSERT INTO tb_TOG_TEMP 
-      (COMPANY_CODE, COMPANY_TO_CODE, TYPE, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE, CUR_STOCK, PHY_STOCK, REPUSER)
-      VALUES (@company, @companyCodeTo, @type, @productCode, @productName, @costPrice, @scalePrice, @stock, @quantity, @username)
+      (COMPANY_CODE, COMPANY_TO_CODE, TYPE, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE, CUR_STOCK, PHY_STOCK, REPUSER, TRDATE, TRTIME)
+      VALUES (@company, @companyCodeTo, @type, @productCode, @productName, @costPrice, @scalePrice, @stock, @quantity, @username, @trDate, @trTime)
     `;
 
     const insertRequest = new mssql.Request();
@@ -959,6 +979,8 @@ exports.updateTempTogTable = async (req, res) => {
     insertRequest.input("stock", mssql.Float, stock);
     insertRequest.input("quantity", mssql.Float, quantity);
     insertRequest.input("username", mssql.NVarChar(50), username);
+    insertRequest.input("trDate", mssql.DateTime, trDate);
+    insertRequest.input("trTime", mssql.DateTime, trTime);
 
     await insertRequest.query(insertQuery);
 
@@ -973,9 +995,14 @@ exports.updateTempTogTable = async (req, res) => {
 exports.stockUpdateDelete = async (req, res) => {
   const idx = parseInt(req.query.idx, 10);
   const username = req.query.username;
+  const selectedType = req.query.selectedType;
 
-  if (isNaN(idx) || !username) {
-    return res.status(400).json({ message: "Invalid or missing 'idx' or 'username' parameter" });
+  if (isNaN(idx) || !username || !selectedType) {
+    return res
+      .status(400)
+      .json({
+        message: "Invalid or missing 'idx' or 'username' or 'type' parameter",
+      });
   }
 
   const transaction = new mssql.Transaction();
@@ -986,8 +1013,7 @@ exports.stockUpdateDelete = async (req, res) => {
     const backupRequest = new mssql.Request(transaction);
     await backupRequest
       .input("DELETED_USER", mssql.NVarChar(50), username)
-      .input("idx", mssql.Int, idx)
-      .query(`
+      .input("idx", mssql.Int, idx).query(`
         INSERT INTO tb_STOCKRECONCILATION_DATAENTRYTEMP_BACKUP (
           COMPANY_CODE, COUNT_STATUS, TYPE, PRODUCT_CODE, PRODUCT_NAMELONG,
           COSTPRICE, UNITPRICE, CUR_STOCK, PHY_STOCK, TRDATE, TRTIME, REPUSER, DELETED_USER
@@ -1002,7 +1028,9 @@ exports.stockUpdateDelete = async (req, res) => {
     const deleteRequest = new mssql.Request(transaction);
     const deleteResult = await deleteRequest
       .input("idx", mssql.Int, idx)
-      .query(`DELETE FROM tb_STOCKRECONCILATION_DATAENTRYTEMP WHERE IDX = @idx`);
+      .query(
+        `DELETE FROM tb_STOCKRECONCILATION_DATAENTRYTEMP WHERE IDX = @idx`
+      );
 
     if (deleteResult.rowsAffected[0] === 0) {
       await transaction.rollback();
@@ -1010,21 +1038,31 @@ exports.stockUpdateDelete = async (req, res) => {
     }
 
     await transaction.commit();
-    res.status(200).json({ message: "Stock data deleted successfully" });
-
+    res.status(200).json({ message: "Data deleted successfully" });
   } catch (error) {
     if (transaction._aborted === false) {
       await transaction.rollback();
     }
     console.error("Error deleting stock data:", error);
-    res.status(500).json({ message: "Failed to delete stock data", error: error.message });
+    res
+      .status(500)
+      .json({ message: "Failed to delete stock data", error: error.message });
   }
 };
 
 //grnprn delete
 exports.grnprnDelete = async (req, res) => {
   try {
-    const { idx, type } = req.query;
+    const idx = parseInt(req.query.idx, 10);
+  const username = req.query.username;
+  const type = req.query.selectedType;
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res
+        .status(403)
+        .json({ message: "No authorization token provided" });
+    }
 
     if (!idx || isNaN(parseInt(idx, 10))) {
       return res
@@ -1038,25 +1076,68 @@ exports.grnprnDelete = async (req, res) => {
       TOG: "tb_TOG_TEMP",
     };
 
-    const tableName = tableMap[type];
+    const backupTableMap = {
+      GRN: "tb_GRN_TEMP_BACKUP",
+      PRN: "tb_PRN_TEMP_BACKUP",
+      TOG: "tb_TOG_TEMP_BACKUP",
+    };
 
-    if (!tableName) {
+    const tableName = tableMap[type];
+    const backupTableName = backupTableMap[type];
+
+    if (!tableName || !backupTableName) {
       return res.status(400).json({ message: "Invalid 'type' parameter" });
     }
 
     const request = new mssql.Request();
     request.input("idx", mssql.Int, parseInt(idx, 10));
+    request.input("username", mssql.NVarChar(50), username);
 
-    const result = await request.query(`
-      USE [RT_WEB]
-      DELETE FROM dbo.${tableName} WHERE IDX = @idx
-    `);
+    let deleteBackup;
 
-    if (result.rowsAffected[0] === 0) {
+    if (type !== "TOG") {
+      deleteBackup = await request.query(`
+    INSERT INTO dbo.${backupTableName} (
+      COMPANY_CODE, VENDOR_CODE, VENDOR_NAME, INVOICE_NO, TYPE,
+      PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE, CUR_STOCK,
+      PHY_STOCK, REMARKS, REPUSER, DELETED_USER, TRDATE, TRTIME
+    )
+    SELECT 
+      COMPANY_CODE, VENDOR_CODE, VENDOR_NAME, INVOICE_NO, TYPE,
+      PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE, CUR_STOCK,
+      PHY_STOCK, REMARKS, REPUSER, @username, TRDATE, TRTIME
+    FROM dbo.${tableName}
+    WHERE IDX = @idx
+  `);
+    } else {
+      deleteBackup = await request.query(`
+    INSERT INTO dbo.${backupTableName} (
+      COMPANY_CODE, COMPANY_TO_CODE, TYPE, PRODUCT_CODE, PRODUCT_NAMELONG,
+      COSTPRICE, UNITPRICE, CUR_STOCK, PHY_STOCK, REPUSER, DELETED_USER, TRDATE, TRTIME
+    )
+    SELECT 
+      COMPANY_CODE, COMPANY_TO_CODE, TYPE, PRODUCT_CODE, PRODUCT_NAMELONG,
+      COSTPRICE, UNITPRICE, CUR_STOCK, PHY_STOCK, REPUSER, @username, TRDATE, TRTIME
+    FROM dbo.${tableName}
+    WHERE IDX = @idx
+  `);
+    }
+
+    if (deleteBackup.rowsAffected[0] === 0) {
+      return res
+        .status(400)
+        .json({ message: "Couldn't back up records before delete." });
+    }
+
+    const deleteResult = await request.query(`
+  DELETE FROM dbo.${tableName} WHERE IDX = @idx
+`);
+
+    if (deleteResult.rowsAffected[0] === 0) {
       return res.status(404).json({ message: "Data not found" });
     }
 
-    res.status(200).json({ message: "Data deleted successfully" });
+    return res.status(200).json({ message: "Data deleted successfully" });
   } catch (error) {
     console.error("Error deleting data:", error);
     res.status(500).json({ message: "Failed to delete data" });
@@ -1078,7 +1159,7 @@ exports.resetDatabaseConnection = async (req, res) => {
     removeStock = [],
     removeDashboard = [],
   } = req.body;
-  console.log("req", admin);
+
   const trimmedName = name?.trim();
   const trimmedIP = ip?.trim();
   const trimmedPort = port?.trim();
@@ -1579,12 +1660,6 @@ exports.loadingDashboard = async (req, res) => {
     const formattedToDate = formatDate(toDate);
     const reportType = "SALESSUM1";
 
-    console.log(
-      formattedCurrentDate,
-      formattedFromDate,
-      formattedToDate,
-      selectedOptions
-    );
 
     // Clear previous dashboard view data
     await mssql.query`USE RT_WEB; DELETE FROM tb_SALES_DASHBOARD_VIEW WHERE REPUSER = ${username};`;
@@ -1696,10 +1771,6 @@ exports.loadingDashboard = async (req, res) => {
           }))
         : [];
 
-    console.log("formattedResult:", formattedResult);
-    console.log("loadingDashboardResult:", loadingDashboardResult);
-    console.log("record:", record?.recordset);
-    console.log("cashierPointRecord:", cashierPointRecord?.recordset);
 
     // Send response
     res.status(200).json({
@@ -2196,13 +2267,11 @@ exports.scan = async (req, res) => {
   const codeData = req.query.data?.trim();
   const company = req.query.company?.trim();
   const name = req.query.name?.trim();
-  console.log("Scan request data:", codeData, company, name);
+
   if ((!codeData || codeData === "No result") && !name) {
-    return res
-      .status(400)
-      .json({
-        message: "Please provide a valid barcode or product code or name",
-      });
+    return res.status(400).json({
+      message: "Please provide a valid barcode or product code or name",
+    });
   }
 
   if (!company) {
@@ -2298,36 +2367,60 @@ exports.scan = async (req, res) => {
 
 // stock update
 exports.stockUpdate = async (req, res) => {
-  const { name, code } = req.query;
+  const { code, selectedType } = req.query;
 
   // Validate required query parameters
-  if (!name || !code) {
+  if (!code || !selectedType) {
     return res
       .status(400)
       .json({ message: "Missing required query parameters: name and/or code" });
   }
 
-  const username = String(name).trim();
   const company = String(code).trim();
+  const type = String(selectedType).trim();
 
   try {
-    const stockData = await mssql.query`
-      USE [RT_WEB];
-      SELECT 
-        IDX,
-        COMPANY_CODE,
-        TYPE,
-        COUNT_STATUS,
-        PRODUCT_CODE,
-        PRODUCT_NAMELONG,
-        COSTPRICE,
-        UNITPRICE,
-        CUR_STOCK,
-        PHY_STOCK,
-        REPUSER
-      FROM tb_STOCKRECONCILATION_DATAENTRYTEMP 
-      WHERE COMPANY_CODE = ${company} AND TYPE = 'STK';
-    `;
+    let stockData;
+
+    if (type === "STOCK") {
+      stockData = await mssql.query`
+        USE [RT_WEB];
+        SELECT IDX,COMPANY_CODE,TYPE,COUNT_STATUS,PRODUCT_CODE,PRODUCT_NAMELONG,COSTPRICE,UNITPRICE,
+          CUR_STOCK,PHY_STOCK,REPUSER
+        FROM tb_STOCKRECONCILATION_DATAENTRYTEMP 
+        WHERE COMPANY_CODE = ${company} AND TYPE = 'STK';
+      `;
+    }
+    if (type === "GRN") {
+      stockData = await mssql.query`
+        USE [RT_WEB];
+        SELECT 
+          IDX,COMPANY_CODE,VENDOR_CODE, VENDOR_NAME, INVOICE_NO, TYPE, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE,
+          CUR_STOCK, PHY_STOCK, REPUSER
+        FROM tb_GRN_TEMP 
+        WHERE COMPANY_CODE = ${company} AND TYPE = 'GRN';
+      `;
+    }
+    if (type === "PRN") {
+      stockData = await mssql.query`
+        USE [RT_WEB];
+        SELECT 
+          IDX,COMPANY_CODE,VENDOR_CODE, VENDOR_NAME, INVOICE_NO, TYPE, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE,
+          CUR_STOCK, PHY_STOCK, REPUSER
+        FROM tb_PRN_TEMP 
+        WHERE COMPANY_CODE = ${company} AND TYPE = 'PRN';
+      `;
+    }
+    if (type === "TOG") {
+      stockData = await mssql.query`
+        USE [RT_WEB];
+        SELECT 
+          IDX,COMPANY_CODE,COMPANY_TO_CODE, TYPE, PRODUCT_CODE, PRODUCT_NAMELONG, 
+          COSTPRICE, UNITPRICE, CUR_STOCK, PHY_STOCK, REPUSER
+        FROM tb_TOG_TEMP 
+        WHERE COMPANY_CODE = ${company} AND TYPE = 'TOG';
+      `;
+    }
 
     const records = stockData.recordset;
 
@@ -2347,7 +2440,7 @@ exports.stockUpdate = async (req, res) => {
 
 // GRN/PRN/TOG table for scan page
 exports.grnprnTableData = async (req, res) => {
-  const { name, code } = req.query;
+  const { name, code, selectedType } = req.query;
 
   // Validate input
   if (!name || !code) {
@@ -2360,48 +2453,44 @@ exports.grnprnTableData = async (req, res) => {
   const company = String(code).trim();
 
   try {
-    const grnDataPromise = mssql.query`
+    let data;
+
+    if (selectedType === "GRN") {
+      data = mssql.query`
       USE [RT_WEB];
-      SELECT IDX, COMPANY_CODE, VENDOR_CODE, VENDOR_NAME, INVOICE_NO, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE, CUR_STOCK, PHY_STOCK, REPUSER
+      SELECT IDX, COMPANY_CODE, VENDOR_CODE, VENDOR_NAME, INVOICE_NO, REPUSER
       FROM tb_GRN_TEMP 
-      WHERE COMPANY_CODE = ${company} AND TYPE = 'GRN';
+      WHERE TYPE = 'GRN' AND REPUSER = ${username} AND COMPANY_CODE = ${company};
     `;
-
-    const prnDataPromise = mssql.query`
+    }
+    if (selectedType === "PRN") {
+      data = mssql.query`
       USE [RT_WEB];
-      SELECT IDX, COMPANY_CODE, VENDOR_CODE, VENDOR_NAME, INVOICE_NO, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE, CUR_STOCK, PHY_STOCK, REPUSER
+      SELECT IDX, COMPANY_CODE, VENDOR_CODE, VENDOR_NAME, INVOICE_NO, REPUSER
       FROM tb_PRN_TEMP 
-      WHERE COMPANY_CODE = ${company} AND TYPE = 'PRN';
+      WHERE TYPE = 'PRN' AND REPUSER = ${username} AND COMPANY_CODE = ${company};
     `;
-
-    const togDataPromise = mssql.query`
+    }
+    if (selectedType === "TOG") {
+      data = mssql.query`
       USE [RT_WEB];
-      SELECT IDX, COMPANY_CODE, COMPANY_TO_CODE, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE, CUR_STOCK, PHY_STOCK, REPUSER
+      SELECT IDX, COMPANY_CODE, COMPANY_TO_CODE, REPUSER
       FROM tb_TOG_TEMP 
-      WHERE COMPANY_CODE = ${company} AND TYPE = 'TOG';
+      WHERE TYPE = 'TOG' AND REPUSER = ${username} AND COMPANY_CODE = ${company};
     `;
+    }
 
     // Execute all queries in parallel
-    const [grnData, prnData, togData] = await Promise.all([
-      grnDataPromise,
-      prnDataPromise,
-      togDataPromise,
-    ]);
+    const tableData = await data;
 
     // Check if all are empty
-    if (
-      grnData.recordset.length === 0 &&
-      prnData.recordset.length === 0 &&
-      togData.recordset.length === 0
-    ) {
+    if (tableData.recordset.length === 0) {
       return res.status(404).json({ message: "No GRN/PRN/TOG data found" });
     }
 
     return res.status(200).json({
       message: "Data Found Successfully",
-      grnData: grnData.recordset,
-      prnData: prnData.recordset,
-      togData: togData.recordset,
+      tableData: tableData.recordset,
     });
   } catch (error) {
     console.error("Error retrieving GRN/PRN/TOG data:", error);
@@ -2425,9 +2514,11 @@ exports.finalStockUpdate = async (req, res) => {
     const transaction = new mssql.Transaction(pool);
     await transaction.begin();
 
-    const selectResult = await new mssql.Request(transaction)
-      .input("COMPANY_CODE", mssql.NChar(10), company)
-      .query(`
+    const selectResult = await new mssql.Request(transaction).input(
+      "COMPANY_CODE",
+      mssql.NChar(10),
+      company
+    ).query(`
         SELECT * FROM tb_STOCKRECONCILATION_DATAENTRYTEMP
         WHERE COMPANY_CODE = @COMPANY_CODE
       `);
@@ -2480,8 +2571,7 @@ exports.finalStockUpdate = async (req, res) => {
 
     const deleteBackup = await new mssql.Request(transaction)
       .input("APPROVED_USER", mssql.NVarChar(50), username)
-      .input("COMPANY_CODE", mssql.NChar(10), company)
-      .query(`
+      .input("COMPANY_CODE", mssql.NChar(10), company).query(`
         INSERT INTO tb_STOCKRECONCILATION_DATAENTRYTEMP_BACKUP (
           COMPANY_CODE, COUNT_STATUS, TYPE, PRODUCT_CODE, PRODUCT_NAMELONG,
           COSTPRICE, UNITPRICE, CUR_STOCK, PHY_STOCK, TRDATE, TRTIME, REPUSER, APPROVED_USER
@@ -2495,12 +2585,16 @@ exports.finalStockUpdate = async (req, res) => {
 
     if (deleteBackup.rowsAffected[0] === 0) {
       await transaction.rollback();
-      return res.status(400).json({ message: "Couldn't back up records before delete." });
+      return res
+        .status(400)
+        .json({ message: "Couldn't back up records before delete." });
     }
 
-    const deleteResult = await new mssql.Request(transaction)
-      .input("COMPANY_CODE", mssql.NChar(10), company)
-      .query(`
+    const deleteResult = await new mssql.Request(transaction).input(
+      "COMPANY_CODE",
+      mssql.NChar(10),
+      company
+    ).query(`
         DELETE FROM tb_STOCKRECONCILATION_DATAENTRYTEMP
         WHERE COMPANY_CODE = @COMPANY_CODE
       `);
@@ -2517,7 +2611,7 @@ exports.finalStockUpdate = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Data moved, backed up, and deleted successfully",
+      message: "Data moved successfully",
       inserted: insertCount,
     });
   } catch (error) {
@@ -2535,12 +2629,12 @@ exports.finalStockUpdate = async (req, res) => {
 
 // GRN/PRN/TOG update final
 exports.finalGrnPrnUpdate = async (req, res) => {
-  const { username, company, type, remarks = "" } = req.query;
+  const { username, company, type, invoice, remarks = "" } = req.query;
 
-  if (!username || !company || !type) {
+  if (!username || !company || !type || (type !=='TOG' && !invoice)) {
     return res.status(400).json({
       success: false,
-      message: "Missing required parameters (username, company, or type)",
+      message: "Missing required parameters",
     });
   }
 
@@ -2556,9 +2650,16 @@ exports.finalGrnPrnUpdate = async (req, res) => {
     TOG: "tb_TOG",
   };
 
+  const backupTables = {
+    GRN: "tb_GRN_TEMP_BACKUP",
+    PRN: "tb_PRN_TEMP_BACKUP",
+    TOG: "tb_TOG_TEMP_BACKUP",
+  };
+
   if (!tempTables[type]) {
     return res.status(400).json({ success: false, message: "Invalid type" });
   }
+
 
   let transaction;
   try {
@@ -2568,13 +2669,27 @@ exports.finalGrnPrnUpdate = async (req, res) => {
     const request = new mssql.Request(transaction);
 
     // Step 2: Retrieve temp data
-    request.input("REPUSER", mssql.NVarChar(50), username.trim());
-    request.input("COMPANY_CODE", mssql.NChar(10), company.trim());
 
-    const selectResult = await request.query(`
-      SELECT * FROM [RT_WEB].dbo.${tempTables[type]} 
-      WHERE REPUSER = @REPUSER AND COMPANY_CODE = @COMPANY_CODE
+    let selectResult;
+    if( type === "TOG") {
+      request.input("COMPANY_CODE", mssql.NChar(10), company.trim());
+
+    selectResult = await request.query(`
+      USE [RT_WEB];
+      SELECT * FROM ${tempTables[type]} 
+      WHERE COMPANY_CODE = @COMPANY_CODE
     `);
+    }
+    else{
+      request.input("COMPANY_CODE", mssql.NChar(10), company.trim());
+    request.input("INVOICE_NO", mssql.NChar(50), invoice.trim());
+
+    selectResult = await request.query(`
+      USE [RT_WEB];
+      SELECT * FROM ${tempTables[type]} 
+      WHERE COMPANY_CODE = @COMPANY_CODE AND INVOICE_NO = @INVOICE_NO
+    `);
+    }
 
     const records = selectResult.recordset;
     if (records.length === 0) {
@@ -2624,7 +2739,15 @@ exports.finalGrnPrnUpdate = async (req, res) => {
     const newTog = String(Number(tog) + 1).padStart(2, "0");
 
     const newDocNums = { GRN: newGrn, PRN: newPrn, TOG: newTog };
-    const documentNo = company.trim() + newDocNums[type];
+    const companyCode = company.trim();
+    const docPart = newDocNums[type].toString();
+    const totalLength = 10;
+
+    const zeroPaddingLength =
+      totalLength - (companyCode.length + docPart.length);
+    const zeroPadding = "0".repeat(zeroPaddingLength);
+
+    const documentNo = companyCode + zeroPadding + docPart;
 
     // Step 5: Update document number
     const updateDocReq = new mssql.Request(transaction);
@@ -2646,85 +2769,149 @@ exports.finalGrnPrnUpdate = async (req, res) => {
       throw new Error(`Failed to update ${type} number`);
     }
 
-    // Step 6: Insert records into final table
+    const {trDate, trTime} = currentDateTime();
+
     for (const record of records) {
+      // Common parameters
+      const baseInputs = {
+        DOCUMENT_NO: documentNo,
+        COMPANY_CODE: record.COMPANY_CODE.trim(),
+        PRODUCT_CODE: record.PRODUCT_CODE.trim(),
+        PRODUCT_NAMELONG: record.PRODUCT_NAMELONG.trim(),
+        COSTPRICE: record.COSTPRICE,
+        UNITPRICE: record.UNITPRICE,
+        CUR_STOCK: record.CUR_STOCK,
+        PHY_STOCK: record.PHY_STOCK,
+        REPUSER: username.trim(),
+        REMARKS: remarks,
+        APPROVED_USER: username,
+        trDate,
+        trTime,
+        VENDOR_CODE: record.VENDOR_CODE?.trim(),
+        VENDOR_NAME: record.VENDOR_NAME?.trim(),
+        INVOICE_NO: record.INVOICE_NO?.trim(),
+        TYPE: record.TYPE?.trim(),
+        COMPANY_TO_CODE: record.COMPANY_TO_CODE?.trim(),
+      };
+
+      // Insert main
       const insertReq = new mssql.Request(transaction);
+      Object.entries(baseInputs).forEach(([key, value]) => {
+        if (value !== undefined) {
+          const type =
+            key === "COSTPRICE" || key === "UNITPRICE"
+              ? mssql.Money
+              : key === "CUR_STOCK" || key === "PHY_STOCK"
+              ? mssql.Float
+              : key === "trDate" || key === "trTime"
+              ? mssql.DateTime
+              : key === "COMPANY_CODE" ||
+                key === "PRODUCT_CODE" ||
+                key === "COMPANY_TO_CODE" ||
+                key === "VENDOR_CODE" ||
+                key === "INVOICE_NO"
+              ? mssql.NChar(30)
+              : mssql.NVarChar(255); // fallback
+          insertReq.input(key, type, value);
+        }
+      });
 
-      // Common inputs
-      insertReq.input("DOCUMENT_NO", mssql.NVarChar(20), documentNo);
-      insertReq.input(
-        "COMPANY_CODE",
-        mssql.NChar(10),
-        record.COMPANY_CODE.trim()
-      );
-      insertReq.input(
-        "PRODUCT_CODE",
-        mssql.NChar(30),
-        record.PRODUCT_CODE.trim()
-      );
-      insertReq.input(
-        "PRODUCT_NAMELONG",
-        mssql.NVarChar(50),
-        record.PRODUCT_NAMELONG.trim()
-      );
-      insertReq.input("COSTPRICE", mssql.Money, record.COSTPRICE);
-      insertReq.input("UNITPRICE", mssql.Money, record.UNITPRICE);
-      insertReq.input("CUR_STOCK", mssql.Float, record.CUR_STOCK);
-      insertReq.input("PHY_STOCK", mssql.Float, record.PHY_STOCK);
-      insertReq.input("REPUSER", mssql.NVarChar(50), username.trim());
-      insertReq.input("REMARKS", mssql.NVarChar(255), remarks);
-
-      let insertQuery = "";
+      let insertQuery = "",
+        backupQuery = "";
       if (type === "GRN" || type === "PRN") {
-        insertReq
-          .input("VENDOR_CODE", mssql.NChar(20), record.VENDOR_CODE.trim())
-          .input("VENDOR_NAME", mssql.NVarChar(100), record.VENDOR_NAME.trim())
-          .input("INVOICE_NO", mssql.NChar(30), record.INVOICE_NO.trim())
-          .input("TYPE", mssql.NChar(10), record.TYPE.trim());
-
         insertQuery = `
-          INSERT INTO [RT_WEB].dbo.${finalTables[type]} 
-          (DOCUMENT_NO, COMPANY_CODE, VENDOR_CODE, VENDOR_NAME, INVOICE_NO, TYPE,
-           PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE,
-           CUR_STOCK, PHY_STOCK, REPUSER, REMARKS)
-          VALUES
-          (@DOCUMENT_NO, @COMPANY_CODE, @VENDOR_CODE, @VENDOR_NAME, @INVOICE_NO, @TYPE,
-           @PRODUCT_CODE, @PRODUCT_NAMELONG, @COSTPRICE, @UNITPRICE,
-           @CUR_STOCK, @PHY_STOCK, @REPUSER, @REMARKS)
-        `;
+      INSERT INTO [RT_WEB].dbo.${finalTables[type]} 
+      (DOCUMENT_NO, COMPANY_CODE, VENDOR_CODE, VENDOR_NAME, INVOICE_NO, TYPE,
+       PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE,
+       CUR_STOCK, PHY_STOCK, REPUSER, REMARKS, TRDATE, TRTIME)
+      VALUES
+      (@DOCUMENT_NO, @COMPANY_CODE, @VENDOR_CODE, @VENDOR_NAME, @INVOICE_NO, @TYPE,
+       @PRODUCT_CODE, @PRODUCT_NAMELONG, @COSTPRICE, @UNITPRICE,
+       @CUR_STOCK, @PHY_STOCK, @REPUSER, @REMARKS, @trDate, @trTime)
+    `;
+
+        backupQuery = `
+      INSERT INTO [RT_WEB].dbo.${backupTables[type]} 
+      (COMPANY_CODE, VENDOR_CODE, VENDOR_NAME, INVOICE_NO, TYPE,
+       PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE,
+       CUR_STOCK, PHY_STOCK, REPUSER, REMARKS, APPROVED_USER, TRDATE, TRTIME)
+      VALUES
+      (@COMPANY_CODE, @VENDOR_CODE, @VENDOR_NAME, @INVOICE_NO, @TYPE,
+       @PRODUCT_CODE, @PRODUCT_NAMELONG, @COSTPRICE, @UNITPRICE,
+       @CUR_STOCK, @PHY_STOCK, @REPUSER, @REMARKS, @APPROVED_USER, @trDate, @trTime)
+    `;
       } else if (type === "TOG") {
-        insertReq
-          .input(
-            "COMPANY_TO_CODE",
-            mssql.NChar(10),
-            record.COMPANY_TO_CODE.trim()
-          )
-          .input("TYPE", mssql.NChar(10), record.TYPE.trim());
 
         insertQuery = `
-          INSERT INTO [RT_WEB].dbo.${finalTables[type]} 
-          (DOCUMENT_NO, COMPANY_CODE, COMPANY_TO_CODE, TYPE,
-           PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE,
-           CUR_STOCK, PHY_STOCK, REMARKS, REPUSER)
-          VALUES
-          (@DOCUMENT_NO, @COMPANY_CODE, @COMPANY_TO_CODE, @TYPE,
-           @PRODUCT_CODE, @PRODUCT_NAMELONG, @COSTPRICE, @UNITPRICE,
-           @CUR_STOCK, @PHY_STOCK, @REMARKS, @REPUSER)
-        `;
+      INSERT INTO [RT_WEB].dbo.${finalTables[type]} 
+      (DOCUMENT_NO, COMPANY_CODE, COMPANY_TO_CODE, TYPE,
+       PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE,
+       CUR_STOCK, PHY_STOCK, REMARKS, REPUSER, TRDATE, TRTIME)
+      VALUES
+      (@DOCUMENT_NO, @COMPANY_CODE, @COMPANY_TO_CODE, @TYPE,
+       @PRODUCT_CODE, @PRODUCT_NAMELONG, @COSTPRICE, @UNITPRICE,
+       @CUR_STOCK, @PHY_STOCK, @REMARKS, @REPUSER, @trDate, @trTime)
+    `;
+
+        backupQuery = `
+      INSERT INTO [RT_WEB].dbo.${backupTables[type]} 
+      (COMPANY_CODE, COMPANY_TO_CODE, TYPE,
+       PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE,
+       CUR_STOCK, PHY_STOCK, REMARKS, REPUSER, APPROVED_USER, TRDATE, TRTIME)
+      VALUES
+      (@COMPANY_CODE, @COMPANY_TO_CODE, @TYPE,
+       @PRODUCT_CODE, @PRODUCT_NAMELONG, @COSTPRICE, @UNITPRICE,
+       @CUR_STOCK, @PHY_STOCK, @REMARKS, @REPUSER, @APPROVED_USER, @trDate, @trTime)
+    `;
       }
 
       await insertReq.query(insertQuery);
+
+      // Separate request for backup
+      const backupReq = new mssql.Request(transaction);
+      Object.entries(baseInputs).forEach(([key, value]) => {
+        if (value !== undefined) {
+          const type =
+            key === "COSTPRICE" || key === "UNITPRICE"
+              ? mssql.Money
+              : key === "CUR_STOCK" || key === "PHY_STOCK"
+              ? mssql.Float
+              : key === "trDate" || key === "trTime"
+              ? mssql.DateTime
+              : key === "COMPANY_CODE" ||
+                key === "PRODUCT_CODE" ||
+                key === "COMPANY_TO_CODE" ||
+                key === "VENDOR_CODE" ||
+                key === "INVOICE_NO"
+              ? mssql.NChar(30)
+              : mssql.NVarChar(255); // fallback
+          backupReq.input(key, type, value);
+        }
+      });
+
+      await backupReq.query(backupQuery);
     }
 
     // Step 7: Delete temp data
-    const deleteReq = new mssql.Request(transaction);
-    deleteReq.input("REPUSER", mssql.NVarChar(50), username.trim());
+    if(type === "TOG") {
+      const deleteReq = new mssql.Request(transaction);
     deleteReq.input("COMPANY_CODE", mssql.NChar(10), company.trim());
 
     await deleteReq.query(`
       DELETE FROM [RT_WEB].dbo.${tempTables[type]} 
-      WHERE REPUSER = @REPUSER AND COMPANY_CODE = @COMPANY_CODE
+      WHERE COMPANY_CODE = @COMPANY_CODE 
     `);
+    }
+    else{
+const deleteReq = new mssql.Request(transaction);
+    deleteReq.input("COMPANY_CODE", mssql.NChar(10), company.trim());
+    deleteReq.input("INVOICE_NO", mssql.NChar(50), invoice.trim());
+
+    await deleteReq.query(`
+      DELETE FROM [RT_WEB].dbo.${tempTables[type]} 
+      WHERE COMPANY_CODE = @COMPANY_CODE AND INVOICE_NO = @INVOICE_NO
+    `);
+    }
 
     // Step 8: Commit transaction
     await transaction.commit();
@@ -2787,14 +2974,10 @@ exports.productView = async (req, res) => {
   const codeData = req.query.data?.trim();
   const name = req.query.inputValue?.trim();
 
-  console.log("Product view request data:", codeData, name);
-
   if ((!codeData || codeData === "No result") && !name) {
-    return res
-      .status(400)
-      .json({
-        message: "Please provide a valid barcode or product code or name",
-      });
+    return res.status(400).json({
+      message: "Please provide a valid barcode or product code or name",
+    });
   }
 
   try {
@@ -2934,7 +3117,6 @@ FROM POSBACK_SYSTEM.dbo.tb_PRICEDETAILS;
 // product name
 exports.productName = async (req, res) => {
   try {
-    console.log("Retrieving product names...");
     // Try finding a product code via barcode link table
     const productNames = await mssql.query`
       USE [POSBACK_SYSTEM];
@@ -2995,7 +3177,6 @@ exports.findUserConnection = async (req, res) => {
     await mssql.close();
 
     if (userPermissionResult.recordset.length === 0) {
-      console.log("No results found for username:", name);
       return res
         .status(404)
         .json({ message: "User details not found for the given username" });
