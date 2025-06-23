@@ -87,10 +87,10 @@ const Home = () => {
           </div>
 
           <button
-            className="mt-6 px-6 py-3 bg-[#ce521a] text-black font-bold font-semibold rounded-lg hover:bg-orange-600 transition"
+            className="mt-6 px-6 py-3 bg-[#ce521a] rounded-lg hover:bg-orange-600 transition"
             onClick={() => navigate("/login")}
           >
-            GET STARTED TODAY
+            <p className="font-bold text-black ">Are You an Existing Customer? </p> 
           </button>
 
           {/* Social Links */}

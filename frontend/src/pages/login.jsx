@@ -58,6 +58,7 @@ const Login = ({ setAuthToken }) => {
           navigate("/profile");
           
         } else {
+          console.log("Login failed:", res.data.message);
           setDisable(false);
           setAlert({ message: res.data.message || "Login failed", type: "error" });
           setServerError(res.data.message || "Login failed");
@@ -66,9 +67,11 @@ const Login = ({ setAuthToken }) => {
           setTimeout(() => setAlert(null), 3000);
         }
       } catch (err) {
+        
         setDisable(false);
         setServerError(err.response?.data?.message || "Login failed");
-        setAlert({ message: err.response?.data?.message || "Login failed", type: "error" });
+        const errorMessage = err?.response?.data?.message ?? "Login failed. Please try again.";
+        setAlert({ message: errorMessage, type: "error" });
   
         // Dismiss alert after 3 seconds
         setTimeout(() => setAlert(null), 3000);

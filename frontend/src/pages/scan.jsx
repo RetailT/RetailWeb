@@ -51,13 +51,13 @@ function App() {
   const [quantity, setQuantity] = useState("1");
   const [salesData, setSalesData] = useState([]);
   const [disable, setDisable] = useState(false);
-const [repUserFilter, setRepUserFilter] = useState(""); // empty means no filter
-const [inputValue, setInputValue] = useState("");
+  const [repUserFilter, setRepUserFilter] = useState(""); // empty means no filter
+  const [inputValue, setInputValue] = useState("");
   const [filteredSuggestions, setFilteredSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [names, setNames] = useState([]);
 
-const [uniqueRepUsers, setUniqueRepUsers] = useState([]);
+  const [uniqueRepUsers, setUniqueRepUsers] = useState([]);
   const quantityRef = useRef(null);
   const codeRef = useRef(null);
   const streamRef = useRef(null);
@@ -75,18 +75,17 @@ const [uniqueRepUsers, setUniqueRepUsers] = useState([]);
   let typeOptions = [];
   const editableColumns = [{ index: 12, type: "number", step: "any" }];
 
-  
-  if(grn==='T'){
-    typeOptions.push('GRN');
+  if (grn === "T") {
+    typeOptions.push("GRN");
   }
-  if(prn==='T'){
-    typeOptions.push('PRN');
+  if (prn === "T") {
+    typeOptions.push("PRN");
   }
-  if(tog==='T'){
-    typeOptions.push('TOG');
+  if (tog === "T") {
+    typeOptions.push("TOG");
   }
-  if(stock_scan==='T'){
-    typeOptions.push('STOCK');
+  if (stock_scan === "T") {
+    typeOptions.push("STOCK");
   }
 
   let costPrice = (salesData.COSTPRICE || 0).toFixed(2);
@@ -94,11 +93,14 @@ const [uniqueRepUsers, setUniqueRepUsers] = useState([]);
 
   const fetchCompanies = async () => {
     try {
-      const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}companies`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const response = await axios.get(
+        `${process.env.REACT_APP_BACKEND_URL}companies`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
       if (response.data.userData && response.data.userData.length > 0) {
         // Map through all userData and get all options
         const companies = response.data.userData.map((data) => ({
@@ -116,11 +118,14 @@ const [uniqueRepUsers, setUniqueRepUsers] = useState([]);
 
   const fetchVendors = async () => {
     try {
-      const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}vendors`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const response = await axios.get(
+        `${process.env.REACT_APP_BACKEND_URL}vendors`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
       if (response.data.vendorData && response.data.vendorData.length > 0) {
         // Map through all userData and get all options
         const vendors = response.data.vendorData.map((data) => ({
@@ -136,7 +141,7 @@ const [uniqueRepUsers, setUniqueRepUsers] = useState([]);
     }
   };
 
-const getCameraStream = async () => {
+  const getCameraStream = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
@@ -156,7 +161,7 @@ const getCameraStream = async () => {
     }
   };
 
-   const stopCameraStream = () => {
+  const stopCameraStream = () => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
@@ -173,36 +178,42 @@ const getCameraStream = async () => {
     }
     fetchCompanies();
     fetchVendors();
-
+    requestProductNames();
     if (scannerEnabled) {
-    getCameraStream();
-  } else {
-    stopCameraStream();
-  }
-requestProductNames();
-  }, [scannerEnabled]);
+      getCameraStream();
+    } else {
+      stopCameraStream();
+    }
+
+    if (selectedType) {
+      tableData();
+    }
+  }, [scannerEnabled, selectedType]);
 
   if (!authToken) {
     return <Navigate to="/login" replace />;
   }
 
-  const requestData = async (data,name) => {
+  const requestData = async (data, name) => {
     setLoading(true);
     try {
-      const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}scan`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        params: {
-          data: data,
-          company: selectedCompany,
-          name: name,
-        },
-      });
+      const response = await axios.get(
+        `${process.env.REACT_APP_BACKEND_URL}scan`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          params: {
+            data: data,
+            company: selectedCompany,
+            name: name,
+          },
+        }
+      );
 
       setSalesData(response.data.salesData[0]);
       setAmount(response.data.amount);
-      
+
       setLoading(false);
       setTimeout(() => {
         if (quantityRef.current) {
@@ -245,15 +256,15 @@ requestProductNames();
     }
 
     if (result) {
-      const beep = new Audio("https://www.myinstants.com/media/sounds/beep.mp3");
-      beep.play().catch((error) =>
-        console.error("Beep sound error:", error)
+      const beep = new Audio(
+        "https://www.myinstants.com/media/sounds/beep.mp3"
       );
+      beep.play().catch((error) => console.error("Beep sound error:", error));
 
       setCurrentData(result.text);
       setCode("");
       toast.success(`Product scanned: ${result.text}`);
-      requestData(result.text,"");
+      requestData(result.text, "");
     }
   };
 
@@ -324,18 +335,17 @@ requestProductNames();
     }
   };
 
-     const requestProductNames = async () => {
+  const requestProductNames = async () => {
     try {
       const response = await axios.get(
         `${process.env.REACT_APP_BACKEND_URL}product-names`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
-          }
+          },
         }
       );
       if (response.data.message === "Product names found") {
-        
         const productNames = response.data.names.map(
           (item) => item.PRODUCT_NAMELONG
         );
@@ -352,69 +362,47 @@ requestProductNames();
 
   const tableData = async () => {
     try {
-      console.log('helooo',username, selectedCompany);
-      setLoading(true);
-      const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}grnprn-table-data`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        params: {
-          name: username,
-          code: selectedCompany,
-        },
-      });
-      
-      const grnData = response.data.grnData;
-      const prnData = response.data.prnData;
-      const togData = response.data.togData;
-     
-      if (selectedType === 'GRN' && grnData.length > 0 ) {
-        // Extract keys from the first object, excluding "IDX"
-        const keys = Object.keys(grnData[0]).filter((key) => key !== "IDX" && key !== "TYPE");
-        
-        // Custom heading mapping
-        const customHeadingMap = {
-          INVOICE_NO: "Invoice No",
-          COMPANY_CODE: "Company Code",
-          VENDOR_CODE: "Vendor Code",
-          VENDOR_NAME: "Vendor Name",
-          PRODUCT_CODE: "Product Code",
-          PRODUCT_NAMELONG: "Product Name",
-          COSTPRICE: "Cost Price",
-          UNITPRICE: "Unit Price",
-          CUR_STOCK: "Current Stock",
-          PHY_STOCK: "Physical Stock",
-        };
-
-        const customHeaders = keys.map((key) => customHeadingMap[key] || key);
-
-        setHeaders(customHeaders);
-
-        // Map the data, include "IDX" as hidden in each row
-        const gData = grnData.map((row) => ({
-          idx: row.IDX, // Store IDX for later reference
-          rowData: keys.map((key) => row[key]), // Data excluding IDX
-        }));
-        setEnteredProduct('submitted')
-        setTableData(gData);
-        setInitialData(true);
+      if (selectedCompany === selectedToCompany) {
+        setCompanyToError("Company and Company To cannot be the same.");
       }
-      else if (selectedType === 'PRN' && prnData.length > 0 ) {
+      setLoading(true);
+      const response = await axios.get(
+        `${process.env.REACT_APP_BACKEND_URL}grnprn-table-data`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          params: {
+            name: username,
+            code: selectedCompany,
+            selectedType: selectedType,
+            // vendor: selectedVendor,
+            // invoice_no: invoiceNo,
+            // company_to: selectedToCompany
+          },
+        }
+      );
+      console.log("message", response);
+      if (response.data.message !== "Data Found Successfully") {
+        setAlert({
+          message: response.data.message || "Data not available",
+          type: "error",
+        });
+        setTimeout(() => setAlert(null), 3000);
+      }
+      const tableData = response.data.tableData;
+
+      if (selectedType === "GRN" && tableData.length > 0) {
         // Extract keys from the first object, excluding "IDX"
-        const keys = Object.keys(prnData[0]).filter((key) => key !== "IDX" && key !== "TYPE");
-        
+        const keys = Object.keys(tableData[0]).filter((key) => key !== "IDX");
+
         // Custom heading mapping
         const customHeadingMap = {
           INVOICE_NO: "Invoice No",
           COMPANY_CODE: "Company Code",
           VENDOR_CODE: "Vendor Code",
           VENDOR_NAME: "Vendor Name",
-          PRODUCT_CODE: "Product Code",
-          PRODUCT_NAMELONG: "Product Name",
-          COSTPRICE: "Cost Price",
-          UNITPRICE: "Unit Price",
-          CUR_STOCK: "Current Stock",
-          PHY_STOCK: "Physical Stock",
+          REPUSER: "REPUSER",
         };
 
         const customHeaders = keys.map((key) => customHeadingMap[key] || key);
@@ -422,29 +410,48 @@ requestProductNames();
         setHeaders(customHeaders);
 
         // Map the data, include "IDX" as hidden in each row
-        const pData = prnData.map((row) => ({
+        const gData = tableData.map((row) => ({
           idx: row.IDX, // Store IDX for later reference
           rowData: keys.map((key) => row[key]), // Data excluding IDX
         }));
-        setEnteredProduct('submitted')
+        setEnteredProduct("submitted");
+        setTableData(gData);
+        // setInitialData(true);
+      } else if (selectedType === "PRN" && tableData.length > 0) {
+        // Extract keys from the first object, excluding "IDX"
+        const keys = Object.keys(tableData[0]).filter((key) => key !== "IDX");
+
+        // Custom heading mapping
+        const customHeadingMap = {
+          INVOICE_NO: "Invoice No",
+          COMPANY_CODE: "Company Code",
+          VENDOR_CODE: "Vendor Code",
+          VENDOR_NAME: "Vendor Name",
+          REPUSER: "REPUSER",
+        };
+
+        const customHeaders = keys.map((key) => customHeadingMap[key] || key);
+
+        setHeaders(customHeaders);
+
+        // Map the data, include "IDX" as hidden in each row
+        const pData = tableData.map((row) => ({
+          idx: row.IDX, // Store IDX for later reference
+          rowData: keys.map((key) => row[key]), // Data excluding IDX
+        }));
+        setEnteredProduct("submitted");
         setTableData(pData);
         // console.log('pData',pData);
-        setInitialData(true);
-      }
-      else if (selectedType === 'TOG' && togData.length > 0 ) {
+        // setInitialData(true);
+      } else if (selectedType === "TOG" && tableData.length > 0) {
         // Extract keys from the first object, excluding "IDX"
-        const keys = Object.keys(togData[0]).filter((key) => key !== "IDX" && key !== "TYPE");
-        
+        const keys = Object.keys(tableData[0]).filter((key) => key !== "IDX");
+
         // Custom heading mapping
         const customHeadingMap = {
           COMPANY_CODE: "Company Code",
           COMPANY_TO_CODE: "Company To Code",
-          PRODUCT_CODE: "Product Code",
-          PRODUCT_NAMELONG: "Product Name",
-          COSTPRICE: "Cost Price",
-          UNITPRICE: "Unit Price",
-          CUR_STOCK: "Current Stock",
-          PHY_STOCK: "Physical Stock",
+          REPUSER: "REPUSER",
         };
 
         const customHeaders = keys.map((key) => customHeadingMap[key] || key);
@@ -452,46 +459,46 @@ requestProductNames();
         setHeaders(customHeaders);
 
         // Map the data, include "IDX" as hidden in each row
-        const tData = togData.map((row) => ({
+        const tData = tableData.map((row) => ({
           idx: row.IDX, // Store IDX for later reference
           rowData: keys.map((key) => row[key]), // Data excluding IDX
         }));
-        setEnteredProduct('submitted')
+        setEnteredProduct("submitted");
         setTableData(tData);
-        setInitialData(true);
-
-
-
-      }
-      else{
-        if(selectedType !== 'STOCK'){
+        // setInitialData(true);
+      } else {
+        if (selectedType !== "STOCK") {
           setAlert({
             message: "No data found",
             type: "error",
           });
         }
-        
       }
 
-      const repUsers = [...new Set((grnData || prnData || togData).map((item) => item.REPUSER?.trim()))];
+      const repUsers = [
+        ...new Set(
+          (tableData || tableData || tableData).map((item) =>
+            item.REPUSER?.trim()
+          )
+        ),
+      ];
       setUniqueRepUsers(repUsers);
-      setLoading(false);
 
+      setLoading(false);
     } catch (err) {
       setLoading(false);
-      if(selectedType !== 'STOCK'){
-      setAlert({
-        message: err.response?.data?.message || "Stock data finding failed",
-        type: "error",
-      });
-    }
-      // Dismiss alert after 3 seconds
-      setTimeout(() => setAlert(null), 3000);
+      if (selectedType !== "STOCK") {
+        console.log("yes");
+        setAlert({
+          message: err.response?.data?.message || "Stock data finding failed",
+          type: "error",
+        });
+        setTimeout(() => setAlert(null), 3000);
+      }
     }
   };
 
   const handleDeleteRow = async (rowIndex) => {
-    
     const deletedRow = newTableData[rowIndex];
     const idxValue = deletedRow.idx; // Access the IDX value of the row being deleted
 
@@ -504,11 +511,11 @@ requestProductNames();
           },
           params: {
             idx: idxValue,
-            type: selectedType
+            type: selectedType,
           },
         }
       );
-      
+
       if (response.data.message === "Data deleted successfully") {
         tableData();
         setAlert({
@@ -531,23 +538,24 @@ requestProductNames();
   };
 
   const handleTableDataSubmit = async () => {
-    
     try {
       setDisable(true);
-      const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}final-grnprn-update`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        params: {
-          username: username,
-          company: selectedCompany,
-          type: selectedType,
-          remarks: remarks
-        },
-      });
+      const response = await axios.get(
+        `${process.env.REACT_APP_BACKEND_URL}final-grnprn-update`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          params: {
+            username: username,
+            company: selectedCompany,
+            type: selectedType,
+            // remarks: remarks,
+          },
+        }
+      );
 
       if (response.data.message === "Data moved and deleted successfully") {
-        
         setDisable(false);
         setAlert({
           message: response.data.message || "Data moved successfully",
@@ -560,9 +568,7 @@ requestProductNames();
             window.location.reload(); // Refresh the page
           }, 200); // Add a small delay before reloading
         }, 3000);
-      
-      }
-      else {
+      } else {
         // setInitialData(false);
         // setDisable(false);
         setAlert({
@@ -589,7 +595,7 @@ requestProductNames();
   const handleDataSubmit = async (e) => {
     e.preventDefault();
     let valid = true; // Initialize at the top
-  
+
     // Company validation
     if (!selectedCompany) {
       setCompanyError("Company is required.");
@@ -597,7 +603,7 @@ requestProductNames();
     } else {
       setCompanyError("");
     }
-  
+
     // Type validation
     if (!selectedType) {
       setTypeError("Type is required.");
@@ -605,7 +611,7 @@ requestProductNames();
     } else {
       setTypeError("");
     }
-  
+
     // Count validation for STOCK type
     if (selectedType === "STOCK" && !selectedCount) {
       setCountError("Count is required.");
@@ -613,29 +619,22 @@ requestProductNames();
     } else {
       setCountError("");
     }
-  
+
     // Vendor validation for GRN or PRN
-    if (
-      (selectedType === "GRN" || selectedType === "PRN") &&
-      !selectedVendor
-    ) {
+    if ((selectedType === "GRN" || selectedType === "PRN") && !selectedVendor) {
       setVendorError("Vendor is required.");
       valid = false;
     } else {
       setVendorError("");
     }
 
-    if (
-      (selectedType === "GRN" || selectedType === "PRN") &&
-      !invoiceNo
-    ) {
+    if ((selectedType === "GRN" || selectedType === "PRN") && !invoiceNo) {
       setInvoiceNoError("Invoice no is required.");
       valid = false;
     } else {
       setInvoiceNoError("");
     }
-  
-    
+
     if (!selectedToCompany) {
       setCompanyToError("Company To required.");
       valid = false;
@@ -643,29 +642,32 @@ requestProductNames();
     if (selectedCompany && selectedType === "STOCK" && selectedCount) {
       valid = true;
     }
-    if (selectedCompany && (selectedType === "GRN" || selectedType === "PRN") && selectedVendor && invoiceNo) {
+    if (
+      selectedCompany &&
+      (selectedType === "GRN" || selectedType === "PRN") &&
+      selectedVendor &&
+      invoiceNo
+    ) {
       valid = true;
     }
     if (selectedCompany && selectedType === "TOG" && selectedToCompany) {
       if (selectedCompany === selectedToCompany) {
         setCompanyToError("Company and Company To cannot be the same.");
         valid = false;
-      }
-      else{
+      } else {
         valid = true;
-      }   
+      }
     }
 
-   // Final check before proceeding
+    // Final check before proceeding
     if (valid) {
       setInitialData(true);
       setHasCameraPermission(true);
-      
+      // setInitialData(true);
     }
   };
 
   const handleProductSubmit = async (e) => {
-    
     e.preventDefault();
     if (!quantity) {
       setQuantityError("Quantity is required.");
@@ -674,7 +676,6 @@ requestProductNames();
       setQuantityError("");
 
       try {
-
         if (selectedType === "STOCK") {
           const now = new Date();
           const date = now.toISOString().split("T")[0];
@@ -692,8 +693,8 @@ requestProductNames();
               scalePrice: salesData.SCALEPRICE,
               stock: amount,
               quantity: quantity,
-              date:date,
-              time:time
+              date: date,
+              time: time,
             },
             {
               headers: {
@@ -704,14 +705,14 @@ requestProductNames();
           if (response.data.message === "Table Updated successfully") {
             setQuantity(1);
             setSalesData([]);
-      setAmount("");
+            setAmount("");
             setAlert({
               message: "Table Updated successfully",
               type: "success",
             });
-  
+
             setTimeout(() => setAlert(null), 3000);
-  
+
             setTimeout(() => {
               if (codeRef.current) {
                 codeRef.current.scrollIntoView({
@@ -722,8 +723,7 @@ requestProductNames();
               }
             }, 100);
           }
-        }
-        else if (selectedType === "GRN" || selectedType === "PRN") {
+        } else if (selectedType === "GRN" || selectedType === "PRN") {
           const response = await axios.post(
             `${process.env.REACT_APP_BACKEND_URL}update-temp-grn-table`,
             {
@@ -738,7 +738,6 @@ requestProductNames();
               vendor_code: selectedVendor,
               vendor_name: selectedVendorName,
               invoice_no: invoiceNo,
-              
             },
             {
               headers: {
@@ -751,9 +750,9 @@ requestProductNames();
               message: "Table Updated successfully",
               type: "success",
             });
-  
+
             setTimeout(() => setAlert(null), 3000);
-  
+
             setTimeout(() => {
               if (codeRef.current) {
                 codeRef.current.scrollIntoView({
@@ -764,8 +763,7 @@ requestProductNames();
               }
             }, 100);
           }
-        }
-        else if (selectedType === "TOG") {
+        } else if (selectedType === "TOG") {
           const response = await axios.post(
             `${process.env.REACT_APP_BACKEND_URL}update-temp-tog-table`,
             {
@@ -777,7 +775,7 @@ requestProductNames();
               costPrice: salesData.COSTPRICE,
               scalePrice: salesData.SCALEPRICE,
               stock: amount,
-              quantity: quantity
+              quantity: quantity,
             },
             {
               headers: {
@@ -790,9 +788,9 @@ requestProductNames();
               message: "Table Updated successfully",
               type: "success",
             });
-  
+
             setTimeout(() => setAlert(null), 3000);
-  
+
             setTimeout(() => {
               if (codeRef.current) {
                 codeRef.current.scrollIntoView({
@@ -802,13 +800,12 @@ requestProductNames();
                 codeRef.current.focus(); // Focus after scrolling
               }
             }, 100);
-          }
-          else{
+          } else {
             setAlert({
               message: "Table Updated Failed",
               type: "error",
             });
-  
+
             setTimeout(() => setAlert(null), 3000);
           }
         }
@@ -826,7 +823,7 @@ requestProductNames();
     }
   };
 
-    const handleChange = (e) => {
+  const handleChange = (e) => {
     const value = e.target.value;
     setInputValue(value);
 
@@ -844,21 +841,33 @@ requestProductNames();
   const handleSelect = (name) => {
     setInputValue(name);
     setShowSuggestions(false);
-   
   };
 
   const filteredTableData = newTableData.filter((item) => {
-  const repUser = item.rowData[headers.indexOf("REPUSER")]?.trim();
-  return repUserFilter === "" || repUser === repUserFilter;
-});
+    const repUser = item.rowData[headers.indexOf("REPUSER")]?.trim();
+    return repUserFilter === "" || repUser === repUserFilter;
+  });
 
+  const handleRowClick = (rowData) => {
+    if (selectedType !== "TOG") {
+      setSelectedVendor(rowData[1]);
+      setInvoiceNo(Number(rowData[3]));
+      setSelectedVendorName(rowData[2]);
+    } else {
+      const code = String(rowData[1]).trim(); // Ensure it's a string and trimmed
+      const companyName = companies.find(
+        (company) => company.code.trim() === code
+      )?.name;
+      setSelectedToCompanyName(companyName);
+      setSelectedToCompany(code);
+    }
+  };
 
   return (
     <div>
       <Navbar />
       {/* Main Layout */}
       <div className="flex">
-       
         <div
           className={`transition-all duration-300 flex-1 p-10`}
           style={{
@@ -870,198 +879,148 @@ requestProductNames();
             <Heading text="Scan" />
           </div>
 
-          {!initialData && (
-            <div
-              className="bg-white p-5 rounded-md shadow-md mb-5 mt-10 ml-[-60px] sm:ml-[-50px]"
-              style={{ backgroundColor: "#d8d8d8" }}
-            >
-              {/* Flex container for responsive layout */}
-              <div className="flex flex-col sm:flex-col lg:flex-row justify-center gap-4">
-                {/* Company Dropdown */}
-                <div className="relative flex flex-col gap-2 w-full lg:w-60">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Select a Company
-                  </label>
-                  <select
-                    value={selectedCompany}
-                    onChange={handleCompanyChange}
-                    className="w-full border border-gray-300 p-2 rounded-md shadow-sm bg-white text-left overflow-hidden text-ellipsis whitespace-nowrap"
-                    style={{ minHeight: "40px" }}
-                  >
-                    <option value="" disabled>
-                      Select a Company
-                    </option>
-                    {companies.map((company) => (
-                      <option key={company.code} value={company.code}>
-                        {company.code} {company.name}
-                      </option>
-                    ))}
-                  </select>
-                  {companyError && (
-                    <p className="text-red-500 text-sm mt-1 mb-4">
-                      {companyError}
-                    </p>
-                  )}
-                </div>
-
-                
-
-                {/* Type Dropdown */}
-                <div className="relative flex flex-col gap-2 w-full lg:w-60">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Select a Type
-                  </label>
-                  <select
-                    value={selectedType}
-                    onChange={handleTypeChange}
-                    className="w-full border border-gray-300 p-2 rounded-md shadow-sm bg-white text-left overflow-hidden text-ellipsis whitespace-nowrap"
-                    style={{ minHeight: "40px" }}
-                  >
-                    <option value="" disabled>
-                      Select a Type
-                    </option>
-                    {typeOptions.map((name, index) => (
-                      <option key={index} value={name}>
-                        {name}
-                      </option>
-                    ))}
-                  </select>
-                  {typeError && (
-                    <p className="text-red-500 text-sm mt-1 mb-4">
-                      {typeError}
-                    </p>
-                  )}
-                </div>
-
-                {(selectedType === "GRN" || selectedType === "PRN" ) && (
-                  
-                <div className="relative flex flex-col gap-2 w-full lg:w-60">
-                  {/* Vendor Dropdown */}
-                <label className="block text-sm font-medium text-gray-700">
-                  Select Vendor
-                </label>
-                <select
-                  value={selectedVendor}
-                  onChange={handleVendorChange}
-                  className="w-full border border-gray-300 p-2 rounded-md shadow-sm bg-white text-left overflow-hidden text-ellipsis whitespace-nowrap"
-                  style={{ minHeight: "40px" }}
-                >
-                  <option value="" disabled>
-                    Select Vendor
-                  </option>
-                  {vendors.map((vendor) => (
-                    <option key={vendor.code} value={vendor.code}>
-                      {vendor.code} {vendor.name}
-                    </option>
-                  ))}
-                </select>
-                {vendorError && (
-                  <p className="text-red-500 text-sm mt-1 mb-4">
-                    {vendorError}
-                  </p>
-                )}
-
-              <label className="block text-sm font-medium text-gray-700">
-                Invoice No
-              </label>
-              <input
-                type="text"
-                value={invoiceNo}
-                onChange={(e) => setInvoiceNo(e.target.value)}
-                className="w-full border border-gray-300 p-2 rounded-md shadow-sm bg-white"
-                placeholder="Enter Invoice No"
+          <div className="mt-5">
+            {alert && (
+              <Alert
+                message={alert.message}
+                type={alert.type}
+                onClose={() => setAlert(null)}
               />
-                {invoiceNoError && (
-                  <p className="text-red-500 text-sm mt-1 mb-4">
-                    {invoiceNoError}
-                  </p>
-                )}
-              </div>
-                )}
+            )}
+          </div>
 
-                {(selectedType === "TOG") && (
-                  <div className="relative flex flex-col gap-2 w-full lg:w-60">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Company To
-                  </label>
-                  <select
-                    value={selectedToCompany}
-                    onChange={handleToCompanyChange}
-                    className="w-full border border-gray-300 p-2 rounded-md shadow-sm bg-white text-left overflow-hidden text-ellipsis whitespace-nowrap"
-                    style={{ minHeight: "40px" }}
-                  >
-                    <option value="" disabled>
-                      Company To
-                    </option>
-                    {companies.map((company) => (
-                      <option key={company.code} value={company.code}>
-                        {company.code} {company.name}
-                      </option>
-                    ))}
-                  </select>
-                  {companyToError && (
-                    <p className="text-red-500 text-sm mt-1 mb-4">
-                      {companyToError}
-                    </p>
-                  )}
-                </div>
-                  )}
+          {!initialData && (
+  <div className="bg-[#d8d8d8] p-5 rounded-md shadow-md mb-10 mt-10 ml-[-60px] sm:ml-[-50px]">
+    
+    {/* Row 1: Company, Type, Conditional field */}
+    <div className="flex flex-col lg:flex-row gap-4 mb-4">
+      {/* Company */}
+      <div className="flex flex-col w-full lg:w-1/3">
+        <label className="text-sm font-medium text-gray-700">Select a Company</label>
+        <select
+          value={selectedCompany}
+          onChange={handleCompanyChange}
+          className="border border-gray-300 p-2 rounded-md shadow-sm bg-white"
+        >
+          <option value="" disabled>Select a Company</option>
+          {companies.map((company) => (
+            <option key={company.code} value={company.code}>
+              {company.code} {company.name}
+            </option>
+          ))}
+        </select>
+        {companyError && <p className="text-red-500 text-sm">{companyError}</p>}
+      </div>
 
-                {selectedType === "STOCK" && (
-                  <div className="relative flex flex-col gap-2 w-full lg:w-60">
-                    {/* Count Dropdown */}
-                    <label className="block text-sm font-medium text-gray-700">
-                      Select a Count
-                    </label>
-                    <select
-                      value={selectedCount}
-                      onChange={handleCountChange}
-                      className="w-full border border-gray-300 p-2 rounded-md shadow-sm bg-white text-left overflow-hidden text-ellipsis whitespace-nowrap"
-                      style={{ minHeight: "40px" }}
-                    >
-                      <option value="" disabled>
-                        Select a Count
-                      </option>
-                      {countOptions.map((name, index) => (
-                        <option key={index} value={name}>
-                          {name}
-                        </option>
-                      ))}
-                    </select>
-                    {countError && (
-                      <p className="text-red-500 text-sm mt-1 mb-4">
-                        {countError}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
+      {/* Type */}
+      <div className="flex flex-col w-full lg:w-1/3">
+        <label className="text-sm font-medium text-gray-700">Select a Type</label>
+        <select
+          value={selectedType}
+          onChange={handleTypeChange}
+          className="border border-gray-300 p-2 rounded-md shadow-sm bg-white"
+        >
+          <option value="" disabled>Select a Type</option>
+          {typeOptions.map((type, index) => (
+            <option key={index} value={type}>{type}</option>
+          ))}
+        </select>
+        {typeError && <p className="text-red-500 text-sm">{typeError}</p>}
+      </div>
 
-              {/* Submit Button - Responsive Positioning */}
-              <div className="flex justify-center lg:justify-end mt-2">
-                <button
-                  onClick={handleDataSubmit}
-                  className="bg-black hover:bg-gray-800 text-white font-semibold py-2 px-5 rounded-md shadow-md transition-all"
-                >
-                  Submit
-                </button>
-              </div>
-            </div>
-          )}
+      {/* Conditional field */}
+      {(selectedType === "GRN" || selectedType === "PRN") && (
+        <div className="flex flex-col w-full lg:w-1/3">
+          <label className="text-sm font-medium text-gray-700">Select Vendor</label>
+          <select
+            value={selectedVendor}
+            onChange={handleVendorChange}
+            className="border border-gray-300 p-2 rounded-md shadow-sm bg-white"
+          >
+            <option value="" disabled>Select Vendor</option>
+            {vendors.map((vendor) => (
+              <option key={vendor.code} value={vendor.code}>
+                {vendor.code} {vendor.name}
+              </option>
+            ))}
+          </select>
+          {vendorError && <p className="text-red-500 text-sm">{vendorError}</p>}
+        </div>
+      )}
+
+      {selectedType === "TOG" && (
+        <div className="flex flex-col w-full lg:w-1/3">
+          <label className="text-sm font-medium text-gray-700">Company To</label>
+          <select
+            value={selectedToCompany}
+            onChange={handleToCompanyChange}
+            className="border border-gray-300 p-2 rounded-md shadow-sm bg-white"
+          >
+            <option value="" disabled>Company To</option>
+            {companies.map((company) => (
+              <option key={company.code} value={company.code}>
+                {company.code} {company.name}
+              </option>
+            ))}
+          </select>
+          {companyToError && <p className="text-red-500 text-sm">{companyToError}</p>}
+        </div>
+      )}
+
+      {selectedType === "STOCK" && (
+        <div className="flex flex-col w-full lg:w-1/3">
+          <label className="text-sm font-medium text-gray-700">Select a Count</label>
+          <select
+            value={selectedCount}
+            onChange={handleCountChange}
+            className="border border-gray-300 p-2 rounded-md shadow-sm bg-white"
+          >
+            <option value="" disabled>Select a Count</option>
+            {countOptions.map((name, index) => (
+              <option key={index} value={name}>{name}</option>
+            ))}
+          </select>
+          {countError && <p className="text-red-500 text-sm">{countError}</p>}
+        </div>
+      )}
+    </div>
+
+    {/* Row 2: Invoice No + Submit button right aligned */}
+    <div className="flex flex-col lg:flex-row items-start lg:items-end gap-4">
+      {(selectedType === "GRN" || selectedType === "PRN") && (
+        <div className="flex flex-col w-full lg:w-1/3">
+          <label className="text-sm font-medium text-gray-700">Invoice No</label>
+          <input
+            type="number"
+            value={invoiceNo}
+            onChange={(e) => setInvoiceNo(e.target.value)}
+            className="border border-gray-300 p-2 rounded-md shadow-sm bg-white"
+            placeholder="Enter Invoice No"
+          />
+          {invoiceNoError && <p className="text-red-500 text-sm">{invoiceNoError}</p>}
+        </div>
+      )}
+
+      {/* Spacer to push button right on large screens */}
+      <div className="flex-grow" />
+
+      {/* Submit button aligned right always */}
+      <div className="w-full lg:w-auto flex justify-end">
+        <button
+          onClick={handleDataSubmit}
+          className="bg-black hover:bg-gray-800 text-white font-semibold py-2 px-5 rounded-md shadow-md"
+        >
+          Submit
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
 
           {initialData && (
             <div className="mt-10 ml-[-60px] sm:ml-[-50px]">
-              {alert && (
-                <Alert
-                  message={alert.message}
-                  type={alert.type}
-                  onClose={() => setAlert(null)}
-                />
-              )}
-              
               <div className="flex">
-                
-
                 {/* Main Content */}
                 <div className="flex flex-col flex-grow justify-center items-center w-full ">
                   <div className="flex items-center  mb-3">
@@ -1070,29 +1029,31 @@ requestProductNames();
                       className="flex items-center space-x-2"
                     >
                       <div className="relative w-full md:w-auto">
-    <input
-      type="text"
-      value={inputValue}
-      onChange={handleChange}
-      onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-      onFocus={() => inputValue && setShowSuggestions(true)}
-      placeholder="Enter Product Name"
-      className="px-3 py-2 w-full md:w-64 bg-gray-100 border border-gray-300 rounded-md text-gray-700 focus:outline-none"
-    />
-    {showSuggestions && filteredSuggestions.length > 0 && (
-      <ul className="absolute z-10 w-full bg-white border border-gray-300 rounded-md mt-1 shadow-md">
-        {filteredSuggestions.map((name, index) => (
-          <li
-            key={index}
-            onClick={() => handleSelect(name)}
-            className="p-2 hover:bg-gray-100 cursor-pointer"
-          >
-            {name}
-          </li>
-        ))}
-      </ul>
-    )}
-  </div>
+                        <input
+                          type="text"
+                          value={inputValue}
+                          onChange={handleChange}
+                          onBlur={() =>
+                            setTimeout(() => setShowSuggestions(false), 150)
+                          }
+                          onFocus={() => inputValue && setShowSuggestions(true)}
+                          placeholder="Enter Product Name"
+                          className="px-3 py-2 w-full md:w-64 bg-gray-100 border border-gray-300 rounded-md text-gray-700 focus:outline-none"
+                        />
+                        {showSuggestions && filteredSuggestions.length > 0 && (
+                          <ul className="absolute z-10 w-full bg-white border border-gray-300 rounded-md mt-1 shadow-md">
+                            {filteredSuggestions.map((name, index) => (
+                              <li
+                                key={index}
+                                onClick={() => handleSelect(name)}
+                                className="p-2 hover:bg-gray-100 cursor-pointer"
+                              >
+                                {name}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
                       <input
                         type="text"
                         id="code"
@@ -1150,7 +1111,6 @@ requestProductNames();
                       >
                         {scannerEnabled ? "Disable Scanner" : "Enable Scanner"}
                       </button>
-
                     </div>
                   ) : (
                     <div className="error">
@@ -1187,20 +1147,22 @@ requestProductNames();
                         {selectedType === "TOG" && (
                           <div>
                             <p className="text-gray-700">
-                          <strong>To Company Code:</strong> {selectedToCompany}
-                        </p>
-                        <p className="text-gray-700">
-                        <strong>To Company Name:</strong> {selectedToCompanyName}
-                      </p>
+                              <strong>To Company Code:</strong>{" "}
+                              {selectedToCompany}
+                            </p>
+                            <p className="text-gray-700">
+                              <strong>To Company Name:</strong>{" "}
+                              {selectedToCompanyName}
+                            </p>
                           </div>
                         )}
 
                         {selectedType === "STOCK" && (
                           <p className="text-gray-700">
-                          <strong>Count Status:</strong> {selectedCount}
-                        </p>
+                            <strong>Count Status:</strong> {selectedCount}
+                          </p>
                         )}
-                        
+
                         <p className="text-gray-700">
                           <strong>Type:</strong> {selectedType}
                         </p>
@@ -1208,22 +1170,20 @@ requestProductNames();
 
                       {(selectedType === "GRN" || selectedType === "PRN") && (
                         <div className="border-t pt-2">
-                        <p className="font-medium text-[#bc4a17] mb-3">
-                          Vendor Information
-                        </p>
-                        <p className="text-gray-700">
-                          <strong>Vendor Code:</strong> {selectedVendor}
-                        </p>
-                        <p className="text-gray-700">
-                          <strong>Vendor Name:</strong> {selectedVendorName}
-                        </p>
-                        <p className="text-gray-700">
-                          <strong>Invoice No:</strong> {invoiceNo}
-                        </p>
-                        
-                      </div>
+                          <p className="font-medium text-[#bc4a17] mb-3">
+                            Vendor Information
+                          </p>
+                          <p className="text-gray-700">
+                            <strong>Vendor Code:</strong> {selectedVendor}
+                          </p>
+                          <p className="text-gray-700">
+                            <strong>Vendor Name:</strong> {selectedVendorName}
+                          </p>
+                          <p className="text-gray-700">
+                            <strong>Invoice No:</strong> {invoiceNo}
+                          </p>
+                        </div>
                       )}
-
 
                       <div className="border-t pt-2">
                         <p className="font-medium text-[#bc4a17] mb-3">
@@ -1250,8 +1210,11 @@ requestProductNames();
                           Amount
                         </p>
                         <p className="text-gray-700">
-                            <strong>Stock: </strong> {isNaN(Number(amount)) ? "0.000" : Number(amount).toFixed(3)}
-                          </p>
+                          <strong>Stock: </strong>{" "}
+                          {isNaN(Number(amount))
+                            ? "0.000"
+                            : Number(amount).toFixed(3)}
+                        </p>
 
                         <form
                           onSubmit={handleSubmit}
@@ -1308,12 +1271,18 @@ requestProductNames();
                   )}
                 </div>
               </div>
-              {((selectedType === "GRN" || selectedType === "PRN" || selectedType === "TOG") && newTableData && showTable && enteredProduct==='submitted') && (
-                <div>
-                  <div className="text-2xl font-bold mt-5">
-                      {selectedType}
-                    </div>
-                  <div className="flex flex-col items-start p-3 gap-2">
+            </div>
+          )}
+
+          {(selectedType === "GRN" ||
+            selectedType === "PRN" ||
+            selectedType === "TOG") &&
+            newTableData.length !== 0 && (
+              <div className="flex flex-col flex-grow justify-center items-center w-full">
+                <div className="text-2xl font-bold mt-5 ml-5 mb-5">
+                  {selectedType}
+                </div>
+                {/* <div className="flex flex-col items-start p-3 gap-2">
                   <div>
                   <label className="block text-sm mt-5 font-medium text-gray-700">
                 Remarks
@@ -1350,25 +1319,28 @@ requestProductNames();
                             {user}
                           </option>
                         ))}
-                      </select>
-                   
+                      </select> */}
 
-
-                  <div className="flex justify-start overflow-x-auto">
-                                   <Table
-                                      headers={headers}
-                                      data={filteredTableData.map((item) => item.rowData)}
-                                      editableColumns={editableColumns}
-                                      onDeleteRow={handleDeleteRow}
-                                      formatColumns={[6, 7, 8, 9]}
-                                    />
-
-                                  </div>
+                <div className="flex justify-start overflow-x-auto">
+                  <Table
+                    headers={headers}
+                    data={filteredTableData.map((item) => item.rowData)}
+                    editableColumns={editableColumns}
+                    // onDeleteRow={handleDeleteRow}
+                    formatColumns={
+                      selectedType === "TOG" ? [4, 5, 6, 7] : [6, 7, 8, 9]
+                    }
+                    formatColumnsQuantity={
+                      selectedType === "TOG" ? [6, 7] : [8, 9]
+                    }
+                    bin="f"
+                    onRowClick={(rowData, rowIndex) =>
+                      handleRowClick(rowData, rowIndex)
+                    }
+                  />
                 </div>
-                 
-              )}
-            </div>
-          )}
+              </div>
+            )}
         </div>
       </div>
     </div>

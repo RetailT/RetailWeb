@@ -8,7 +8,9 @@ const ScrollableTable = ({
   onRowChange,
   onDeleteRow,
   formatColumns = [],
+  formatColumnsQuantity = [],
   bin,
+  onRowClick
 }) => {
   const shouldScrollVertically = data.length > 7; // Enable vertical scroll if more than 7 rows
   const tableRef = useRef(null);
@@ -72,6 +74,7 @@ const ScrollableTable = ({
                       className={`px-6 py-3 whitespace-nowrap text-sm ${getColumnAlignment(
                         cellIndex
                       )} text-gray-900 border border-gray-300`}
+                      onClick={() => onRowClick && onRowClick(row, rowIndex)}
                     >
                       {editableColumns.some(
                         (col) => col.index === cellIndex
@@ -84,13 +87,16 @@ const ScrollableTable = ({
                           }
                           className="w-full"
                         />
-                      ) : formatColumns.includes(cellIndex) &&
-                        cell !== undefined &&
-                        cell !== null ? (
-                        `${parseFloat(cell).toFixed(2)}`
-                      ) : (
-                        cell
-                      )}
+                      ) : (cell !== undefined && cell !== null) ? (
+    formatColumnsQuantity.includes(cellIndex)
+      ? `${parseFloat(cell).toFixed(3)}`
+      : formatColumns.includes(cellIndex)
+      ? `${parseFloat(cell).toFixed(2)}`
+      : cell
+  ) : (
+    cell
+  )
+}
                     </td>
                   ))}
                   {!bin && (

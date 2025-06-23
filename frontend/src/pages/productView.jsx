@@ -546,7 +546,7 @@ function App() {
                             <span>{productData.WPRICE.toFixed(2)}</span>
                           </div>
                           <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 mt-2">
-                            <span className="font-medium">Average Price:</span>
+                            <span className="font-medium">Average Cost:</span>
                             <span>{productData.AVGCOST.toFixed(2)}</span>
                           </div>
                         </div>

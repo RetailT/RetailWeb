@@ -196,7 +196,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
             {t_stock_update?.toLowerCase() === "t" && transactionOpen && isOpen && (
               <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
                 <NavLink to="/stock-update" className="w-full">
-                  Stock Data
+                  Scan Data
                 </NavLink>
               </li>
             )}
