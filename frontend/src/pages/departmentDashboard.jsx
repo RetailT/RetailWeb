@@ -419,7 +419,7 @@ const Dashboard = () => {
             marginTop: "96px", // Space for Navbar
           }}
         >
-          <div className="mt-10 ml-[-50px]">
+          <div className="ml-[-50px]">
             <Heading text="Department Sales Dashboard" />
           </div>
           <div className="mt-10 ml-[-50px]">

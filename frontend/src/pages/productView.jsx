@@ -22,7 +22,11 @@ function App() {
   const [tableData, setTableData] = useState([]);
   const [headers, setHeaders] = useState([]);
   const [priceTableData, setPriceTableData] = useState([]);
+  const [stockTableData, setStockTableData] = useState([]);
+  const [colorWiseTableData, setColorWiseTableData] = useState([]);
   const [priceHeaders, setPriceHeaders] = useState([]);
+  const [colorWiseHeaders, setColorWiseHeaders] = useState([]);
+  const [stockHeaders, setStockHeaders] = useState([]);
   const [repUserFilter, setRepUserFilter] = useState("");
   const [isData, setIsData] = useState(false);
   const codeRef = useRef(null);
@@ -122,11 +126,10 @@ function App() {
   const handleSelect = (name) => {
     setInputValue(name);
     setShowSuggestions(false);
-    console.log("Selected name:", name);
-    requestData(code, name);
+    requestData("", code, name);
   };
 
-  const requestData = async (data, inputValue) => {
+  const requestData = async (mode, data, inputValue) => {
     try {
       const response = await axios.get(
         `${process.env.REACT_APP_BACKEND_URL}product-view`,
@@ -137,6 +140,7 @@ function App() {
           params: {
             data: data,
             inputValue: inputValue,
+            mode: mode,
           },
         }
       );
@@ -148,7 +152,9 @@ function App() {
         const stockData = response.data.stockData;
         const companies = response.data.companies;
         const prices = response.data.prices;
-
+        const companyStockData = response.data.companyStockData;
+        const colorWiseData = response.data.colorWiseData;
+      
         // Step 1: Merge each stock item with its company name
         const mergedData = stockData.map((stockItem) => {
           const matchingCompany = companies.find(
@@ -174,6 +180,26 @@ function App() {
           };
         });
 
+        const stockMergedData = companyStockData.map((stockItem) => {
+          const matchingCompany = companies.find(
+            (company) =>
+              company.COMPANY_CODE.trim() === stockItem.COMPANY_CODE.trim()
+          );
+
+          return {
+            ...stockItem,
+            COMPANY_NAME: matchingCompany?.COMPANY_NAME || "Unknown",
+          };
+        });
+
+        const stockTableDataArray = stockMergedData.map((item) => [
+          item.COMPANY_CODE.trim(),
+          item.COMPANY_NAME,
+          item.STOCK,
+        ]);
+
+        setStockTableData(stockTableDataArray);
+
         const customOrder = [
           "COMPANY_CODE",
           "COMPANY_NAME",
@@ -194,7 +220,7 @@ function App() {
           "COST_PRICE",
           "UNIT_PRICE",
           "WPRICE",
-          "MIN_PRICE"
+          "MIN_PRICE",
         ];
         const customPriceHeadingMap = {
           COMPANY_CODE: "Company Code",
@@ -203,7 +229,27 @@ function App() {
           COST_PRICE: "Cost Price",
           UNIT_PRICE: "Unit Price",
           WPRICE: "Wholesale Price",
-          MIN_PRICE: "Minimum Price"
+          MIN_PRICE: "Minimum Price",
+        };
+
+        const customStockOrder = ["COMPANY_CODE", "COMPANY_NAME", "STOCK"];
+
+        const customStockHeadingMap = {
+          COMPANY_CODE: "Company Code",
+          COMPANY_NAME: "Company Name",
+          STOCK: "Stock",
+        };
+
+        const colorWiseHeadings = [
+          "SERIALNO",
+          "COLORCODE",
+          "SIZECODE",
+        ];
+
+        const colorWiseHeadingMap = {
+          SERIALNO: "Serial No",
+          COLORCODE: "Color Code",
+          SIZECODE: "Size Code",
         };
 
         const customHeaders = customOrder.map(
@@ -215,6 +261,16 @@ function App() {
           (key) => customPriceHeadingMap[key] || key
         );
         setPriceHeaders(customPriceHeaders);
+
+        const customStockHeaders = customStockOrder.map(
+          (key) => customStockHeadingMap[key] || key
+        );
+        setStockHeaders(customStockHeaders);
+
+        const colorHeaders = colorWiseHeadings.map(
+          (key) => colorWiseHeadingMap[key] || key
+        );
+        setColorWiseHeaders(colorHeaders);
 
         const finalArray = mergedData.map((item) =>
           customOrder.map((key) => {
@@ -231,15 +287,29 @@ function App() {
         const finalPriceArray = priceMergedData.map((item) =>
           customPriceOrder.map((key) => {
             const value = item[key];
-            if ((key === "COST_PRICE" || key==="UNIT_PRICE" || key==="WPRICE" || key ==="MIN_PRICE") && typeof value === "number") {
+            if (
+              (key === "COST_PRICE" ||
+                key === "UNIT_PRICE" ||
+                key === "WPRICE" ||
+                key === "MIN_PRICE") &&
+              typeof value === "number"
+            ) {
               return value.toFixed(2); // format to 3 decimal places
             }
-           
+
             return value;
           })
         );
 
         setPriceTableData(finalPriceArray);
+
+        const colorWiseTableDataFormatted = colorWiseData.map((item) => [
+          item.SERIALNO,
+          item.COLORCODE,
+          item.SIZECODE,
+        ]);
+
+        setColorWiseTableData(colorWiseTableDataFormatted);
 
         setAlert({
           message: "Product Found Successfully",
@@ -279,7 +349,7 @@ function App() {
 
       setCode("");
       toast.success(`Product scanned: ${result.text}`);
-      requestData(result.text);
+      requestData("scan", result.text);
     }
   };
 
@@ -293,7 +363,7 @@ function App() {
       valid = false;
     }
     if (valid) {
-      requestData(code, inputValue);
+      requestData("", code, inputValue);
     }
   };
 
@@ -313,7 +383,7 @@ function App() {
             <Heading text="Product View" />
           </div>
 
-          <div className="mt-10 ml-[-60px] sm:ml-[-50px]">
+          <div className="mt-10 ml-[-60px] sm:ml-[-50px] ">
             {alert && (
               <Alert
                 message={alert.message}
@@ -572,13 +642,39 @@ function App() {
 
                 {isData && (
                   <div>
-                    <div className="p-4 bg-white rounded-xl shadow-md mt-6">
+                    <div className="p-4 bg-white rounded-xl shadow-md mt-6 w-1/2 md:w-full mx-auto">
                       <p className="text-center text-[#bc4a17] text-xl font-bold mb-6">
                         Company Wise Price Details
                       </p>
                       <Table
                         headers={priceHeaders}
                         data={priceTableData}
+                        editableColumns={[]}
+                        bin={true}
+                      />
+                    </div>
+
+                    <div className="p-4 bg-white rounded-xl shadow-md mt-6 w-1/2 md:w-full mx-auto">
+                      <p className="text-center text-[#bc4a17] text-xl font-bold mb-6">
+                        Company Wise Stock Details
+                      </p>
+                      <Table
+                        headers={stockHeaders}
+                        data={stockTableData}
+                        formatColumnsQuantity={[2]}
+                        editableColumns={[]}
+                        bin={true}
+                      />
+                    </div>
+
+                    <div className="p-4 bg-white rounded-xl shadow-md mt-6 w-1/2 md:w-full mx-auto">
+                      <p className="text-center text-[#bc4a17] text-xl font-bold mb-6">
+                        Color Wise Stock Details
+                      </p>
+                      <Table
+                        headers={colorWiseHeaders}
+                        data={colorWiseTableData}
+                        formatColumnsQuantity={[]}
                         editableColumns={[]}
                         bin={true}
                       />

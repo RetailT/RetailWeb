@@ -354,16 +354,16 @@ const Dashboard = () => {
 
         {/* Page Content */}
         <div
-          className={`transition-all duration-300 flex-1 p-10`}
+          className={`transition-all duration-300 flex-1`}
           style={{
             marginLeft: isSidebarOpen ? "15rem" : "4rem", // Space for sidebar
             marginTop: "96px", // Space for Navbar
           }}
         >
-          <div className="mt-10 ">
+          <div className="mt-10">
             <Heading text="Category Sales Dashboard" />
           </div>
-          <div className="mt-10">
+          <div className="p-10">
             {alert && (
               <Alert
                 message={alert.message}

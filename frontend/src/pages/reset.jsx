@@ -213,7 +213,7 @@ const Reset = () => {
       <Navbar />
       <div className="flex">
         <div className="flex-1 p-10 ml-12">
-          <div className="mt-20 mb-10 ml-[-50px]">
+          <div className="mt-24 mb-10 ml-[-36px]">
             <Heading text="Permission Setting" />
           </div>
 
@@ -227,7 +227,7 @@ const Reset = () => {
             )}
           </div>
 
-          <div className="flex justify-center mt-10 ml-[-50px] md:ml-0">
+          <div className="flex justify-center mt-10 ml-[-50px] md:ml-[-60px]">
   <div className="w-full max-w-7xl px-4 md:px-8">
     {/* <PanelMenu items={sidePanel()} /> */}
     <form className="space-y-6" onSubmit={handleSubmit}>
@@ -276,7 +276,7 @@ const Reset = () => {
 
 </div>
 
-<div className="flex flex-col md:flex-row flex-wrap gap-4">
+<div className="bg-white p-6 rounded-md shadow-md flex flex-col lg:flex-row lg:justify-between items-center gap-4">
   {/* Card 1 */}
   <div className="bg-white p-6 rounded-md shadow-md w-full md:w-[calc(25%-1rem)]">
     <h2 className="text-lg font-semibold text-gray-800 mb-4">Connection</h2>

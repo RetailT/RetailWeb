@@ -83,8 +83,8 @@ const Reset = () => {
       <Navbar />
       <div className="flex">
         {/* <Sidebar onToggle={handleSidebarToggle} /> */}
-        <div className="flex-1 p-10 ml-12">
-          <div className="mt-20 mb-10 ml-[-50px]">
+        <div className="flex-1 p-10 ">
+          <div className="mt-24 mb-10 ml-5">
             <Heading text="Sync Databases" />
           </div>
 
@@ -100,7 +100,7 @@ const Reset = () => {
       </div>
      
      
-<div>
+<div className="p-10">
     <button  onClick={handleDataSubmit}
     disabled={isDisable}
                   className={`bg-black hover:bg-gray-800 text-white font-semibold py-2 px-5 rounded-md shadow-md transition-all ${

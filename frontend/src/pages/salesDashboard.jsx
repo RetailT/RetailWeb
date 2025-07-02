@@ -706,10 +706,10 @@ console.log("Response from API:", response.data.cashierPointRecord.length);
             marginTop: "96px", // Space for Navbar
           }}
         >
-          <div className="mt-5 ml-[-50px]">
+          <div className="ml-[-50px]">
             <Heading text="Company Sales Dashboard" />
           </div>
-          <div className="mt-10 ml-[-50px]">
+          <div className="p-10 ml-[-50px]">
             {alert && (
               <Alert
                 message={alert.message}

@@ -356,10 +356,10 @@ const Report = () => {
       <Navbar />
       <div className="flex">
         <div className="flex-1 p-10 ml-16 mt-10 mr-10 ">
-          <div className="mt-8 ml-[-50px]">
+          <div className="mt-16 ml-[-50px]">
             <Heading text="Invoice Wise Report" />
           </div>
-          <div className="mt-5 ml-[-50px]">
+          <div className="">
             {alert && (
               <Alert
                 message={alert.message}

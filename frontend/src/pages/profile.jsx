@@ -45,7 +45,7 @@ const Profile = () => {
   return (
     <div>
       <Navbar />
-      <div className="flex justify-center items-center min-h-screen bg-gradient-to-br from-orange-50 to-white px-4 mt-8">
+      <div className="flex justify-center items-center min-h-screen bg-gradient-to-br from-orange-50 to-white px-4 mt-12 md:mt-8">
   <div className="w-full max-w-3xl bg-white rounded-2xl shadow-2xl p-8 sm:p-14 transition-all duration-500 ease-in-out hover:shadow-orange-200">
     {/* Alert */}
     {alert && (

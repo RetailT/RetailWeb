@@ -5,7 +5,6 @@ import { AuthContext } from "../AuthContext";
 import Heading from "../components/Heading";
 import Table from "../components/EditableTable";
 import Alert from "../components/Alert";
-import { FadeLoader } from "react-spinners";
 import axios, { all } from "axios";
 import { jwtDecode } from "jwt-decode";
 
@@ -20,7 +19,7 @@ function App() {
   const [headers, setHeaders] = useState([]);
   const [repUserFilter, setRepUserFilter] = useState("");
   const [invoiceFilter, setInvoiceFilter] = useState("");
-  const [invoiceError, setInvoiceError] = useState("");
+  
   const [invoice, setInvoice] = useState([]);
   const [uniqueRepUsers, setUniqueRepUsers] = useState([]);
   const [companies, setCompanies] = useState([]);
@@ -28,7 +27,6 @@ function App() {
   const [companyError, setCompanyError] = useState("");
   const [selectedCompanyName, setSelectedCompanyName] = useState(null);
   const [initialData, setInitialData] = useState(false);
-  const [disable, setDisable] = useState(false);
   const [typeError, setTypeError] = useState("");
   const [selectedType, setSelectedType] = useState("");
   const [remarks, setRemarks] = useState("");
@@ -92,23 +90,6 @@ function App() {
     }
   }, []);
 
-  if (loading) {
-    return (
-      <div className="fixed inset-0 flex justify-center items-center bg-black bg-opacity-100 z-50">
-        <FadeLoader
-          cssOverride={null}
-          height={50}
-          loading
-          margin={30}
-          radius={30}
-          speedMultiplier={1}
-          width={8}
-          color="#ce521a"
-        />
-      </div>
-    );
-  }
-
   const handleTypeChange = (event) => {
     setSelectedType(event.target.value);
   };
@@ -119,15 +100,25 @@ function App() {
 
   const handleTableDataSubmit = async () => {
     try {
-      setDisable(true);
+      setLoading(true);
 
-      if (selectedType !== "STOCK" && selectedType !== "TOG" && !invoiceFilter) {
-        setInvoiceError("Please select an invoice no");
-        setDisable(false);
+      if (
+        selectedType !== "STOCK" &&
+        selectedType !== "TOG" &&
+        (!invoiceFilter || invoiceFilter.trim() === "")
+      ) {
+         setAlert({
+          message: "Please select an invoice number",
+          type: "error",
+        });
+
+        setTimeout(() => {
+          setAlert(null);
+        }, 3000);
+        setLoading(false);
+        
         return;
-      } else {
-        setInvoiceError("");
-      }
+      } 
 
       let response;
 
@@ -163,20 +154,10 @@ function App() {
       }
 
       if (response.data.message === "Data moved successfully") {
-        setDisable(false);
-        setAlert({
-          message: response.data.message || "Data moved successfully",
-          type: "success",
-        });
+       setLoading(true);
+       setInvoiceFilter("");
+        requestData();
 
-        setTimeout(() => {
-          setAlert(null);
-
-          // Add a delay before reload
-          setTimeout(() => {
-            requestData();
-          }, 100);
-        }, 3000);
       } else {
         // setInitialData(false);
         // setDisable(false);
@@ -186,10 +167,11 @@ function App() {
         });
         // Dismiss alert after 3 seconds
         setTimeout(() => setAlert(null), 3000);
+        setLoading(false);
       }
-      setDisable(false);
+      
     } catch (err) {
-      setDisable(false);
+      setLoading(false);
       // Handle any errors that occur
       setAlert({
         message: err.response?.data?.message || "Data deletion failed",
@@ -239,6 +221,9 @@ function App() {
           CUR_STOCK: "Current Stock",
           PHY_STOCK: "Physical Stock",
           COMPANY_TO_CODE: "Company To Code",
+          SERIALNO: "Serial No",
+          COLORCODE: "Color Code",
+          SIZECODE: "Size Code",
         };
 
         const customHeaders = keys.map((key) => customHeadingMap[key] || key);
@@ -327,6 +312,7 @@ function App() {
   });
 
   const handleDeleteRow = async (rowIndex) => {
+    setLoading(true);
     const deletedRow = data[rowIndex];
     const idxValue = deletedRow.idx; // Access the IDX value of the row being deleted
 
@@ -334,36 +320,36 @@ function App() {
       let response;
       if (selectedType === "STOCK") {
         response = await axios.delete(
-        `${process.env.REACT_APP_BACKEND_URL}stock-update-delete`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          params: {
-            idx: idxValue,
-            username: username,
-            selectedType: selectedType,
-          },
-        }
-      );
-      }
-      else{
-response = await axios.delete(
-        `${process.env.REACT_APP_BACKEND_URL}grnprn-delete`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          params: {
-            idx: idxValue,
-            username: username,
-            selectedType: selectedType,
-          },
-        }
-      );
+          `${process.env.REACT_APP_BACKEND_URL}stock-update-delete`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            params: {
+              idx: idxValue,
+              username: username,
+              selectedType: selectedType,
+            },
+          }
+        );
+      } else {
+        response = await axios.delete(
+          `${process.env.REACT_APP_BACKEND_URL}grnprn-delete`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            params: {
+              idx: idxValue,
+              username: username,
+              selectedType: selectedType,
+            },
+          }
+        );
       }
 
       if (response.data.message === "Data deleted successfully") {
+        setLoading(false);
         setAlert({
           message: response.data.message || "Item deleted successfully",
           type: "success",
@@ -373,6 +359,7 @@ response = await axios.delete(
           requestData(); // Now it runs after the alert is dismissed
         }, 3000);
       }
+      setLoading(false);
       // requestData();
     } catch (err) {
       // Handle any errors that occur
@@ -430,41 +417,33 @@ response = await axios.delete(
   return (
     <div>
       <Navbar />
-      {/* Main Layout */}
-      <div className="flex">
-        {/* Page Content */}
-        <div className="flex-1 p-10 ml-16 mt-24">
-          <div className="ml-[-50px] ">
-            <Heading text={`${type} Upload`} />
-          </div>
-          <div className="mt-2 ">
-            <div className=" mt-2 ml-[-60px] sm:ml-[-50px]">
-              {alert && (
-                <Alert
-                  message={alert.message}
-                  type={alert.type}
-                  onClose={() => setAlert(null)}
-                />
-              )}
-            </div>
 
+      <div className="flex">
+        <div className="flex-1 p-10 mt-24 ml-2 md:ml-4">
+          <Heading text={`${type} Upload`} />
+
+          <div className="mt-5 ml-0 md:ml-10 mr-0 md:mr-10">
+            {alert && (
+              <Alert
+                message={alert.message}
+                type={alert.type}
+                onClose={() => setAlert(null)}
+              />
+            )}
+
+            {/* Company Selector Section */}
             {!initialData && (
-              <div
-                className="bg-white p-5 rounded-md shadow-md mb-10 mt-10 ml-[-60px] sm:ml-[-50px]"
-                style={{ backgroundColor: "#d8d8d8" }}
-              >
-                {/* Flex container for responsive layout */}
-                <div className="flex flex-col sm:flex-col lg:flex-row justify-center gap-4">
+              <div className="bg-[#d8d8d8] p-5 rounded-md shadow-md mb-10 mt-10">
+                <div className="flex flex-col lg:flex-row lg:items-end justify-center gap-4">
                   {/* Company Dropdown */}
-                  <div className="relative flex flex-col gap-2 w-full lg:w-60">
-                    <label className="block text-sm font-medium text-gray-700">
+                  <div className="flex flex-col gap-1 w-full lg:w-60">
+                    <label className="text-sm font-medium text-gray-700">
                       Select a Company
                     </label>
                     <select
                       value={selectedCompany}
                       onChange={handleCompanyChange}
-                      className="w-full border border-gray-300 p-2 rounded-md shadow-sm bg-white text-left overflow-hidden text-ellipsis whitespace-nowrap"
-                      style={{ minHeight: "40px" }}
+                      className="border border-gray-300 p-2 rounded-md shadow-sm w-full"
                     >
                       <option value="" disabled>
                         Select a Company
@@ -482,15 +461,15 @@ response = await axios.delete(
                     )}
                   </div>
 
-                  <div className="relative flex flex-col gap-2 w-full lg:w-60">
-                    <label className="block text-sm font-medium text-gray-700">
+                  {/* Type Dropdown */}
+                  <div className="flex flex-col gap-1 w-full lg:w-60">
+                    <label className="text-sm font-medium text-gray-700">
                       Select a Type
                     </label>
                     <select
                       value={selectedType}
                       onChange={handleTypeChange}
-                      className="w-full border border-gray-300 p-2 rounded-md shadow-sm bg-white text-left overflow-hidden text-ellipsis whitespace-nowrap"
-                      style={{ minHeight: "40px" }}
+                      className="border border-gray-300 p-2 rounded-md shadow-sm w-full"
                     >
                       <option value="" disabled>
                         Select a Type
@@ -508,10 +487,19 @@ response = await axios.delete(
                     )}
                   </div>
 
-                  <div className="flex justify-center lg:justify-end h-10 mt-7">
+                  {/* Submit Button aligned with bottom of selects */}
+                  <div className="w-full lg:w-auto">
+
+
+                    
+                          
                     <button
                       onClick={handleCompanySubmit}
-                      className="bg-black hover:bg-gray-800 text-white font-semibold py-2 px-5 rounded-md shadow-md transition-all"
+                      disabled={loading}
+                      className={`bg-black hover:bg-gray-800 text-white font-semibold py-2 px-4 rounded-md 
+                        shadow-md transition-all w-full lg:w-auto ${
+                              loading ? "opacity-50 cursor-not-allowed" : ""
+                            }`}
                     >
                       Submit
                     </button>
@@ -520,36 +508,77 @@ response = await axios.delete(
               </div>
             )}
 
+            {/* Upload Section */}
             {initialData && (
-              <div className="ml-[-38px] ">
-                {/* stock data */}
-                <div>
-                  <div>
-                    <div className="flex flex-col md:flex-row md:items-start md:space-x-4 space-y-4 md:space-y-0 mt-10 w-full">
-                      {/* Rep User Dropdown */}
-                      <div className="w-full md:w-1/4">
-                        <select
-                          value={repUserFilter}
-                          onChange={(e) => setRepUserFilter(e.target.value)}
-                          className="border p-2 rounded w-full"
-                        >
-                          <option value="">User</option>
-                          {uniqueRepUsers.map((user) => (
-                            <option key={user} value={user}>
-                              {user}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+              <div>
+                <div className="bg-[#d8d8d8] p-5 rounded-md shadow-md mb-10 mt-10">
+                  <div className="w-full flex justify-center">
+                    <div className="w-full max-w-5xl px-4">
+                      {/* Remarks Row (Always on Top Full Width) */}
+                      {(selectedType === "GRN" ||
+                        selectedType === "PRN" ||
+                        selectedType === "TOG") && (
+                        <div className="flex flex-col mt-2 w-full">
+                          <label className="text-sm font-medium text-gray-700 mb-1">
+                            Remarks
+                          </label>
+                          <input
+                            type="text"
+                            value={remarks}
+                            onChange={(e) => setRemarks(e.target.value)}
+                            className="border p-2 rounded-md w-full shadow-sm"
+                            placeholder="Enter Remarks"
+                          />
+                        </div>
+                      )}
 
-                      {/* Invoice Dropdown + Error */}
-                      {(selectedType === "GRN" || selectedType === "PRN") && (
-                        <div className="w-full md:w-1/4">
-                          <div className="relative">
+                      {/* Second Row: User, Invoice, Submit (Stacked on small, horizontal on large) */}
+                      <div
+                        className={`flex flex-col lg:flex-row lg:items-end gap-4 mt-5
+    ${
+      selectedType === "STOCK" || selectedType === "TOG"
+        ? "lg:justify-center"
+        : ""
+    }
+  `}
+                      >
+                        {/* Rep User Dropdown */}
+                        <div
+                          className={`flex flex-col w-full lg:w-1/3
+      ${
+        selectedType === "STOCK" || selectedType === "TOG"
+          ? "lg:mb-5 lg:max-w-xs"
+          : ""
+      }
+    `}
+                        >
+                          <label className="text-sm font-medium text-gray-700 mb-1">
+                            User
+                          </label>
+                          <select
+                            value={repUserFilter}
+                            onChange={(e) => setRepUserFilter(e.target.value)}
+                            className="border p-2 rounded-md w-full shadow-sm"
+                          >
+                            <option value="">User</option>
+                            {uniqueRepUsers.map((user) => (
+                              <option key={user} value={user}>
+                                {user}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Invoice Dropdown */}
+                        {(selectedType === "GRN" || selectedType === "PRN") && (
+                          <div className="flex flex-col w-full lg:w-1/3">
+                            <label className="text-sm font-medium text-gray-700 mb-1">
+                              Invoice No
+                            </label>
                             <select
                               value={invoiceFilter}
                               onChange={(e) => setInvoiceFilter(e.target.value)}
-                              className="border p-2 rounded w-full"
+                              className="border p-2 rounded-md w-full shadow-sm"
                             >
                               <option value="">Invoice No</option>
                               {invoice.map((user) => (
@@ -558,63 +587,51 @@ response = await axios.delete(
                                 </option>
                               ))}
                             </select>
-                            {invoiceError && (
-                              <p className="text-red-500 text-sm mt-1">
-                                {invoiceError}
-                              </p>
-                            )}
+                            
                           </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                        )}
 
-                  {(selectedType === "GRN" ||
-                    selectedType === "PRN" ||
-                    selectedType === "TOG") && (
-                    <div className="flex flex-col items-start gap-2">
-                      <div>
-                        <label className="block text-sm mt-5 font-medium text-gray-700">
-                          Remarks
-                        </label>
-                        <input
-                          type="text"
-                          value={remarks}
-                          onChange={(e) => setRemarks(e.target.value)}
-                          className="min-w-[800px] max-w-xl border border-gray-300 p-2 rounded-md shadow-sm bg-white"
-                          placeholder="Enter Remarks"
-                        />
+                        {/* Submit Button */}
+                        <div
+                          className={`flex w-full lg:w-1/3
+      ${
+        selectedType === "STOCK" || selectedType === "TOG"
+          ? "lg:mb-5 lg:max-w-xs"
+          : ""
+      }
+    `}
+                        >
+                          <button
+                            onClick={handleTableDataSubmit}
+                            disabled={loading}
+                            className={`mt-[26px] bg-black hover:bg-gray-800 text-white font-semibold px-4 py-2 rounded-lg w-full ${
+                              loading ? "opacity-50 cursor-not-allowed" : ""
+                            }`}
+                          >
+                            Save
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  )}
-                  <button
-                    onClick={handleTableDataSubmit}
-                    disabled={disable}
-                    className={`bg-[#f17e21] hover:bg-[#efa05f] mt-3 text-white px-4 py-2 rounded-lg w-1/4 text-center ${
-                      disable ? "opacity-50 cursor-not-allowed" : ""
-                    }`}
-                  >
-                    Save
-                  </button>
-                  <div className="flex justify-start overflow-x-auto ml-[-19px] ">
+                  </div>
+                </div>
+
+                {/* Table */}
+                <div className="overflow-x-auto w-full mt-6 flex justify-center">
+                  <div className="min-w-[400px] w-[320px] sm:w-[600px] lg:w-[900px]">
                     <Table
                       headers={headers}
                       data={filteredTableData.map((item) => item.rowData)}
                       editableColumns={editableColumns}
-                      // onRowChange={handleRowChange}
                       onDeleteRow={handleDeleteRow}
                       formatColumns={
                         selectedType === "GRN" || selectedType === "PRN"
                           ? [6, 7]
-                          : selectedType === "STOCK"
-                          ? [4, 5]
                           : [4, 5]
                       }
                       formatColumnsQuantity={
                         selectedType === "GRN" || selectedType === "PRN"
                           ? [8, 9]
-                          : selectedType === "STOCK"
-                          ? [6, 7]
                           : [6, 7]
                       }
                     />
