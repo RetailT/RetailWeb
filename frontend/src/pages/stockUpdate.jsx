@@ -12,7 +12,6 @@ function App() {
   const { authToken } = useContext(AuthContext);
   const [data, setData] = useState([]);
 
-  // const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [error, setError] = useState(null);
   const [alert, setAlert] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -415,234 +414,233 @@ function App() {
   };
 
   return (
-    <div>
-      <Navbar />
+  <div>
+  <Navbar />
 
-      <div className="flex">
-        <div className="flex-1 p-10 mt-24 ml-2 md:ml-4">
-          <Heading text={`${type} Upload`} />
+  <div className="flex">
+    <div
+      className={`transition-all duration-300 flex-1 p-4 sm:p-6 md:ml-4 md:mr-4 ${
+        initialData ? "lg:ml-6 lg:mr-6" : "lg:ml-8 lg:mr-8"
+      } ml-4 mr-4 sm:mr-6 mt-[110px] max-w-full`}
+    >
+      <div className="w-full max-w-full">
+        <Heading text={`${type} Upload`} />
+      </div>
 
-          <div className="mt-5 ml-0 md:ml-10 mr-0 md:mr-10">
-            {alert && (
-              <Alert
-                message={alert.message}
-                type={alert.type}
-                onClose={() => setAlert(null)}
-              />
-            )}
+      {alert && (
+        <div className="mt-5">
+          <Alert
+            message={alert.message}
+            type={alert.type}
+            onClose={() => setAlert(null)}
+          />
+        </div>
+      )}
 
-            {/* Company Selector Section */}
-            {!initialData && (
-              <div className="bg-[#d8d8d8] p-5 rounded-md shadow-md mb-10 mt-10">
-                <div className="flex flex-col lg:flex-row lg:items-end justify-center gap-4">
-                  {/* Company Dropdown */}
-                  <div className="flex flex-col gap-1 w-full lg:w-60">
-                    <label className="text-sm font-medium text-gray-700">
-                      Select a Company
+      {/* Company Selector Section */}
+      {!initialData && (
+        <div className="bg-[#d8d8d8] p-4 sm:p-5 rounded-md shadow-md mb-10 mt-10 w-full max-w-full">
+          <div className="flex flex-col lg:flex-row lg:items-end justify-center gap-4 mb-4">
+            {/* Company Dropdown */}
+            <div className="flex flex-col gap-1 w-full lg:w-1/3">
+              <label className="text-sm font-medium text-gray-700">
+                Select a Company
+              </label>
+              <select
+                value={selectedCompany}
+                onChange={handleCompanyChange}
+                className="border border-gray-300 p-2 rounded-md shadow-sm bg-white w-full"
+              >
+                <option value="" disabled>
+                  Select a Company
+                </option>
+                {companies.map((company) => (
+                  <option key={company.code} value={company.code}>
+                    {company.code} {company.name}
+                  </option>
+                ))}
+              </select>
+              {companyError && (
+                <p className="text-red-500 text-sm mt-1 mb-4">
+                  {companyError}
+                </p>
+              )}
+            </div>
+
+            {/* Type Dropdown */}
+            <div className="flex flex-col gap-1 w-full lg:w-1/3">
+              <label className="text-sm font-medium text-gray-700">
+                Select a Type
+              </label>
+              <select
+                value={selectedType}
+                onChange={handleTypeChange}
+                className="border border-gray-300 p-2 rounded-md shadow-sm bg-white w-full"
+              >
+                <option value="" disabled>
+                  Select a Type
+                </option>
+                {typeOptions.map((name, index) => (
+                  <option key={index} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+              {typeError && (
+                <p className="text-red-500 text-sm mt-1 mb-4">
+                  {typeError}
+                </p>
+              )}
+            </div>
+
+            {/* Submit Button aligned with bottom of selects */}
+            <div className="w-full lg:w-auto flex justify-center lg:justify-end">
+              <button
+                onClick={handleCompanySubmit}
+                disabled={loading}
+                className={`bg-black hover:bg-gray-800 text-white font-semibold py-2 px-4 rounded-md shadow-md transition-all w-full lg:w-auto ${
+                  loading ? "opacity-50 cursor-not-allowed" : ""
+                }`}
+              >
+                Submit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Upload Section */}
+      {initialData && (
+        <div>
+          <div className="bg-[#d8d8d8] p-4 sm:p-5 rounded-md shadow-md mb-10 mt-10 w-full max-w-full lg:max-w-[95%] mx-auto">
+            <div className="w-full flex justify-center">
+              <div className="w-full max-w-full">
+                {/* Remarks Row (Always on Top Full Width) */}
+                {(selectedType === "GRN" ||
+                  selectedType === "PRN" ||
+                  selectedType === "TOG") && (
+                  <div className="flex flex-col mt-2 w-full">
+                    <label className="text-sm font-medium text-gray-700 mb-1">
+                      Remarks
+                    </label>
+                    <input
+                      type="text"
+                      value={remarks}
+                      onChange={(e) => setRemarks(e.target.value)}
+                      className="border border-gray-300 p-2 rounded-md shadow-sm bg-white w-full"
+                      placeholder="Enter Remarks"
+                    />
+                  </div>
+                )}
+
+                {/* Second Row: User, Invoice, Submit (Stacked on small, horizontal on large) */}
+                <div
+                  className={`flex flex-col lg:flex-row lg:items-end gap-4 mt-5 ${
+                    selectedType === "STOCK" || selectedType === "TOG"
+                      ? "lg:justify-center"
+                      : ""
+                  }`}
+                >
+                  {/* Rep User Dropdown */}
+                  <div
+                    className={`flex flex-col w-full lg:w-1/3 ${
+                      selectedType === "STOCK" || selectedType === "TOG"
+                        ? "lg:mb-5 lg:max-w-xs"
+                        : ""
+                    }`}
+                  >
+                    <label className="text-sm font-medium text-gray-700 mb-1">
+                      User
                     </label>
                     <select
-                      value={selectedCompany}
-                      onChange={handleCompanyChange}
-                      className="border border-gray-300 p-2 rounded-md shadow-sm w-full"
+                      value={repUserFilter}
+                      onChange={(e) => setRepUserFilter(e.target.value)}
+                      className="border border-gray-300 p-2 rounded-md shadow-sm bg-white w-full"
                     >
-                      <option value="" disabled>
-                        Select a Company
-                      </option>
-                      {companies.map((company) => (
-                        <option key={company.code} value={company.code}>
-                          {company.code} {company.name}
+                      <option value="">User</option>
+                      {uniqueRepUsers.map((user) => (
+                        <option key={user} value={user}>
+                          {user}
                         </option>
                       ))}
                     </select>
-                    {companyError && (
-                      <p className="text-red-500 text-sm mt-1 mb-4">
-                        {companyError}
-                      </p>
-                    )}
                   </div>
 
-                  {/* Type Dropdown */}
-                  <div className="flex flex-col gap-1 w-full lg:w-60">
-                    <label className="text-sm font-medium text-gray-700">
-                      Select a Type
-                    </label>
-                    <select
-                      value={selectedType}
-                      onChange={handleTypeChange}
-                      className="border border-gray-300 p-2 rounded-md shadow-sm w-full"
-                    >
-                      <option value="" disabled>
-                        Select a Type
-                      </option>
-                      {typeOptions.map((name, index) => (
-                        <option key={index} value={name}>
-                          {name}
-                        </option>
-                      ))}
-                    </select>
-                    {typeError && (
-                      <p className="text-red-500 text-sm mt-1 mb-4">
-                        {typeError}
-                      </p>
-                    )}
-                  </div>
+                  {/* Invoice Dropdown */}
+                  {(selectedType === "GRN" || selectedType === "PRN") && (
+                    <div className="flex flex-col w-full lg:w-1/3">
+                      <label className="text-sm font-medium text-gray-700 mb-1">
+                        Invoice No
+                      </label>
+                      <select
+                        value={invoiceFilter}
+                        onChange={(e) => setInvoiceFilter(e.target.value)}
+                        className="border border-gray-300 p-2 rounded-md shadow-sm bg-white w-full"
+                      >
+                        <option value="">Invoice No</option>
+                        {invoice.map((user) => (
+                          <option key={user} value={user}>
+                            {user}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
-                  {/* Submit Button aligned with bottom of selects */}
-                  <div className="w-full lg:w-auto">
-
-
-                    
-                          
+                  {/* Submit Button */}
+                  <div
+                    className={`flex w-full lg:w-1/3 ${
+                      selectedType === "STOCK" || selectedType === "TOG"
+                        ? "lg:mb-5 lg:max-w-xs"
+                        : ""
+                    }`}
+                  >
                     <button
-                      onClick={handleCompanySubmit}
+                      onClick={handleTableDataSubmit}
                       disabled={loading}
-                      className={`bg-black hover:bg-gray-800 text-white font-semibold py-2 px-4 rounded-md 
-                        shadow-md transition-all w-full lg:w-auto ${
-                              loading ? "opacity-50 cursor-not-allowed" : ""
-                            }`}
+                      className={`mt-[26px] bg-black hover:bg-gray-800 text-white font-semibold px-4 py-2 rounded-md shadow-md w-full ${
+                        loading ? "opacity-50 cursor-not-allowed" : ""
+                      }`}
                     >
-                      Submit
+                      Save
                     </button>
                   </div>
                 </div>
               </div>
-            )}
+            </div>
+          </div>
 
-            {/* Upload Section */}
-            {initialData && (
-              <div>
-                <div className="bg-[#d8d8d8] p-5 rounded-md shadow-md mb-10 mt-10">
-                  <div className="w-full flex justify-center">
-                    <div className="w-full max-w-5xl px-4">
-                      {/* Remarks Row (Always on Top Full Width) */}
-                      {(selectedType === "GRN" ||
-                        selectedType === "PRN" ||
-                        selectedType === "TOG") && (
-                        <div className="flex flex-col mt-2 w-full">
-                          <label className="text-sm font-medium text-gray-700 mb-1">
-                            Remarks
-                          </label>
-                          <input
-                            type="text"
-                            value={remarks}
-                            onChange={(e) => setRemarks(e.target.value)}
-                            className="border p-2 rounded-md w-full shadow-sm"
-                            placeholder="Enter Remarks"
-                          />
-                        </div>
-                      )}
-
-                      {/* Second Row: User, Invoice, Submit (Stacked on small, horizontal on large) */}
-                      <div
-                        className={`flex flex-col lg:flex-row lg:items-end gap-4 mt-5
-    ${
-      selectedType === "STOCK" || selectedType === "TOG"
-        ? "lg:justify-center"
-        : ""
-    }
-  `}
-                      >
-                        {/* Rep User Dropdown */}
-                        <div
-                          className={`flex flex-col w-full lg:w-1/3
-      ${
-        selectedType === "STOCK" || selectedType === "TOG"
-          ? "lg:mb-5 lg:max-w-xs"
-          : ""
-      }
-    `}
-                        >
-                          <label className="text-sm font-medium text-gray-700 mb-1">
-                            User
-                          </label>
-                          <select
-                            value={repUserFilter}
-                            onChange={(e) => setRepUserFilter(e.target.value)}
-                            className="border p-2 rounded-md w-full shadow-sm"
-                          >
-                            <option value="">User</option>
-                            {uniqueRepUsers.map((user) => (
-                              <option key={user} value={user}>
-                                {user}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        {/* Invoice Dropdown */}
-                        {(selectedType === "GRN" || selectedType === "PRN") && (
-                          <div className="flex flex-col w-full lg:w-1/3">
-                            <label className="text-sm font-medium text-gray-700 mb-1">
-                              Invoice No
-                            </label>
-                            <select
-                              value={invoiceFilter}
-                              onChange={(e) => setInvoiceFilter(e.target.value)}
-                              className="border p-2 rounded-md w-full shadow-sm"
-                            >
-                              <option value="">Invoice No</option>
-                              {invoice.map((user) => (
-                                <option key={user} value={user}>
-                                  {user}
-                                </option>
-                              ))}
-                            </select>
-                            
-                          </div>
-                        )}
-
-                        {/* Submit Button */}
-                        <div
-                          className={`flex w-full lg:w-1/3
-      ${
-        selectedType === "STOCK" || selectedType === "TOG"
-          ? "lg:mb-5 lg:max-w-xs"
-          : ""
-      }
-    `}
-                        >
-                          <button
-                            onClick={handleTableDataSubmit}
-                            disabled={loading}
-                            className={`mt-[26px] bg-black hover:bg-gray-800 text-white font-semibold px-4 py-2 rounded-lg w-full ${
-                              loading ? "opacity-50 cursor-not-allowed" : ""
-                            }`}
-                          >
-                            Save
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Table */}
-                <div className="overflow-x-auto w-full mt-6 flex justify-center">
-                  <div className="min-w-[400px] w-[320px] sm:w-[600px] lg:w-[900px]">
-                    <Table
-                      headers={headers}
-                      data={filteredTableData.map((item) => item.rowData)}
-                      editableColumns={editableColumns}
-                      onDeleteRow={handleDeleteRow}
-                      formatColumns={
-                        selectedType === "GRN" || selectedType === "PRN"
-                          ? [6, 7]
-                          : [4, 5]
-                      }
-                      formatColumnsQuantity={
-                        selectedType === "GRN" || selectedType === "PRN"
-                          ? [8, 9]
-                          : [6, 7]
-                      }
-                    />
-                  </div>
-                </div>
+          {/* Table */}
+          <div className="flex flex-col w-full max-w-full">
+            <div className="text-2xl font-bold mt-5 mb-5 text-center w-full">
+              {selectedType}
+            </div>
+            <div className="overflow-x-auto w-full max-w-full lg:max-w-[90%] mx-auto table-container">
+              <div className="w-full max-w-full" style={{ boxSizing: "border-box" }}>
+                <Table
+                  headers={headers}
+                  data={filteredTableData.map((item) => item.rowData)}
+                  editableColumns={editableColumns}
+                  onDeleteRow={handleDeleteRow}
+                  formatColumns={
+                    selectedType === "GRN" || selectedType === "PRN"
+                      ? [6, 7]
+                      : [4, 5]
+                  }
+                  formatColumnsQuantity={
+                    selectedType === "GRN" || selectedType === "PRN"
+                      ? [8, 9]
+                      : [6, 7]
+                  }
+                />
               </div>
-            )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
+  </div>
+</div>
   );
 }
 

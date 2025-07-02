@@ -15,8 +15,6 @@ function App() {
   const { authToken } = useContext(AuthContext);
   const [currentData, setCurrentData] = useState("No result");
   const [cameraError, setCameraError] = useState(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [showTable, setShowTable] = useState(true);
   const [loading, setLoading] = useState(true);
   const [selectedCompanyName, setSelectedCompanyName] = useState(null);
   const [selectedToCompanyName, setSelectedToCompanyName] = useState(null);
@@ -62,6 +60,7 @@ function App() {
 
   const [uniqueRepUsers, setUniqueRepUsers] = useState([]);
   const quantityRef = useRef(null);
+  const tableRef = useRef(null);
   const codeRef = useRef(null);
   const streamRef = useRef(null);
 
@@ -198,7 +197,6 @@ function App() {
   }
 
   const requestData = async (data, name) => {
-    
     setLoading(true);
     try {
       const response = await axios.get(
@@ -222,11 +220,11 @@ function App() {
         item.SERIALNO,
         item.COLORCODE,
         item.SIZECODE,
-        item.STOCK
+        item.STOCK,
       ]);
 
       setColorWiseTableData(colorWiseTableDataFormatted);
-      const colorWiseHeadings = ["SERIALNO", "COLORCODE", "SIZECODE","STOCK"];
+      const colorWiseHeadings = ["SERIALNO", "COLORCODE", "SIZECODE", "STOCK"];
 
       const colorWiseHeadingMap = {
         SERIALNO: "Serial No",
@@ -242,7 +240,12 @@ function App() {
 
       setLoading(false);
       setTimeout(() => {
-        if (quantityRef.current) {
+        if (colorWiseTableData.length > 0 && tableRef.current) {
+          tableRef.current.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+        } else if (quantityRef.current) {
           quantityRef.current.scrollIntoView({
             behavior: "smooth",
             block: "center",
@@ -409,7 +412,7 @@ function App() {
           },
         }
       );
-     
+
       if (response.data.message !== "Data Found Successfully") {
         setAlert({
           message: response.data.message || "Data not available",
@@ -695,7 +698,6 @@ function App() {
   };
 
   const handleProductSubmit = async (e) => {
-  
     e.preventDefault();
     if (!quantity) {
       setQuantityError("Quantity is required.");
@@ -717,7 +719,7 @@ function App() {
               scalePrice: salesData.SCALEPRICE,
               stock: amount,
               quantity: quantity,
-              colorWiseTableData:colorWiseTableData,
+              colorWiseTableData: colorWiseTableData,
             },
             {
               headers: {
@@ -761,7 +763,7 @@ function App() {
               vendor_code: selectedVendor,
               vendor_name: selectedVendorName,
               invoice_no: invoiceNo,
-              colorWiseTableData:colorWiseTableData
+              colorWiseTableData: colorWiseTableData,
             },
             {
               headers: {
@@ -800,7 +802,7 @@ function App() {
               scalePrice: salesData.SCALEPRICE,
               stock: amount,
               quantity: quantity,
-              colorWiseTableData:colorWiseTableData
+              colorWiseTableData: colorWiseTableData,
             },
             {
               headers: {
@@ -874,21 +876,22 @@ function App() {
   });
 
   const handleRowChange = (rowIndex, cellIndex, newValue) => {
-  if (parseFloat(newValue) < 0) return; // do nothing if negative
+    if (parseFloat(newValue) < 0) return; // do nothing if negative
 
-  const updatedData = [...colorWiseTableData];
-  updatedData[rowIndex][cellIndex] = newValue;
-  setColorWiseTableData(updatedData);
-};
-
+    const updatedData = [...colorWiseTableData];
+    updatedData[rowIndex][cellIndex] = newValue;
+    setColorWiseTableData(updatedData);
+  };
 
   const handleRowClick = (rowData) => {
     if (selectedType !== "TOG") {
-      setSelectedVendor(rowData[1]);
-      setInvoiceNo(Number(rowData[3]));
-      setSelectedVendorName(rowData[2]);
+      const vendorCode = String(rowData[1]).trim(); // Trim VENDOR_CODE to match dropdown values
+      const vendor = vendors.find((v) => v.code === vendorCode); // Find matching vendor
+      setSelectedVendor(vendorCode); // Set trimmed vendor code
+      setInvoiceNo(Number(rowData[3])); // Set invoice number
+      setSelectedVendorName(vendor ? vendor.name : rowData[2].trim()); // Set vendor name, fallback to rowData
     } else {
-      const code = String(rowData[1]).trim(); // Ensure it's a string and trimmed
+      const code = String(rowData[1]).trim(); // COMPANY_TO_CODE
       const companyName = companies.find(
         (company) => company.code.trim() === code
       )?.name;
@@ -898,519 +901,517 @@ function App() {
   };
 
   return (
-   <div>
-  <Navbar />
-  {/* Main Layout */}
-  <div className="flex">
-    <div
-      className="transition-all duration-300 flex-1 p-4 sm:p-6 md:ml-10 md:mr-10 ml-4 mr-10"
-      style={{
-        marginLeft: isSidebarOpen ? "10rem" : "2rem", // Reduced margin for mobile
-        marginTop: "96px", // Space for Navbar
-        maxWidth: "100%", // Ensure content doesn't exceed viewport
-      }}
-    >
-      <div className="w-full max-w-full">
-        <Heading text="Scan" />
-      </div>
+    <div>
+      <Navbar />
+      {/* Main Layout */}
+      <div className="flex">
+        <div className="transition-all duration-300 flex-1 p-4 sm:p-6 md:ml-10 md:mr-10 ml-4 mr-10 ml-8 mt-[96px] max-w-full">
+          <div className="w-full max-w-full">
+            <Heading text="Scan" />
+          </div>
 
-      <div className="mt-5 w-full">
-        {alert && (
-          <Alert
-            message={alert.message}
-            type={alert.type}
-            onClose={() => setAlert(null)}
-          />
-        )}
-      </div>
-
-      {!initialData && (
-        <div className="bg-[#d8d8d8] p-4 sm:p-5 rounded-md shadow-md mb-10 mt-10 w-full max-w-full">
-          {/* Row 1: Company, Type, Conditional field */}
-          <div className="flex flex-col lg:flex-row gap-4 mb-4">
-            {/* Company */}
-            <div className="flex flex-col w-full lg:w-1/3">
-              <label className="text-sm font-medium text-gray-700">
-                Select a Company
-              </label>
-              <select
-                value={selectedCompany}
-                onChange={handleCompanyChange}
-                className="border border-gray-300 p-2 rounded-md shadow-sm bg-white w-full"
-              >
-                <option value="" disabled>
-                  Select a Company
-                </option>
-                {companies.map((company) => (
-                  <option key={company.code} value={company.code}>
-                    {company.code} {company.name}
-                  </option>
-                ))}
-              </select>
-              {companyError && (
-                <p className="text-red-500 text-sm">{companyError}</p>
-              )}
-            </div>
-
-            {/* Type */}
-            <div className="flex flex-col w-full lg:w-1/3">
-              <label className="text-sm font-medium text-gray-700">
-                Select a Type
-              </label>
-              <select
-                value={selectedType}
-                onChange={handleTypeChange}
-                className="border border-gray-300 p-2 rounded-md shadow-sm bg-white w-full"
-              >
-                <option value="" disabled>
-                  Select a Type
-                </option>
-                {typeOptions.map((type, index) => (
-                  <option key={index} value={type}>
-                    {type}
-                  </option>
-                ))}
-              </select>
-              {typeError && (
-                <p className="text-red-500 text-sm">{typeError}</p>
-              )}
-            </div>
-
-            {/* Conditional field */}
-            {(selectedType === "GRN" || selectedType === "PRN") && (
-              <div className="flex flex-col w-full lg:w-1/3">
-                <label className="text-sm font-medium text-gray-700">
-                  Select Vendor
-                </label>
-                <select
-                  value={selectedVendor}
-                  onChange={handleVendorChange}
-                  className="border border-gray-300 p-2 rounded-md shadow-sm bg-white w-full"
-                >
-                  <option value="" disabled>
-                    Select Vendor
-                  </option>
-                  {vendors.map((vendor) => (
-                    <option key={vendor.code} value={vendor.code
-
-}>
-                      {vendor.code} {vendor.name}
-                    </option>
-                  ))}
-                </select>
-                {vendorError && (
-                  <p className="text-red-500 text-sm">{vendorError}</p>
-                )}
-              </div>
-            )}
-
-            {selectedType === "TOG" && (
-              <div className="flex flex-col w-full lg:w-1/3">
-                <label className="text-sm font-medium text-gray-700">
-                  Company To
-                </label>
-                <select
-                  value={selectedToCompany}
-                  onChange={handleToCompanyChange}
-                  className="border border-gray-300 p-2 rounded-md shadow-sm bg-white w-full"
-                >
-                  <option value="" disabled>
-                    Company To
-                  </option>
-                  {companies.map((company) => (
-                    <option key={company.code} value={company.code}>
-                      {company.code} {company.name}
-                    </option>
-                  ))}
-                </select>
-                {companyToError && (
-                  <p className="text-red-500 text-sm">{companyToError}</p>
-                )}
-              </div>
-            )}
-
-            {selectedType === "STOCK" && (
-              <div className="flex flex-col w-full lg:w-1/3">
-                <label className="text-sm font-medium text-gray-700">
-                  Select a Count
-                </label>
-                <select
-                  value={selectedCount}
-                  onChange={handleCountChange}
-                  className="border border-gray-300 p-2 rounded-md shadow-sm bg-white w-full"
-                >
-                  <option value="" disabled>
-                    Select a Count
-                  </option>
-                  {countOptions.map((name, index) => (
-                    <option key={index} value={name}>
-                      {name}
-                    </option>
-                  ))}
-                </select>
-                {countError && (
-                  <p className="text-red-500 text-sm">{countError}</p>
-                )}
-              </div>
+          <div className="mt-5 w-full">
+            {alert && (
+              <Alert
+                message={alert.message}
+                type={alert.type}
+                onClose={() => setAlert(null)}
+              />
             )}
           </div>
 
-          {/* Row 2: Invoice No + Submit button right aligned */}
-          <div className="flex flex-col lg:flex-row items-start lg:items-end gap-4">
-            {(selectedType === "GRN" || selectedType === "PRN") && (
-              <div className="flex flex-col w-full lg:w-1/3">
-                <label className="text-sm font-medium text-gray-700">
-                  Invoice No
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  value={invoiceNo}
-                  onChange={(e) => {
-                    const value = parseInt(e.target.value);
-                    if (value >= 0 || isNaN(value)) {
-                      setInvoiceNo(e.target.value);
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "-" || e.key === "e") {
-                      e.preventDefault();
-                    }
-                  }}
-                  className="border border-gray-300 p-2 rounded-md shadow-sm bg-white w-full"
-                  placeholder="Enter Invoice No"
-                />
-                {invoiceNoError && (
-                  <p className="text-red-500 text-sm">{invoiceNoError}</p>
-                )}
-              </div>
-            )}
-
-            {/* Spacer to push button right on large screens */}
-            <div className="flex-grow" />
-
-            {/* Submit button aligned right always */}
-            <div className="w-full lg:w-auto flex justify-center lg:justify-end">
-              <button
-                onClick={handleDataSubmit}
-                className="bg-black hover:bg-gray-800 w-full lg:w-auto text-white font-semibold py-2 px-5 rounded-md shadow-md"
-              >
-                Submit
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {initialData && (
-        <div className="mt-10 w-full max-w-full">
-          <div className="flex flex-col">
-            {/* Main Content */}
-            <div className="flex flex-col flex-grow justify-center items-center w-full max-w-full">
-              <div className="flex items-center mb-3 w-full justify-center">
-        <form
-          onSubmit={handleSubmit}
-          className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-2 w-full lg:w-auto"
-        >
-          <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 w-full lg:w-[600px]">
-            <input
-              type="text"
-              value={inputValue}
-              onChange={(e) => {
-  handleChange(e);
-  setScannedCode("");
-}}
-
-              onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-              onFocus={() => inputValue && setShowSuggestions(true)}
-              placeholder="Enter Product Name"
-              className="px-3 py-2 w-full lg:w-1/2 bg-gray-100 border border-gray-300 rounded-md text-gray-700 focus:outline-none"
-            />
-            {showSuggestions && filteredSuggestions.length > 0 && (
-              <ul className="absolute z-10 w-full lg:w-[calc(50%-0.5rem)] bg-white border border-gray-300 rounded-md mt-1 shadow-md">
-                {filteredSuggestions.map((name, index) => (
-                  <li
-                    key={index}
-                    onClick={() => handleSelect(name)}
-                    className="p-2 hover:bg-gray-100 cursor-pointer"
+          {!initialData && (
+            <div className="bg-[#d8d8d8] p-4 sm:p-5 rounded-md shadow-md mb-10 mt-10 w-full max-w-full">
+              {/* Row 1: Company, Type, Conditional field */}
+              <div className="flex flex-col lg:flex-row gap-4 mb-4">
+                {/* Company */}
+                <div className="flex flex-col w-full lg:w-1/3">
+                  <label className="text-sm font-medium text-gray-700">
+                    Select a Company
+                  </label>
+                  <select
+                    value={selectedCompany}
+                    onChange={handleCompanyChange}
+                    className="border border-gray-300 p-2 rounded-md shadow-sm bg-white w-full"
                   >
-                    {name}
-                  </li>
-                ))}
-              </ul>
-            )}
-            <input
-              type="text"
-              id="code"
-              ref={codeRef}
-              value={code}
-              onChange={(e) => {
-  setCode(e.target.value);
-  setScannedCode(e.target.value);
-}}
+                    <option value="" disabled>
+                      Select a Company
+                    </option>
+                    {companies.map((company) => (
+                      <option key={company.code} value={company.code}>
+                        {company.code} {company.name}
+                      </option>
+                    ))}
+                  </select>
+                  {companyError && (
+                    <p className="text-red-500 text-sm">{companyError}</p>
+                  )}
+                </div>
 
-              className="px-3 py-2 w-full lg:w-1/2 bg-gray-100 border border-gray-300 rounded-md text-gray-700 focus:outline-none"
-              placeholder="Enter Code"
-            />
-          </div>
-          <button
-            type="submit"
-            className="bg-[#f17e21] hover:bg-[#efa05f] text-white px-4 py-2 rounded-lg w-full sm:w-auto"
-          >
-            Search
-          </button>
-        </form>
-      </div>
-      {codeError && (
-        <p className="text-red-500 text-sm mt-1 mb-10">{codeError}</p>
-      )}
-      <Toaster position="top-right" reverseOrder={false} />
-      {cameraError && <div className="error">{cameraError}</div>}
-
-              {hasCameraPermission ? (
-                <div className="text-center">
-                  <div
-                    className="scan border border-gray-400 rounded-lg bg-gray-200 flex justify-center items-center mt-10"
-                    style={{
-                      width: "240px",
-                      height: "240px",
-                      maxWidth: "100%",
-                    }}
+                {/* Type */}
+                <div className="flex flex-col w-full lg:w-1/3">
+                  <label className="text-sm font-medium text-gray-700">
+                    Select a Type
+                  </label>
+                  <select
+                    value={selectedType}
+                    onChange={handleTypeChange}
+                    className="border border-gray-300 p-2 rounded-md shadow-sm bg-white w-full"
                   >
-                    {scannerEnabled ? (
-                      <BarcodeScannerComponent
-                        width={240}
-                        height={240}
-                        className="w-full h-full object-cover"
-                        onUpdate={handleScan}
-                        delay={1000}
-                        onError={(error) => {
-                          console.error("Scanner Error:", error);
-                          toast.error("Scanner error: Please try again.");
-                        }}
-                      />
-                    ) : (
-                      <CameraOff size={60} className="text-gray-600" />
+                    <option value="" disabled>
+                      Select a Type
+                    </option>
+                    {typeOptions.map((type, index) => (
+                      <option key={index} value={type}>
+                        {type}
+                      </option>
+                    ))}
+                  </select>
+                  {typeError && (
+                    <p className="text-red-500 text-sm">{typeError}</p>
+                  )}
+                </div>
+
+                {/* Conditional field */}
+                {(selectedType === "GRN" || selectedType === "PRN") && (
+                  <div className="flex flex-col w-full lg:w-1/3">
+                    <label className="text-sm font-medium text-gray-700">
+                      Select Vendor
+                    </label>
+                    <select
+                      value={selectedVendor}
+                      onChange={handleVendorChange}
+                      className="border border-gray-300 p-2 rounded-md shadow-sm bg-white w-full"
+                    >
+                      <option value="" disabled>
+                        Select Vendor
+                      </option>
+                      {vendors.map((vendor) => (
+                        <option key={vendor.code} value={vendor.code}>
+                          {vendor.code} {vendor.name}
+                        </option>
+                      ))}
+                    </select>
+                    {vendorError && (
+                      <p className="text-red-500 text-sm">{vendorError}</p>
                     )}
                   </div>
+                )}
+
+                {selectedType === "TOG" && (
+                  <div className="flex flex-col w-full lg:w-1/3">
+                    <label className="text-sm font-medium text-gray-700">
+                      Company To
+                    </label>
+                    <select
+                      value={selectedToCompany}
+                      onChange={handleToCompanyChange}
+                      className="border border-gray-300 p-2 rounded-md shadow-sm bg-white w-full"
+                    >
+                      <option value="" disabled>
+                        Company To
+                      </option>
+                      {companies.map((company) => (
+                        <option key={company.code} value={company.code}>
+                          {company.code} {company.name}
+                        </option>
+                      ))}
+                    </select>
+                    {companyToError && (
+                      <p className="text-red-500 text-sm">{companyToError}</p>
+                    )}
+                  </div>
+                )}
+
+                {selectedType === "STOCK" && (
+                  <div className="flex flex-col w-full lg:w-1/3">
+                    <label className="text-sm font-medium text-gray-700">
+                      Select a Count
+                    </label>
+                    <select
+                      value={selectedCount}
+                      onChange={handleCountChange}
+                      className="border border-gray-300 p-2 rounded-md shadow-sm bg-white w-full"
+                    >
+                      <option value="" disabled>
+                        Select a Count
+                      </option>
+                      {countOptions.map((name, index) => (
+                        <option key={index} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                    </select>
+                    {countError && (
+                      <p className="text-red-500 text-sm">{countError}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Row 2: Invoice No + Submit button right aligned */}
+              <div className="flex flex-col lg:flex-row items-start lg:items-end gap-4">
+                {(selectedType === "GRN" || selectedType === "PRN") && (
+                  <div className="flex flex-col w-full lg:w-1/3">
+                    <label className="text-sm font-medium text-gray-700">
+                      Invoice No
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={invoiceNo}
+                      onChange={(e) => {
+                        const value = parseInt(e.target.value);
+                        if (value >= 0 || isNaN(value)) {
+                          setInvoiceNo(e.target.value);
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "-" || e.key === "e") {
+                          e.preventDefault();
+                        }
+                      }}
+                      className="border border-gray-300 p-2 rounded-md shadow-sm bg-white w-full"
+                      placeholder="Enter Invoice No"
+                    />
+                    {invoiceNoError && (
+                      <p className="text-red-500 text-sm">{invoiceNoError}</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Spacer to push button right on large screens */}
+                <div className="flex-grow" />
+
+                {/* Submit button aligned right always */}
+                <div className="w-full lg:w-auto flex justify-center lg:justify-end">
                   <button
-                    className="bg-[#f17e21] hover:bg-[#efa05f] text-white px-4 py-2 rounded mt-16"
-                    onClick={() => setScannerEnabled(!scannerEnabled)}
+                    onClick={handleDataSubmit}
+                    className="bg-black hover:bg-gray-800 w-full lg:w-auto text-white font-semibold py-2 px-5 rounded-md shadow-md"
                   >
-                    {scannerEnabled ? "Disable Scanner" : "Enable Scanner"}
+                    Submit
                   </button>
                 </div>
-              ) : (
-                <div className="error">
-                  Camera access is not granted. Please check permissions.
-                </div>
-              )}
+              </div>
+            </div>
+          )}
 
-             <div className="bg-white p-5 rounded-md shadow-md mb-5 mt-10 sm:w-full md:w-2/5 max-w-full">
-
-                <div className="text-lg font-semibold mb-4 text-[#f17e21]">
-                  Product Details
-                </div>
-
-                <div className="space-y-2">
-                  <div className="border-t pt-2">
-                    <p className="font-medium text-[#bc4a17] mb-3">
-                      Scanned Data
-                    </p>
-                    <p className="text-gray-700">
-                      <strong>Scanned Code:</strong>{" "}
-                      {scannedCode}
-                    </p>
-                  </div>
-
-                  <div className="border-t pt-2">
-                    <p className="font-medium text-[#bc4a17] mb-3">
-                      Company Information
-                    </p>
-                    <p className="text-gray-700">
-                      <strong>Company Code:</strong> {selectedCompany}
-                    </p>
-                    <p className="text-gray-700">
-                      <strong>Company Name:</strong> {selectedCompanyName}
-                    </p>
-                    {selectedType === "TOG" && (
-                      <div>
-                        <p className="text-gray-700">
-                          <strong>To Company Code:</strong>{" "}
-                          {selectedToCompany}
-                        </p>
-                        <p className="text-gray-700">
-                          <strong>To Company Name:</strong>{" "}
-                          {selectedToCompanyName}
-                        </p>
+          {initialData && (
+            <div className="mt-10 w-full max-w-full">
+              <div className="flex flex-col">
+                {/* Main Content */}
+                <div className="flex flex-col flex-grow justify-center items-center w-full max-w-full">
+                  <div className="flex items-center mb-3 w-full justify-center">
+                    <form
+                      onSubmit={handleSubmit}
+                      className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-2 w-full lg:w-auto"
+                    >
+                      <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 w-full lg:w-[600px]">
+                        <input
+                          type="text"
+                          value={inputValue}
+                          onChange={(e) => {
+                            handleChange(e);
+                            setScannedCode("");
+                          }}
+                          onBlur={() =>
+                            setTimeout(() => setShowSuggestions(false), 150)
+                          }
+                          onFocus={() => inputValue && setShowSuggestions(true)}
+                          placeholder="Enter Product Name"
+                          className="px-3 py-2 w-full lg:w-1/2 bg-gray-100 border border-gray-300 rounded-md text-gray-700 focus:outline-none"
+                        />
+                        {showSuggestions && filteredSuggestions.length > 0 && (
+                          <ul className="absolute z-10 w-full lg:w-[calc(50%-0.5rem)] bg-white border border-gray-300 rounded-md mt-1 shadow-md">
+                            {filteredSuggestions.map((name, index) => (
+                              <li
+                                key={index}
+                                onClick={() => handleSelect(name)}
+                                className="p-2 hover:bg-gray-100 cursor-pointer"
+                              >
+                                {name}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        <input
+                          type="text"
+                          id="code"
+                          ref={codeRef}
+                          value={code}
+                          onChange={(e) => {
+                            setCode(e.target.value);
+                            setScannedCode(e.target.value);
+                          }}
+                          className="px-3 py-2 w-full lg:w-1/2 bg-gray-100 border border-gray-300 rounded-md text-gray-700 focus:outline-none"
+                          placeholder="Enter Code"
+                        />
                       </div>
-                    )}
-
-                    {selectedType === "STOCK" && (
-                      <p className="text-gray-700">
-                        <strong>Count Status:</strong> {selectedCount}
-                      </p>
-                    )}
-
-                    <p className="text-gray-700">
-                      <strong>Type:</strong> {selectedType}
-                    </p>
+                      <button
+                        type="submit"
+                        className="bg-[#f17e21] hover:bg-[#efa05f] text-white px-4 py-2 rounded-lg w-full sm:w-auto"
+                      >
+                        Search
+                      </button>
+                    </form>
                   </div>
+                  {codeError && (
+                    <p className="text-red-500 text-sm mt-1 mb-10">
+                      {codeError}
+                    </p>
+                  )}
+                  <Toaster position="top-right" reverseOrder={false} />
+                  {cameraError && <div className="error">{cameraError}</div>}
 
-                  {(selectedType === "GRN" || selectedType === "PRN") && (
-                    <div className="border-t pt-2">
-                      <p className="font-medium text-[#bc4a17] mb-3">
-                        Vendor Information
-                      </p>
-                      <p className="text-gray-700">
-                        <strong>Vendor Code:</strong> {selectedVendor}
-                      </p>
-                      <p className="text-gray-700">
-                        <strong>Vendor Name:</strong> {selectedVendorName}
-                      </p>
-                      <p className="text-gray-700">
-                        <strong>Invoice No:</strong> {invoiceNo}
-                      </p>
+                  {hasCameraPermission ? (
+                    <div className="text-center">
+                      <div
+                        className="scan border border-gray-400 rounded-lg bg-gray-200 flex justify-center items-center mt-10"
+                        style={{
+                          width: "240px",
+                          height: "240px",
+                          maxWidth: "100%",
+                        }}
+                      >
+                        {scannerEnabled ? (
+                          <BarcodeScannerComponent
+                            width={240}
+                            height={240}
+                            className="w-full h-full object-cover"
+                            onUpdate={handleScan}
+                            delay={1000}
+                            onError={(error) => {
+                              console.error("Scanner Error:", error);
+                              toast.error("Scanner error: Please try again.");
+                            }}
+                          />
+                        ) : (
+                          <CameraOff size={60} className="text-gray-600" />
+                        )}
+                      </div>
+                      <button
+                        className="bg-[#f17e21] hover:bg-[#efa05f] text-white px-4 py-2 rounded mt-16"
+                        onClick={() => setScannerEnabled(!scannerEnabled)}
+                      >
+                        {scannerEnabled ? "Disable Scanner" : "Enable Scanner"}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="error">
+                      Camera access is not granted. Please check permissions.
                     </div>
                   )}
 
-                  <div className="border-t pt-2">
-                    <p className="font-medium text-[#bc4a17] mb-3">
-                      Product Information
-                    </p>
-                    <p className="text-gray-700">
-                      <strong>Product Code:</strong>{" "}
-                      {salesData.PRODUCT_CODE}
-                    </p>
-                    <p className="text-gray-700">
-                      <strong>Product Name:</strong>{" "}
-                      {salesData.PRODUCT_NAMELONG}
-                    </p>
-                    <p className="text-gray-700">
-                      <strong>Cost Price:</strong> {costPrice}
-                    </p>
-                    <p className="text-gray-700">
-                      <strong>Unit Price: </strong> {salesPrice}
-                    </p>
-                  </div>
+                  <div className="bg-white p-5 rounded-md shadow-md mb-5 mt-10 sm:w-full md:w-2/5 max-w-full">
+                    <div className="text-lg font-semibold mb-4 text-[#f17e21]">
+                      Product Details
+                    </div>
 
-                  <div className="border-t pt-2">
-                    <p className="font-medium text-[#bc4a17] mb-3">
-                      Amount
-                    </p>
-                    <p className="text-gray-700">
-                      <strong>Stock: </strong>{" "}
-                      {isNaN(Number(amount))
-                        ? "0.000"
-                        : Number(amount).toFixed(3)}
-                    </p>
+                    <div className="space-y-2">
+                      <div className="border-t pt-2">
+                        <p className="font-medium text-[#bc4a17] mb-3">
+                          Scanned Data
+                        </p>
+                        <p className="text-gray-700">
+                          <strong>Scanned Code:</strong> {scannedCode}
+                        </p>
+                      </div>
 
-                    <form
-                      onSubmit={handleSubmit}
-                      className="flex flex-col space-y-4"
-                    >
-                      <div className="flex flex-col space-y-2">
-                        <div className="flex flex-col sm:flex-row sm:space-x-2">
+                      <div className="border-t pt-2">
+                        <p className="font-medium text-[#bc4a17] mb-3">
+                          Company Information
+                        </p>
+                        <p className="text-gray-700">
+                          <strong>Company Code:</strong> {selectedCompany}
+                        </p>
+                        <p className="text-gray-700">
+                          <strong>Company Name:</strong> {selectedCompanyName}
+                        </p>
+                        {selectedType === "TOG" && (
+                          <div>
+                            <p className="text-gray-700">
+                              <strong>To Company Code:</strong>{" "}
+                              {selectedToCompany}
+                            </p>
+                            <p className="text-gray-700">
+                              <strong>To Company Name:</strong>{" "}
+                              {selectedToCompanyName}
+                            </p>
+                          </div>
+                        )}
+
+                        {selectedType === "STOCK" && (
                           <p className="text-gray-700">
-                            <strong>Quantity: </strong>
-                          </p>
-                          {colorWiseTableData.length > 0 ? (
-                            <div className="overflow-x-auto w-full mt-6">
-                              <div className="w-full max-w-full">
-                                <Table
-                                  headers={colorWiseHeaders}
-                                  data={colorWiseTableData}
-                                  editableColumns={[{ index: 3, type: "number", step: "any" }]}
-                                  onRowChange={handleRowChange}
-                                  bin={true}
-                                />
-                              </div>
-                            </div>
-                          ) : (
-                            <input
-                              type="number"
-                              id="quantity"
-                              ref={quantityRef}
-                              value={quantity}
-                              onChange={(e) => setQuantity(e.target.value)}
-                              className="mt-1 px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-gray-700 focus:outline-none w-full"
-                              placeholder="Enter quantity"
-                              step="1"
-                              min="0"
-                            />
-                          )}
-                        </div>
-
-                        {/* Display error message under the input field */}
-                        {quantityError && (
-                          <p className="text-red-500 text-sm mt-1">
-                            {quantityError}
+                            <strong>Count Status:</strong> {selectedCount}
                           </p>
                         )}
+
+                        <p className="text-gray-700">
+                          <strong>Type:</strong> {selectedType}
+                        </p>
                       </div>
 
-                      <div className="flex justify-center items-center">
-                        <button
-                          onClick={handleProductSubmit}
-                          disabled={loading}
-                          className={`bg-[#f17e21] hover:bg-[#efa05f] text-white px-4 py-2 rounded-lg mt-5 w-full sm:w-1/2 ${
-                            loading ? "opacity-50 cursor-not-allowed" : ""
-                          }`}
-                        >
-                          Enter
-                        </button>
+                      {(selectedType === "GRN" || selectedType === "PRN") && (
+                        <div className="border-t pt-2">
+                          <p className="font-medium text-[#bc4a17] mb-3">
+                            Vendor Information
+                          </p>
+                          <p className="text-gray-700">
+                            <strong>Vendor Code:</strong> {selectedVendor}
+                          </p>
+                          <p className="text-gray-700">
+                            <strong>Vendor Name:</strong> {selectedVendorName}
+                          </p>
+                          <p className="text-gray-700">
+                            <strong>Invoice No:</strong> {invoiceNo}
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="border-t pt-2">
+                        <p className="font-medium text-[#bc4a17] mb-3">
+                          Product Information
+                        </p>
+                        <p className="text-gray-700">
+                          <strong>Product Code:</strong>{" "}
+                          {salesData.PRODUCT_CODE}
+                        </p>
+                        <p className="text-gray-700">
+                          <strong>Product Name:</strong>{" "}
+                          {salesData.PRODUCT_NAMELONG}
+                        </p>
+                        <p className="text-gray-700">
+                          <strong>Cost Price:</strong> {costPrice}
+                        </p>
+                        <p className="text-gray-700">
+                          <strong>Unit Price: </strong> {salesPrice}
+                        </p>
                       </div>
-                    </form>
+
+                      <div className="border-t pt-2">
+                        <p className="font-medium text-[#bc4a17] mb-3">
+                          Amount
+                        </p>
+                        <p className="text-gray-700">
+                          <strong>Stock: </strong>{" "}
+                          {isNaN(Number(amount))
+                            ? "0.000"
+                            : Number(amount).toFixed(3)}
+                        </p>
+
+                        <form
+                          onSubmit={handleSubmit}
+                          className="flex flex-col space-y-4"
+                        >
+                          <div className="flex flex-col space-y-2">
+                            <div className="flex flex-col sm:flex-row sm:space-x-2">
+                              <p className="text-gray-700">
+                                <strong>Quantity: </strong>
+                              </p>
+                              {colorWiseTableData.length > 0 ? (
+                                <div className="overflow-x-auto w-full mt-6">
+                                  <div className="w-full max-w-full">
+                                    <Table
+                                      headers={colorWiseHeaders}
+                                      data={colorWiseTableData}
+                                      editableColumns={[
+                                        {
+                                          index: 3,
+                                          type: "number",
+                                          step: "any",
+                                        },
+                                      ]}
+                                      onRowChange={handleRowChange}
+                                      bin={true}
+                                    />
+                                  </div>
+                                </div>
+                              ) : (
+                                <input
+                                  type="number"
+                                  id="quantity"
+                                  ref={quantityRef}
+                                  value={quantity}
+                                  onChange={(e) => setQuantity(e.target.value)}
+                                  className="mt-1 px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-gray-700 focus:outline-none w-full"
+                                  placeholder="Enter quantity"
+                                  step="1"
+                                  min="0"
+                                />
+                              )}
+                            </div>
+
+                            {/* Display error message under the input field */}
+                            {quantityError && (
+                              <p className="text-red-500 text-sm mt-1">
+                                {quantityError}
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="flex justify-center items-center">
+                            <button
+                              onClick={handleProductSubmit}
+                              disabled={loading}
+                              className={`bg-[#f17e21] hover:bg-[#efa05f] text-white px-4 py-2 rounded-lg mt-5 w-full sm:w-1/2 ${
+                                loading ? "opacity-50 cursor-not-allowed" : ""
+                              }`}
+                            >
+                              Enter
+                            </button>
+                          </div>
+                        </form>
+                      </div>
+                    </div>
+                  </div>
+
+                  {alert && (
+                    <Alert
+                      message={alert.message}
+                      type={alert.type}
+                      onClose={() => setAlert(null)}
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {(selectedType === "GRN" ||
+            selectedType === "PRN" ||
+            selectedType === "TOG") &&
+            newTableData.length !== 0 && (
+              <div className="flex flex-col w-full max-w-full">
+                {/* Label: always centered */}
+                <div className="text-2xl font-bold mt-5 mb-5 text-center w-full">
+                  {selectedType}
+                </div>
+
+                {/* Scrollable Table Container */}
+                <div className="overflow-x-auto w-full mt-4">
+                  <div className="w-full max-w-full" ref={tableRef}>
+                    <Table
+                      headers={headers}
+                      data={filteredTableData.map((item) => item.rowData)}
+                      editableColumns={editableColumns}
+                      formatColumns={
+                        selectedType === "TOG" ? [4, 5, 6, 7] : [6, 7, 8, 9]
+                      }
+                      formatColumnsQuantity={
+                        selectedType === "TOG" ? [6, 7] : [8, 9]
+                      }
+                      bin="f"
+                      onRowClick={(rowData, rowIndex) =>
+                        handleRowClick(rowData, rowIndex)
+                      }
+                    />
                   </div>
                 </div>
               </div>
-
-              {alert && (
-                <Alert
-                  message={alert.message}
-                  type={alert.type}
-                  onClose={() => setAlert(null)}
-                />
-              )}
-            </div>
-          </div>
+            )}
         </div>
-      )}
-
-      {(selectedType === "GRN" ||
-        selectedType === "PRN" ||
-        selectedType === "TOG") &&
-        newTableData.length !== 0 && (
-          <div className="flex flex-col w-full max-w-full">
-            {/* Label: always centered */}
-            <div className="text-2xl font-bold mt-5 mb-5 text-center w-full">
-              {selectedType}
-            </div>
-
-            {/* Scrollable Table Container */}
-            <div className="overflow-x-auto w-full mt-4">
-              <div className="w-full max-w-full">
-                <Table
-                  headers={headers}
-                  data={filteredTableData.map((item) => item.rowData)}
-                  editableColumns={editableColumns}
-                  formatColumns={
-                    selectedType === "TOG" ? [4, 5, 6, 7] : [6, 7, 8, 9]
-                  }
-                  formatColumnsQuantity={
-                    selectedType === "TOG" ? [6, 7] : [8, 9]
-                  }
-                  bin="f"
-                  onRowClick={(rowData, rowIndex) =>
-                    handleRowClick(rowData, rowIndex)
-                  }
-                />
-              </div>
-            </div>
-          </div>
-        )}
+      </div>
     </div>
-  </div>
-</div>
-      );}
+  );
+}
 export default App;

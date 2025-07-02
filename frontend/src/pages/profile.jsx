@@ -8,7 +8,6 @@ import { jwtDecode } from "jwt-decode";
 
 const Profile = () => {
   const { authToken } = useContext(AuthContext);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [details, setDetails] = useState(null);
   const [alert, setAlert] = useState(null);
 
@@ -38,9 +37,6 @@ const Profile = () => {
     return <Navigate to="/login" replace />;
   }
 
-  const handleSidebarToggle = (isOpen) => {
-    setIsSidebarOpen(isOpen);
-  };
 
   return (
     <div>
