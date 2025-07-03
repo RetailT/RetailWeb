@@ -901,517 +901,502 @@ function App() {
   };
 
   return (
-    <div>
-      <Navbar />
-      {/* Main Layout */}
-      <div className="flex">
-        <div className="transition-all duration-300 flex-1 p-4 sm:p-6 md:ml-10 md:mr-10 ml-4 mr-10 ml-8 mt-[96px] max-w-full">
-          <div className="w-full max-w-full">
-            <Heading text="Scan" />
-          </div>
+   <div>
+  <Navbar />
+  {/* Main Layout */}
+  <div className="flex flex-col md:flex-row min-h-screen">
+    <div className="transition-all duration-300 flex-1 p-2 sm:p-4 md:p-6 md:ml-10 md:mr-10 ml-4 mr-4 mt-24 sm:mt-20 md:mt-24">
+      <div className="w-full max-w-full ml-2 sm:ml-4 md:ml-0">
+        <Heading text="Scan" />
+      </div>
 
-          <div className="mt-5 w-full">
-            {alert && (
-              <Alert
-                message={alert.message}
-                type={alert.type}
-                onClose={() => setAlert(null)}
-              />
+      <div className="mt-4 sm:mt-6 md:mt-10 w-full ml-2 sm:ml-4 md:ml-0">
+        {alert && (
+          <Alert
+            message={alert.message}
+            type={alert.type}
+            onClose={() => setAlert(null)}
+          />
+        )}
+      </div>
+
+      {!initialData && (
+        <div className="bg-[#d8d8d8] p-2 sm:p-4 rounded-md shadow-md mb-4 sm:mb-6 mt-10 w-full max-w-full">
+          {/* Row 1: Company, Type, Conditional field */}
+          <div className="flex flex-col lg:flex-row gap-2 sm:gap-4 mb-2 sm:mb-4">
+            {/* Company */}
+            <div className="flex flex-col w-full lg:w-1/3 mb-2 sm:mb-0">
+              <label className="text-sm font-medium text-gray-700">
+                Select a Company
+              </label>
+              <select
+                value={selectedCompany}
+                onChange={handleCompanyChange}
+                className="border border-gray-300 p-2 rounded-md shadow-sm bg-white w-full text-sm"
+              >
+                <option value="" disabled>
+                  Select a Company
+                </option>
+                {companies.map((company) => (
+                  <option key={company.code} value={company.code}>
+                    {company.code} {company.name}
+                  </option>
+                ))}
+              </select>
+              {companyError && (
+                <p className="text-red-500 text-sm">{companyError}</p>
+              )}
+            </div>
+
+            {/* Type */}
+            <div className="flex flex-col w-full lg:w-1/3 mb-2 sm:mb-0">
+              <label className="text-sm font-medium text-gray-700">
+                Select a Type
+              </label>
+              <select
+                value={selectedType}
+                onChange={handleTypeChange}
+                className="border border-gray-300 p-2 rounded-md shadow-sm bg-white w-full text-sm"
+              >
+                <option value="" disabled>
+                  Select a Type
+                </option>
+                {typeOptions.map((type, index) => (
+                  <option key={index} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+              {typeError && <p className="text-red-500 text-sm">{typeError}</p>}
+            </div>
+
+            {/* Conditional field */}
+            {(selectedType === "GRN" || selectedType === "PRN") && (
+              <div className="flex flex-col w-full lg:w-1/3 mb-2 sm:mb-0">
+                <label className="text-sm font-medium text-gray-700">
+                  Select Vendor
+                </label>
+                <select
+                  value={selectedVendor}
+                  onChange={handleVendorChange}
+                  className="border border-gray-300 p-2 rounded-md shadow-sm bg-white w-full text-sm"
+                >
+                  <option value="" disabled>
+                    Select Vendor
+                  </option>
+                  {vendors.map((vendor) => (
+                    <option key={vendor.code} value={vendor.code}>
+                      {vendor.code} {vendor.name}
+                    </option>
+                  ))}
+                </select>
+                {vendorError && <p className="text-red-500 text-sm">{vendorError}</p>}
+              </div>
+            )}
+
+            {selectedType === "TOG" && (
+              <div className="flex flex-col w-full lg:w-1/3 mb-2 sm:mb-0">
+                <label className="text-sm font-medium text-gray-700">
+                  Company To
+                </label>
+                <select
+                  value={selectedToCompany}
+                  onChange={handleToCompanyChange}
+                  className="border border-gray-300 p-2 rounded-md shadow-sm bg-white w-full text-sm"
+                >
+                  <option value="" disabled>
+                    Company To
+                  </option>
+                  {companies.map((company) => (
+                    <option key={company.code} value={company.code}>
+                      {company.code} {company.name}
+                    </option>
+                  ))}
+                </select>
+                {companyToError && (
+                  <p className="text-red-500 text-sm">{companyToError}</p>
+                )}
+              </div>
+            )}
+
+            {selectedType === "STOCK" && (
+              <div className="flex flex-col w-full lg:w-1/3 mb-2 sm:mb-0">
+                <label className="text-sm font-medium text-gray-700">
+                  Select a Count
+                </label>
+                <select
+                  value={selectedCount}
+                  onChange={handleCountChange}
+                  className="border border-gray-300 p-2 rounded-md shadow-sm bg-white w-full text-sm"
+                >
+                  <option value="" disabled>
+                    Select a Count
+                  </option>
+                  {countOptions.map((name, index) => (
+                    <option key={index} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+                {countError && <p className="text-red-500 text-sm">{countError}</p>}
+              </div>
             )}
           </div>
 
-          {!initialData && (
-            <div className="bg-[#d8d8d8] p-4 sm:p-5 rounded-md shadow-md mb-10 mt-10 w-full max-w-full">
-              {/* Row 1: Company, Type, Conditional field */}
-              <div className="flex flex-col lg:flex-row gap-4 mb-4">
-                {/* Company */}
-                <div className="flex flex-col w-full lg:w-1/3">
-                  <label className="text-sm font-medium text-gray-700">
-                    Select a Company
-                  </label>
-                  <select
-                    value={selectedCompany}
-                    onChange={handleCompanyChange}
-                    className="border border-gray-300 p-2 rounded-md shadow-sm bg-white w-full"
-                  >
-                    <option value="" disabled>
-                      Select a Company
-                    </option>
-                    {companies.map((company) => (
-                      <option key={company.code} value={company.code}>
-                        {company.code} {company.name}
-                      </option>
-                    ))}
-                  </select>
-                  {companyError && (
-                    <p className="text-red-500 text-sm">{companyError}</p>
-                  )}
-                </div>
-
-                {/* Type */}
-                <div className="flex flex-col w-full lg:w-1/3">
-                  <label className="text-sm font-medium text-gray-700">
-                    Select a Type
-                  </label>
-                  <select
-                    value={selectedType}
-                    onChange={handleTypeChange}
-                    className="border border-gray-300 p-2 rounded-md shadow-sm bg-white w-full"
-                  >
-                    <option value="" disabled>
-                      Select a Type
-                    </option>
-                    {typeOptions.map((type, index) => (
-                      <option key={index} value={type}>
-                        {type}
-                      </option>
-                    ))}
-                  </select>
-                  {typeError && (
-                    <p className="text-red-500 text-sm">{typeError}</p>
-                  )}
-                </div>
-
-                {/* Conditional field */}
-                {(selectedType === "GRN" || selectedType === "PRN") && (
-                  <div className="flex flex-col w-full lg:w-1/3">
-                    <label className="text-sm font-medium text-gray-700">
-                      Select Vendor
-                    </label>
-                    <select
-                      value={selectedVendor}
-                      onChange={handleVendorChange}
-                      className="border border-gray-300 p-2 rounded-md shadow-sm bg-white w-full"
-                    >
-                      <option value="" disabled>
-                        Select Vendor
-                      </option>
-                      {vendors.map((vendor) => (
-                        <option key={vendor.code} value={vendor.code}>
-                          {vendor.code} {vendor.name}
-                        </option>
-                      ))}
-                    </select>
-                    {vendorError && (
-                      <p className="text-red-500 text-sm">{vendorError}</p>
-                    )}
-                  </div>
-                )}
-
-                {selectedType === "TOG" && (
-                  <div className="flex flex-col w-full lg:w-1/3">
-                    <label className="text-sm font-medium text-gray-700">
-                      Company To
-                    </label>
-                    <select
-                      value={selectedToCompany}
-                      onChange={handleToCompanyChange}
-                      className="border border-gray-300 p-2 rounded-md shadow-sm bg-white w-full"
-                    >
-                      <option value="" disabled>
-                        Company To
-                      </option>
-                      {companies.map((company) => (
-                        <option key={company.code} value={company.code}>
-                          {company.code} {company.name}
-                        </option>
-                      ))}
-                    </select>
-                    {companyToError && (
-                      <p className="text-red-500 text-sm">{companyToError}</p>
-                    )}
-                  </div>
-                )}
-
-                {selectedType === "STOCK" && (
-                  <div className="flex flex-col w-full lg:w-1/3">
-                    <label className="text-sm font-medium text-gray-700">
-                      Select a Count
-                    </label>
-                    <select
-                      value={selectedCount}
-                      onChange={handleCountChange}
-                      className="border border-gray-300 p-2 rounded-md shadow-sm bg-white w-full"
-                    >
-                      <option value="" disabled>
-                        Select a Count
-                      </option>
-                      {countOptions.map((name, index) => (
-                        <option key={index} value={name}>
-                          {name}
-                        </option>
-                      ))}
-                    </select>
-                    {countError && (
-                      <p className="text-red-500 text-sm">{countError}</p>
-                    )}
-                  </div>
+          {/* Row 2: Invoice No + Submit button right aligned */}
+          <div className="flex flex-col lg:flex-row items-start lg:items-end gap-2 sm:gap-4">
+            {(selectedType === "GRN" || selectedType === "PRN") && (
+              <div className="flex flex-col w-full lg:w-1/3 mb-2 sm:mb-0">
+                <label className="text-sm font-medium text-gray-700">
+                  Invoice No
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={invoiceNo}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value);
+                    if (value >= 0 || isNaN(value)) {
+                      setInvoiceNo(e.target.value);
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "-" || e.key === "e") {
+                      e.preventDefault();
+                    }
+                  }}
+                  className="border border-gray-300 p-2 rounded-md shadow-sm bg-white w-full text-sm"
+                  placeholder="Enter Invoice No"
+                />
+                {invoiceNoError && (
+                  <p className="text-red-500 text-sm">{invoiceNoError}</p>
                 )}
               </div>
+            )}
 
-              {/* Row 2: Invoice No + Submit button right aligned */}
-              <div className="flex flex-col lg:flex-row items-start lg:items-end gap-4">
-                {(selectedType === "GRN" || selectedType === "PRN") && (
-                  <div className="flex flex-col w-full lg:w-1/3">
-                    <label className="text-sm font-medium text-gray-700">
-                      Invoice No
-                    </label>
+            {/* Spacer to push button right on large screens */}
+            <div className="flex-grow" />
+
+            {/* Submit button aligned right always */}
+            <div className="w-full lg:w-auto flex justify-center lg:justify-end">
+              <button
+                onClick={handleDataSubmit}
+                className="bg-black hover:bg-gray-800 w-full lg:w-auto text-white font-semibold py-2 px-4 rounded-md shadow-md text-sm"
+              >
+                Submit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {initialData && (
+        <div className="mt-4 sm:mt-6 md:mt-10 w-full max-w-full">
+          <div className="flex flex-col">
+            {/* Main Content */}
+            <div className="flex flex-col flex-grow justify-center items-center w-full max-w-full">
+              <div className="flex items-center mb-2 sm:mb-3 w-full justify-center">
+                <form
+                  onSubmit={handleSubmit}
+                  className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-2 w-full lg:w-auto"
+                >
+                  <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 w-full lg:w-[600px]">
                     <input
-                      type="number"
-                      min="0"
-                      value={invoiceNo}
+                      type="text"
+                      value={inputValue}
                       onChange={(e) => {
-                        const value = parseInt(e.target.value);
-                        if (value >= 0 || isNaN(value)) {
-                          setInvoiceNo(e.target.value);
-                        }
+                        handleChange(e);
+                        setScannedCode("");
                       }}
-                      onKeyDown={(e) => {
-                        if (e.key === "-" || e.key === "e") {
-                          e.preventDefault();
-                        }
-                      }}
-                      className="border border-gray-300 p-2 rounded-md shadow-sm bg-white w-full"
-                      placeholder="Enter Invoice No"
+                      onBlur={() =>
+                        setTimeout(() => setShowSuggestions(false), 150)
+                      }
+                      onFocus={() => inputValue && setShowSuggestions(true)}
+                      placeholder="Enter Product Name"
+                      className="px-2 sm:px-3 py-2 w-full lg:w-1/2 bg-gray-100 border border-gray-300 rounded-md text-gray-700 focus:outline-none text-sm"
                     />
-                    {invoiceNoError && (
-                      <p className="text-red-500 text-sm">{invoiceNoError}</p>
+                    {showSuggestions && filteredSuggestions.length > 0 && (
+                      <ul className="absolute z-10 w-full lg:w-[calc(50%-0.5rem)] bg-white border border-gray-300 rounded-md mt-1 shadow-md max-h-40 sm:max-h-60 overflow-y-auto">
+                        {filteredSuggestions.map((name, index) => (
+                          <li
+                            key={index}
+                            onClick={() => handleSelect(name)}
+                            className="p-1 sm:p-2 hover:bg-gray-100 cursor-pointer text-sm"
+                          >
+                            {name}
+                          </li>
+                        ))}
+                      </ul>
                     )}
+                    <input
+                      type="text"
+                      id="code"
+                      ref={codeRef}
+                      value={code}
+                      onChange={(e) => {
+                        setCode(e.target.value);
+                        setScannedCode(e.target.value);
+                      }}
+                      className="px-2 sm:px-3 py-2 w-full lg:w-1/2 bg-gray-100 border border-gray-300 rounded-md text-gray-700 focus:outline-none text-sm"
+                      placeholder="Enter Code"
+                    />
                   </div>
-                )}
-
-                {/* Spacer to push button right on large screens */}
-                <div className="flex-grow" />
-
-                {/* Submit button aligned right always */}
-                <div className="w-full lg:w-auto flex justify-center lg:justify-end">
                   <button
-                    onClick={handleDataSubmit}
-                    className="bg-black hover:bg-gray-800 w-full lg:w-auto text-white font-semibold py-2 px-5 rounded-md shadow-md"
+                    type="submit"
+                    className="bg-[#f17e21] hover:bg-[#efa05f] text-white px-3 sm:px-4 py-2 rounded-lg w-full sm:w-auto text-sm mt-2 sm:mt-0"
                   >
-                    Submit
+                    Search
+                  </button>
+                </form>
+              </div>
+              {codeError && (
+                <p className="text-red-500 text-sm mt-1 mb-4 sm:mb-6">{codeError}</p>
+              )}
+              <Toaster position="top-right" reverseOrder={false} />
+              {cameraError && <div className="text-red-500 text-sm">{cameraError}</div>}
+
+              {hasCameraPermission ? (
+                <div className="text-center mt-4 sm:mt-6">
+                  <div
+  className="scan border border-gray-400 rounded-lg bg-gray-200 flex justify-center items-center"
+  style={{
+    width: "min(240px, 90vw)",
+    height: "min(240px, 90vw)",
+  }}
+>
+  {scannerEnabled ? (
+    <BarcodeScannerComponent
+      width={240}
+      height={240}
+      className="w-full h-full object-cover"
+      onUpdate={handleScan}
+      delay={1000}
+      onError={(error) => {
+        console.error("Scanner Error:", error);
+        toast.error("Scanner error: Please try again.");
+      }}
+    />
+  ) : (
+    <CameraOff size={40} className="text-gray-600 w-10 h-10 sm:w-15 sm:h-15" />
+  )}
+</div>
+                  <button
+                    className="bg-[#f17e21] hover:bg-[#efa05f] text-white px-3 sm:px-4 py-2 rounded mt-4 sm:mt-6 text-sm"
+                    onClick={() => setScannerEnabled(!scannerEnabled)}
+                  >
+                    {scannerEnabled ? "Disable Scanner" : "Enable Scanner"}
                   </button>
                 </div>
-              </div>
-            </div>
-          )}
+              ) : (
+                <div className="text-red-500 text-sm mt-4 sm:mt-6">
+                  Camera access is not granted. Please check permissions.
+                </div>
+              )}
 
-          {initialData && (
-            <div className="mt-10 w-full max-w-full">
-              <div className="flex flex-col">
-                {/* Main Content */}
-                <div className="flex flex-col flex-grow justify-center items-center w-full max-w-full">
-                  <div className="flex items-center mb-3 w-full justify-center">
+              <div className="bg-white p-2 sm:p-4 rounded-md shadow-md mb-2 sm:mb-4 mt-4 sm:mt-6 sm:w-full md:w-2/5 max-w-full">
+                <div className="text-sm sm:text-lg font-semibold mb-2 sm:mb-4 text-[#f17e21]">
+                  Product Details
+                </div>
+
+                <div className="space-y-1 sm:space-y-2">
+                  <div className="border-t pt-1 sm:pt-2">
+                    <p className="font-medium text-[#bc4a17] mb-1 sm:mb-2 text-sm sm:text-base">
+                      Scanned Data
+                    </p>
+                    <p className="text-gray-700 text-sm">
+                      <strong>Scanned Code:</strong> {scannedCode}
+                    </p>
+                  </div>
+
+                  <div className="border-t pt-1 sm:pt-2">
+                    <p className="font-medium text-[#bc4a17] mb-1 sm:mb-2 text-sm sm:text-base">
+                      Company Information
+                    </p>
+                    <p className="text-gray-700 text-sm">
+                      <strong>Company Code:</strong> {selectedCompany}
+                    </p>
+                    <p className="text-gray-700 text-sm">
+                      <strong>Company Name:</strong> {selectedCompanyName}
+                    </p>
+                    {selectedType === "TOG" && (
+                      <div>
+                        <p className="text-gray-700 text-sm">
+                          <strong>To Company Code:</strong> {selectedToCompany}
+                        </p>
+                        <p className="text-gray-700 text-sm">
+                          <strong>To Company Name:</strong> {selectedToCompanyName}
+                        </p>
+                      </div>
+                    )}
+
+                    {selectedType === "STOCK" && (
+                      <p className="text-gray-700 text-sm">
+                        <strong>Count Status:</strong> {selectedCount}
+                      </p>
+                    )}
+
+                    <p className="text-gray-700 text-sm">
+                      <strong>Type:</strong> {selectedType}
+                    </p>
+                  </div>
+
+                  {(selectedType === "GRN" || selectedType === "PRN") && (
+                    <div className="border-t pt-1 sm:pt-2">
+                      <p className="font-medium text-[#bc4a17] mb-1 sm:mb-2 text-sm sm:text-base">
+                        Vendor Information
+                      </p>
+                      <p className="text-gray-700 text-sm">
+                        <strong>Vendor Code:</strong> {selectedVendor}
+                      </p>
+                      <p className="text-gray-700 text-sm">
+                        <strong>Vendor Name:</strong> {selectedVendorName}
+                      </p>
+                      <p className="text-gray-700 text-sm">
+                        <strong>Invoice No:</strong> {invoiceNo}
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="border-t pt-1 sm:pt-2">
+                    <p className="font-medium text-[#bc4a17] mb-1 sm:mb-2 text-sm sm:text-base">
+                      Product Information
+                    </p>
+                    <p className="text-gray-700 text-sm">
+                      <strong>Product Code:</strong> {salesData.PRODUCT_CODE}
+                    </p>
+                    <p className="text-gray-700 text-sm">
+                      <strong>Product Name:</strong> {salesData.PRODUCT_NAMELONG}
+                    </p>
+                    <p className="text-gray-700 text-sm">
+                      <strong>Cost Price:</strong> {costPrice}
+                    </p>
+                    <p className="text-gray-700 text-sm">
+                      <strong>Unit Price: </strong> {salesPrice}
+                    </p>
+                  </div>
+
+                  <div className="border-t pt-1 sm:pt-2">
+                    <p className="font-medium text-[#bc4a17] mb-1 sm:mb-2 text-sm sm:text-base">
+                      Amount
+                    </p>
+                    <p className="text-gray-700 text-sm">
+                      <strong>Stock: </strong>
+                      {isNaN(Number(amount))
+                        ? "0.000"
+                        : Number(amount).toFixed(3)}
+                    </p>
+
                     <form
                       onSubmit={handleSubmit}
-                      className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-2 w-full lg:w-auto"
+                      className="flex flex-col space-y-2 sm:space-y-4"
                     >
-                      <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 w-full lg:w-[600px]">
-                        <input
-                          type="text"
-                          value={inputValue}
-                          onChange={(e) => {
-                            handleChange(e);
-                            setScannedCode("");
-                          }}
-                          onBlur={() =>
-                            setTimeout(() => setShowSuggestions(false), 150)
-                          }
-                          onFocus={() => inputValue && setShowSuggestions(true)}
-                          placeholder="Enter Product Name"
-                          className="px-3 py-2 w-full lg:w-1/2 bg-gray-100 border border-gray-300 rounded-md text-gray-700 focus:outline-none"
-                        />
-                        {showSuggestions && filteredSuggestions.length > 0 && (
-                          <ul className="absolute z-10 w-full lg:w-[calc(50%-0.5rem)] bg-white border border-gray-300 rounded-md mt-1 shadow-md">
-                            {filteredSuggestions.map((name, index) => (
-                              <li
-                                key={index}
-                                onClick={() => handleSelect(name)}
-                                className="p-2 hover:bg-gray-100 cursor-pointer"
-                              >
-                                {name}
-                              </li>
-                            ))}
-                          </ul>
+                      <div className="flex flex-col space-y-1 sm:space-y-2">
+                        <div className="flex flex-col sm:flex-row sm:space-x-2">
+                          <p className="text-gray-700 text-sm">
+                            <strong>Quantity: </strong>
+                          </p>
+                          {colorWiseTableData.length > 0 ? (
+                            <div className="overflow-x-auto w-full mt-2 sm:mt-4">
+                              <div className="w-full max-w-full" ref={tableRef}>
+                                <Table
+                                  headers={colorWiseHeaders}
+                                  data={colorWiseTableData}
+                                  editableColumns={[
+                                    {
+                                      index: 3,
+                                      type: "number",
+                                      step: "any",
+                                    },
+                                  ]}
+                                  onRowChange={handleRowChange}
+                                  bin={true}
+                                />
+                              </div>
+                            </div>
+                          ) : (
+                            <input
+                              type="number"
+                              id="quantity"
+                              ref={quantityRef}
+                              value={quantity}
+                              onChange={(e) => setQuantity(e.target.value)}
+                              className="mt-1 px-2 sm:px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-gray-700 focus:outline-none w-full text-sm"
+                              placeholder="Enter quantity"
+                              step="1"
+                              min="0"
+                            />
+                          )}
+                        </div>
+
+                        {/* Display error message under the input field */}
+                        {quantityError && (
+                          <p className="text-red-500 text-sm mt-1">{quantityError}</p>
                         )}
-                        <input
-                          type="text"
-                          id="code"
-                          ref={codeRef}
-                          value={code}
-                          onChange={(e) => {
-                            setCode(e.target.value);
-                            setScannedCode(e.target.value);
-                          }}
-                          className="px-3 py-2 w-full lg:w-1/2 bg-gray-100 border border-gray-300 rounded-md text-gray-700 focus:outline-none"
-                          placeholder="Enter Code"
-                        />
                       </div>
-                      <button
-                        type="submit"
-                        className="bg-[#f17e21] hover:bg-[#efa05f] text-white px-4 py-2 rounded-lg w-full sm:w-auto"
-                      >
-                        Search
-                      </button>
+
+                      <div className="flex justify-center items-center">
+                        <button
+                          onClick={handleProductSubmit}
+                          disabled={loading}
+                          className={`bg-[#f17e21] hover:bg-[#efa05f] text-white px-3 sm:px-4 py-2 rounded-lg mt-2 sm:mt-4 w-full sm:w-1/2 ${
+                            loading ? "opacity-50 cursor-not-allowed" : ""
+                          } text-sm`}
+                        >
+                          Enter
+                        </button>
+                      </div>
                     </form>
                   </div>
-                  {codeError && (
-                    <p className="text-red-500 text-sm mt-1 mb-10">
-                      {codeError}
-                    </p>
-                  )}
-                  <Toaster position="top-right" reverseOrder={false} />
-                  {cameraError && <div className="error">{cameraError}</div>}
-
-                  {hasCameraPermission ? (
-                    <div className="text-center">
-                      <div
-                        className="scan border border-gray-400 rounded-lg bg-gray-200 flex justify-center items-center mt-10"
-                        style={{
-                          width: "240px",
-                          height: "240px",
-                          maxWidth: "100%",
-                        }}
-                      >
-                        {scannerEnabled ? (
-                          <BarcodeScannerComponent
-                            width={240}
-                            height={240}
-                            className="w-full h-full object-cover"
-                            onUpdate={handleScan}
-                            delay={1000}
-                            onError={(error) => {
-                              console.error("Scanner Error:", error);
-                              toast.error("Scanner error: Please try again.");
-                            }}
-                          />
-                        ) : (
-                          <CameraOff size={60} className="text-gray-600" />
-                        )}
-                      </div>
-                      <button
-                        className="bg-[#f17e21] hover:bg-[#efa05f] text-white px-4 py-2 rounded mt-16"
-                        onClick={() => setScannerEnabled(!scannerEnabled)}
-                      >
-                        {scannerEnabled ? "Disable Scanner" : "Enable Scanner"}
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="error">
-                      Camera access is not granted. Please check permissions.
-                    </div>
-                  )}
-
-                  <div className="bg-white p-5 rounded-md shadow-md mb-5 mt-10 sm:w-full md:w-2/5 max-w-full">
-                    <div className="text-lg font-semibold mb-4 text-[#f17e21]">
-                      Product Details
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="border-t pt-2">
-                        <p className="font-medium text-[#bc4a17] mb-3">
-                          Scanned Data
-                        </p>
-                        <p className="text-gray-700">
-                          <strong>Scanned Code:</strong> {scannedCode}
-                        </p>
-                      </div>
-
-                      <div className="border-t pt-2">
-                        <p className="font-medium text-[#bc4a17] mb-3">
-                          Company Information
-                        </p>
-                        <p className="text-gray-700">
-                          <strong>Company Code:</strong> {selectedCompany}
-                        </p>
-                        <p className="text-gray-700">
-                          <strong>Company Name:</strong> {selectedCompanyName}
-                        </p>
-                        {selectedType === "TOG" && (
-                          <div>
-                            <p className="text-gray-700">
-                              <strong>To Company Code:</strong>{" "}
-                              {selectedToCompany}
-                            </p>
-                            <p className="text-gray-700">
-                              <strong>To Company Name:</strong>{" "}
-                              {selectedToCompanyName}
-                            </p>
-                          </div>
-                        )}
-
-                        {selectedType === "STOCK" && (
-                          <p className="text-gray-700">
-                            <strong>Count Status:</strong> {selectedCount}
-                          </p>
-                        )}
-
-                        <p className="text-gray-700">
-                          <strong>Type:</strong> {selectedType}
-                        </p>
-                      </div>
-
-                      {(selectedType === "GRN" || selectedType === "PRN") && (
-                        <div className="border-t pt-2">
-                          <p className="font-medium text-[#bc4a17] mb-3">
-                            Vendor Information
-                          </p>
-                          <p className="text-gray-700">
-                            <strong>Vendor Code:</strong> {selectedVendor}
-                          </p>
-                          <p className="text-gray-700">
-                            <strong>Vendor Name:</strong> {selectedVendorName}
-                          </p>
-                          <p className="text-gray-700">
-                            <strong>Invoice No:</strong> {invoiceNo}
-                          </p>
-                        </div>
-                      )}
-
-                      <div className="border-t pt-2">
-                        <p className="font-medium text-[#bc4a17] mb-3">
-                          Product Information
-                        </p>
-                        <p className="text-gray-700">
-                          <strong>Product Code:</strong>{" "}
-                          {salesData.PRODUCT_CODE}
-                        </p>
-                        <p className="text-gray-700">
-                          <strong>Product Name:</strong>{" "}
-                          {salesData.PRODUCT_NAMELONG}
-                        </p>
-                        <p className="text-gray-700">
-                          <strong>Cost Price:</strong> {costPrice}
-                        </p>
-                        <p className="text-gray-700">
-                          <strong>Unit Price: </strong> {salesPrice}
-                        </p>
-                      </div>
-
-                      <div className="border-t pt-2">
-                        <p className="font-medium text-[#bc4a17] mb-3">
-                          Amount
-                        </p>
-                        <p className="text-gray-700">
-                          <strong>Stock: </strong>{" "}
-                          {isNaN(Number(amount))
-                            ? "0.000"
-                            : Number(amount).toFixed(3)}
-                        </p>
-
-                        <form
-                          onSubmit={handleSubmit}
-                          className="flex flex-col space-y-4"
-                        >
-                          <div className="flex flex-col space-y-2">
-                            <div className="flex flex-col sm:flex-row sm:space-x-2">
-                              <p className="text-gray-700">
-                                <strong>Quantity: </strong>
-                              </p>
-                              {colorWiseTableData.length > 0 ? (
-                                <div className="overflow-x-auto w-full mt-6">
-                                  <div className="w-full max-w-full">
-                                    <Table
-                                      headers={colorWiseHeaders}
-                                      data={colorWiseTableData}
-                                      editableColumns={[
-                                        {
-                                          index: 3,
-                                          type: "number",
-                                          step: "any",
-                                        },
-                                      ]}
-                                      onRowChange={handleRowChange}
-                                      bin={true}
-                                    />
-                                  </div>
-                                </div>
-                              ) : (
-                                <input
-                                  type="number"
-                                  id="quantity"
-                                  ref={quantityRef}
-                                  value={quantity}
-                                  onChange={(e) => setQuantity(e.target.value)}
-                                  className="mt-1 px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-gray-700 focus:outline-none w-full"
-                                  placeholder="Enter quantity"
-                                  step="1"
-                                  min="0"
-                                />
-                              )}
-                            </div>
-
-                            {/* Display error message under the input field */}
-                            {quantityError && (
-                              <p className="text-red-500 text-sm mt-1">
-                                {quantityError}
-                              </p>
-                            )}
-                          </div>
-
-                          <div className="flex justify-center items-center">
-                            <button
-                              onClick={handleProductSubmit}
-                              disabled={loading}
-                              className={`bg-[#f17e21] hover:bg-[#efa05f] text-white px-4 py-2 rounded-lg mt-5 w-full sm:w-1/2 ${
-                                loading ? "opacity-50 cursor-not-allowed" : ""
-                              }`}
-                            >
-                              Enter
-                            </button>
-                          </div>
-                        </form>
-                      </div>
-                    </div>
-                  </div>
-
-                  {alert && (
-                    <Alert
-                      message={alert.message}
-                      type={alert.type}
-                      onClose={() => setAlert(null)}
-                    />
-                  )}
                 </div>
+              </div>
+
+              {alert && (
+                <Alert
+                  message={alert.message}
+                  type={alert.type}
+                  onClose={() => setAlert(null)}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {(selectedType === "GRN" ||
+        selectedType === "PRN" ||
+        selectedType === "TOG") &&
+        newTableData.length !== 0 && (
+          <div className="flex flex-col w-full max-w-full mt-4 sm:mt-6">
+            {/* Label: always centered */}
+            <div className="text-xl sm:text-2xl font-bold mb-2 sm:mb-4 text-center w-full">
+              {selectedType}
+            </div>
+
+            {/* Scrollable Table Container */}
+            <div className="overflow-x-auto w-full">
+              <div className="w-full max-w-full">
+                <Table
+                  headers={headers}
+                  data={filteredTableData.map((item) => item.rowData)}
+                  editableColumns={editableColumns}
+                  formatColumns={
+                    selectedType === "TOG" ? [4, 5, 6, 7] : [6, 7, 8, 9]
+                  }
+                  formatColumnsQuantity={
+                    selectedType === "TOG" ? [6, 7] : [8, 9]
+                  }
+                  bin="f"
+                  onRowClick={(rowData, rowIndex) =>
+                    handleRowClick(rowData, rowIndex)
+                  }
+                />
               </div>
             </div>
-          )}
-
-          {(selectedType === "GRN" ||
-            selectedType === "PRN" ||
-            selectedType === "TOG") &&
-            newTableData.length !== 0 && (
-              <div className="flex flex-col w-full max-w-full">
-                {/* Label: always centered */}
-                <div className="text-2xl font-bold mt-5 mb-5 text-center w-full">
-                  {selectedType}
-                </div>
-
-                {/* Scrollable Table Container */}
-                <div className="overflow-x-auto w-full mt-4">
-                  <div className="w-full max-w-full" ref={tableRef}>
-                    <Table
-                      headers={headers}
-                      data={filteredTableData.map((item) => item.rowData)}
-                      editableColumns={editableColumns}
-                      formatColumns={
-                        selectedType === "TOG" ? [4, 5, 6, 7] : [6, 7, 8, 9]
-                      }
-                      formatColumnsQuantity={
-                        selectedType === "TOG" ? [6, 7] : [8, 9]
-                      }
-                      bin="f"
-                      onRowClick={(rowData, rowIndex) =>
-                        handleRowClick(rowData, rowIndex)
-                      }
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-        </div>
-      </div>
+          </div>
+        )}
     </div>
+  </div>
+</div>
   );
 }
 export default App;

@@ -369,283 +369,270 @@ function App() {
 
   return (
     <div>
-      <Navbar />
-      {/* Main Layout */}
-      <div className="flex">
-        <div
-          className={`transition-all duration-300 flex-1 p-10`}
-          style={{
-            marginLeft: "4rem", // Space for sidebar
-            marginTop: "96px", // Space for Navbar
-          }}
-        >
-          <div className="ml-[-50px]">
-            <Heading text="Product View" />
-          </div>
+  <Navbar />
+  {/* Main Layout */}
+  <div className="flex flex-col md:flex-row min-h-screen">
+    <div
+  className="transition-all duration-300 flex-1 p-4 sm:p-6 md:p-10 mt-20 sm:mt-16 md:mt-20"
+>
+      <div className="ml-3 mt-1 md:mt-5">
+        <Heading text="Product View" />
+      </div>
 
-          <div className="mt-10 ml-[-60px] sm:ml-[-50px] ">
-            {alert && (
-              <Alert
-                message={alert.message}
-                type={alert.type}
-                onClose={() => setAlert(null)}
-              />
+      <div className="mt-6 sm:mt-10 ml-1 md:ml-5">
+        {alert && (
+          <Alert
+            message={alert.message}
+            type={alert.type}
+            onClose={() => setAlert(null)}
+          />
+        )}
+
+        <div className="flex flex-col w-full">
+          {/* Main Content */}
+          <div className="flex flex-col flex-grow justify-center items-center w-full">
+       <div className="flex flex-col items-center justify-center mb-3 w-full max-w-4xl mx-auto">
+  <form
+    onSubmit={handleSubmit}
+    className="flex flex-col sm:flex-row sm:items-center justify-center sm:space-x-2 space-y-3 sm:space-y-0 w-full sm:w-auto"
+  >
+    {/* Autocomplete Input */}
+    <div className="relative w-full sm:w-64">
+      <input
+        type="text"
+        value={inputValue}
+        onChange={handleChange}
+        onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+        onFocus={() => inputValue && setShowSuggestions(true)}
+        placeholder="Enter Product Name"
+        className="px-3 py-2 w-full bg-gray-100 border border-gray-300 rounded-md text-gray-700 focus:outline-none text-sm"
+      />
+      {showSuggestions && filteredSuggestions.length > 0 && (
+        <ul className="absolute z-10 w-full bg-white border border-gray-300 rounded-md mt-1 shadow-md max-h-60 overflow-y-auto">
+          {filteredSuggestions.map((name, index) => (
+            <li
+              key={index}
+              onClick={() => handleSelect(name)}
+              className="p-2 hover:bg-gray-100 cursor-pointer text-sm"
+            >
+              {name}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+
+    {/* Code Input */}
+    <input
+      type="text"
+      id="code"
+      ref={codeRef}
+      value={code}
+      onChange={(e) => setCode(e.target.value)}
+      className="px-3 py-2 w-full sm:w-64 bg-gray-100 border border-gray-300 rounded-md text-gray-700 focus:outline-none text-sm"
+      placeholder="Enter Product Code"
+    />
+
+    {/* Submit Button */}
+    <button
+      type="submit"
+      className="bg-[#f17e21] hover:bg-[#efa05f] text-white px-4 py-2 rounded-lg w-full sm:w-auto text-sm mt-3 sm:mt-0"
+    >
+      Search
+    </button>
+  </form>
+</div>
+            {codeError && (
+              <p className="text-red-500 text-sm mt-1 mb-6">{codeError}</p>
+            )}
+            <Toaster position="top-right" reverseOrder={false} />
+            {cameraError && <div className="text-red-500 text-sm">{cameraError}</div>}
+
+            {hasCameraPermission ? (
+              <div className="text-center mt-6">
+                <div
+                  className="scan border border-gray-400 rounded-lg bg-gray-200 flex justify-center items-center"
+                  style={{
+                    width: "min(240px, 90vw)",
+                    height: "min(240px, 90vw)",
+                  }}
+                >
+                  {scannerEnabled ? (
+                    <BarcodeScannerComponent
+                      width={240}
+                      height={240}
+                      className="w-full h-full object-cover"
+                      onUpdate={handleScan}
+                      delay={1000}
+                      onError={(error) => {
+                        console.error("Scanner Error:", error);
+                        toast.error("Scanner error: Please try again.");
+                      }}
+                    />
+                  ) : (
+                    <CameraOff size={60} className="text-gray-600" />
+                  )}
+                </div>
+                <button
+                  className="bg-[#f17e21] hover:bg-[#efa05f] text-white px-4 py-2 rounded mt-6 text-sm"
+                  onClick={() => setScannerEnabled(!scannerEnabled)}
+                >
+                  {scannerEnabled ? "Disable Scanner" : "Enable Scanner"}
+                </button>
+              </div>
+            ) : (
+              <div className="text-red-500 text-sm mt-6">
+                Camera access is not granted. Please check permissions.
+              </div>
             )}
 
-            <div className="flex">
-              {/* Main Content */}
-              <div className="flex flex-col flex-grow justify-center items-center w-full ">
-                <div className="flex items-center  mb-3">
-                  <form
-                    onSubmit={handleSubmit}
-                    className="flex flex-col md:flex-row md:items-center md:space-x-2 space-y-3 md:space-y-0 w-full"
-                  >
-                    {/* Autocomplete Input */}
-                    <div className="relative w-full md:w-auto">
-                      <input
-                        type="text"
-                        value={inputValue}
-                        onChange={handleChange}
-                        onBlur={() =>
-                          setTimeout(() => setShowSuggestions(false), 150)
-                        }
-                        onFocus={() => inputValue && setShowSuggestions(true)}
-                        placeholder="Enter Product Name"
-                        className="px-3 py-2 w-full md:w-64 bg-gray-100 border border-gray-300 rounded-md text-gray-700 focus:outline-none"
-                      />
-                      {showSuggestions && filteredSuggestions.length > 0 && (
-                        <ul className="absolute z-10 w-full bg-white border border-gray-300 rounded-md mt-1 shadow-md">
-                          {filteredSuggestions.map((name, index) => (
-                            <li
-                              key={index}
-                              onClick={() => handleSelect(name)}
-                              className="p-2 hover:bg-gray-100 cursor-pointer"
-                            >
-                              {name}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
+            {isData && (
+              <div className="mt-6 w-full max-w-4xl mx-auto">
+                <div className="p-4 bg-white rounded-xl shadow-md">
+                  <p className="text-center text-[#bc4a17] text-lg sm:text-xl font-bold mb-6">
+                    Product Details
+                  </p>
+
+                  {/* Product */}
+                  <div className="mb-6">
+                    <p className="text-[#bc4a17] font-semibold text-base sm:text-lg mb-2">
+                      Product
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-2 text-gray-800 text-sm sm:text-base">
+                      <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
+                        <span className="font-medium">Code:</span>
+                        <span>{productData.PRODUCT_CODE}</span>
+                        <span className="font-medium">Barcode:</span>
+                        <span>{productData.BARCODE}</span>
+                      </div>
+                      <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
+                        <span className="font-medium">Name:</span>
+                        <span>{productData.PRODUCT_NAMELONG}</span>
+                        <span className="font-medium">Barcode 2:</span>
+                        <span>{productData.BARCODE2}</span>
+                      </div>
                     </div>
+                  </div>
 
-                    {/* Code Input */}
-                    <input
-                      type="text"
-                      id="code"
-                      ref={codeRef}
-                      value={code}
-                      onChange={(e) => setCode(e.target.value)}
-                      className="px-3 py-2 w-full md:w-64 bg-gray-100 border border-gray-300 rounded-md text-gray-700 focus:outline-none"
-                      placeholder="Enter Product Code"
-                    />
+                  {/* Department */}
+                  <div className="mb-6">
+                    <p className="text-[#bc4a17] font-semibold text-base sm:text-lg mb-2">
+                      Department
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 text-gray-800 text-sm sm:text-base">
+                      <div className="grid grid-cols-[auto_1fr] gap-x-4">
+                        <span className="font-medium">Code:</span>
+                        <span>{productData.DEPTCODE}</span>
+                      </div>
+                      <div className="grid grid-cols-[auto_1fr] gap-x-4">
+                        <span className="font-medium">Name:</span>
+                        <span>{productData.DEPTNAME}</span>
+                      </div>
+                    </div>
+                  </div>
 
-                    {/* Submit Button */}
-                    <button
-                      type="submit"
-                      className="bg-[#f17e21] hover:bg-[#efa05f] text-white px-4 py-2 rounded-lg w-full md:w-auto"
-                    >
-                      Search
-                    </button>
-                  </form>
+                  {/* Category */}
+                  <div className="mb-6">
+                    <p className="text-[#bc4a17] font-semibold text-base sm:text-lg mb-2">
+                      Category
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 text-gray-800 text-sm sm:text-base">
+                      <div className="grid grid-cols-[auto_1fr] gap-x-4">
+                        <span className="font-medium">Code:</span>
+                        <span>{productData.CATCODE}</span>
+                      </div>
+                      <div className="grid grid-cols-[auto_1fr] gap-x-4">
+                        <span className="font-medium">Name:</span>
+                        <span>{productData.CATNAME}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Sub Category */}
+                  <div className="mb-6">
+                    <p className="text-[#bc4a17] font-semibold text-base sm:text-lg mb-2">
+                      Sub Category
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 text-gray-800 text-sm sm:text-base">
+                      <div className="grid grid-cols-[auto_1fr] gap-x-4">
+                        <span className="font-medium">Code:</span>
+                        <span>{productData.SCATCODE}</span>
+                      </div>
+                      <div className="grid grid-cols-[auto_1fr] gap-x-4">
+                        <span className="font-medium">Name:</span>
+                        <span>{productData.SCATNAME}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Vendor */}
+                  <div className="mb-6">
+                    <p className="text-[#bc4a17] font-semibold text-base sm:text-lg mb-2">
+                      Vendor
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 text-gray-800 text-sm sm:text-base">
+                      <div className="grid grid-cols-[auto_1fr] gap-x-4">
+                        <span className="font-medium">Code:</span>
+                        <span>{productData.VENDORCODE}</span>
+                      </div>
+                      <div className="grid grid-cols-[auto_1fr] gap-x-4">
+                        <span className="font-medium">Name:</span>
+                        <span>{productData.VENDORNAME}</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                {codeError && (
-                  <p className="text-red-500 text-sm mt-1 mb-10">{codeError}</p>
-                )}
-                <Toaster position="top-right" reverseOrder={false} />
-                {cameraError && <div className="error">{cameraError}</div>}
 
-                {hasCameraPermission ? (
-                  <div className="text-center">
-                    <div
-                      className="scan border border-gray-400 rounded-lg bg-gray-200 flex justify-center items-center mt-10"
-                      style={{
-                        width: "240px",
-                        height: "240px",
-                        maxWidth: "100vw",
-                      }}
-                    >
-                      {scannerEnabled ? (
-                        <BarcodeScannerComponent
-                          width={240}
-                          height={240}
-                          className="w-full h-full object-cover"
-                          onUpdate={handleScan}
-                          delay={1000}
-                          onError={(error) => {
-                            console.error("Scanner Error:", error);
-                            toast.error("Scanner error: Please try again.");
-                          }}
-                        />
-                      ) : (
-                        <CameraOff size={60} className="text-gray-600" /> // Icon stays centered inside fixed box
-                      )}
-                    </div>
-                    <button
-                      className="bg-[#f17e21] hover:bg-[#efa05f] text-white px-4 py-2 rounded mt-16"
-                      onClick={() => setScannerEnabled(!scannerEnabled)}
-                    >
-                      {scannerEnabled ? "Disable Scanner" : "Enable Scanner"}
-                    </button>
-                  </div>
-                ) : (
-                  <div className="error">
-                    Camera access is not granted. Please check permissions.
-                  </div>
-                )}
+                <div className="p-4 bg-white rounded-xl shadow-md mt-6">
+                  <p className="text-center text-[#bc4a17] text-lg sm:text-xl font-bold mb-6">
+                    Price Details
+                  </p>
 
-                {isData && (
-                  <div className="p-4 bg-white rounded-xl shadow-md mt-6">
-                    <div className="p-4 bg-white rounded-xl shadow-md mt-6">
-                      <p className="text-center text-[#bc4a17] text-xl font-bold mb-6">
-                        Product Details
-                      </p>
-
-                      {/* Product */}
-                      <div className="mb-6">
-                        <p className="text-[#bc4a17] font-semibold text-lg mb-2">
-                          Product
-                        </p>
-                        <div className="grid sm:grid-cols-2 gap-y-2  text-gray-800">
-                          <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
-                            <span className="font-medium">Code:</span>
-                            <span>{productData.PRODUCT_CODE}</span>
-                            <span className="font-medium">Barcode:</span>
-                            <span>{productData.BARCODE}</span>
-                          </div>
-                          <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
-                            <span className="font-medium">Name:</span>
-                            <span>{productData.PRODUCT_NAMELONG}</span>
-                            <span className="font-medium">Barcode 2:</span>
-                            <span>{productData.BARCODE2}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Department */}
-                      <div className="mb-6">
-                        <p className="text-[#bc4a17] font-semibold text-lg mb-2">
-                          Department
-                        </p>
-                        <div className="grid sm:grid-cols-2  text-gray-800">
-                          <div className="grid grid-cols-[auto_1fr] gap-x-4">
-                            <span className="font-medium">Code:</span>
-                            <span>{productData.DEPTCODE}</span>
-                          </div>
-                          <div className="grid grid-cols-[auto_1fr] gap-x-4">
-                            <span className="font-medium">Name:</span>
-                            <span>{productData.DEPTNAME}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Category */}
-                      <div className="mb-6">
-                        <p className="text-[#bc4a17] font-semibold text-lg mb-2">
-                          Category
-                        </p>
-                        <div className="grid sm:grid-cols-2  text-gray-800">
-                          <div className="grid grid-cols-[auto_1fr] gap-x-4">
-                            <span className="font-medium">Code:</span>
-                            <span>{productData.CATCODE}</span>
-                          </div>
-                          <div className="grid grid-cols-[auto_1fr] gap-x-4">
-                            <span className="font-medium">Name:</span>
-                            <span>{productData.CATNAME}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Sub Category */}
-                      <div className="mb-6">
-                        <p className="text-[#bc4a17] font-semibold text-lg mb-2">
-                          Sub Category
-                        </p>
-                        <div className="grid sm:grid-cols-2  text-gray-800">
-                          <div className="grid grid-cols-[auto_1fr] gap-x-4">
-                            <span className="font-medium">Code:</span>
-                            <span>{productData.SCATCODE}</span>
-                          </div>
-                          <div className="grid grid-cols-[auto_1fr] gap-x-4">
-                            <span className="font-medium">Name:</span>
-                            <span>{productData.SCATNAME}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Vendor */}
-                      <div className="mb-6">
-                        <p className="text-[#bc4a17] font-semibold text-lg mb-2">
-                          Vendor
-                        </p>
-                        <div className="grid sm:grid-cols-2  text-gray-800">
-                          <div className="grid grid-cols-[auto_1fr] gap-x-4">
-                            <span className="font-medium">Code:</span>
-                            <span>{productData.VENDORCODE}</span>
-                          </div>
-                          <div className="grid grid-cols-[auto_1fr] gap-x-4">
-                            <span className="font-medium">Name:</span>
-                            <span>{productData.VENDORNAME}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="p-4 bg-white rounded-xl shadow-md mt-6">
-                      <p className="text-center text-[#bc4a17] text-xl font-bold mb-6">
-                        Price Details
-                      </p>
-
-                      {/* Price */}
-                      <div>
-                        <p className="text-[#bc4a17] font-semibold text-lg mb-2">
-                          Price
-                        </p>
-                        <div className="grid sm:grid-cols-2  text-gray-800">
-                          <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
-                            <span className="font-medium">Cost Price:</span>
-                            <span>{productData.COSTPRICE.toFixed(2)}</span>
-                            <span className="font-medium">Unit Price:</span>
-                            <span>{productData.SCALEPRICE.toFixed(2)}</span>
-                          </div>
-                          <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
-                            <span className="font-medium">Minimum Price:</span>
-                            <span>{productData.MINPRICE.toFixed(2)}</span>
-                            <span className="font-medium">
-                              Wholesale Price:
-                            </span>
-                            <span>{productData.WPRICE.toFixed(2)}</span>
-                          </div>
-                          <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 mt-2">
-                            <span className="font-medium">Average Cost:</span>
-                            <span>{productData.AVGCOST.toFixed(2)}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-y-4  text-gray-700 mt-8">
-                        <p>
-                          <strong>Price 1:</strong>{" "}
-                          {productData.PRICE1.toFixed(2)}
-                        </p>
-                        <p>
-                          <strong>Price 2:</strong>{" "}
-                          {productData.PRICE2.toFixed(2)}
-                        </p>
-                        <p>
-                          <strong>Price 3:</strong>{" "}
-                          {productData.PRICE3.toFixed(2)}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {isData && (
+                  {/* Price */}
                   <div>
-                    <div className="p-4 bg-white rounded-xl shadow-md mt-6 w-1/2 md:w-full mx-auto">
-                      <p className="text-center text-[#bc4a17] text-xl font-bold mb-6">
-                        Company Wise Price Details
-                      </p>
+                    <p className="text-[#bc4a17] font-semibold text-base sm:text-lg mb-2">
+                      Price
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 text-gray-800 text-sm sm:text-base">
+                      <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
+                        <span className="font-medium">Cost Price:</span>
+                        <span>{productData.COSTPRICE.toFixed(2)}</span>
+                        <span className="font-medium">Unit Price:</span>
+                        <span>{productData.SCALEPRICE.toFixed(2)}</span>
+                      </div>
+                      <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
+                        <span className="font-medium">Minimum Price:</span>
+                        <span>{productData.MINPRICE.toFixed(2)}</span>
+                        <span className="font-medium">Wholesale Price:</span>
+                        <span>{productData.WPRICE.toFixed(2)}</span>
+                      </div>
+                      <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 mt-2">
+                        <span className="font-medium">Average Cost:</span>
+                        <span>{productData.AVGCOST.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-y-4 text-gray-700 mt-8 text-sm sm:text-base">
+                    <p>
+                      <strong>Price 1:</strong> {productData.PRICE1.toFixed(2)}
+                    </p>
+                    <p>
+                      <strong>Price 2:</strong> {productData.PRICE2.toFixed(2)}
+                    </p>
+                    <p>
+                      <strong>Price 3:</strong> {productData.PRICE3.toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              )}{isData && (
+                <div className="mt-6 w-full max-w-4xl mx-auto">
+                  <div className="p-4 bg-white rounded-xl shadow-md w-full">
+                    <p className="text-center text-[#bc4a17] text-lg sm:text-xl font-bold mb-6">
+                      Company Wise Price Details
+                    </p>
+                    <div className="overflow-x-auto">
                       <Table
                         headers={priceHeaders}
                         data={priceTableData}
@@ -653,11 +640,13 @@ function App() {
                         bin={true}
                       />
                     </div>
+                  </div>
 
-                    <div className="p-4 bg-white rounded-xl shadow-md mt-6 w-1/2 md:w-full mx-auto">
-                      <p className="text-center text-[#bc4a17] text-xl font-bold mb-6">
-                        Company Wise Stock Details
-                      </p>
+                  <div className="p-4 bg-white rounded-xl shadow-md mt-6 w-full">
+                    <p className="text-center text-[#bc4a17] text-lg sm:text-xl font-bold mb-6">
+                      Company Wise Stock Details
+                    </p>
+                    <div className="overflow-x-auto">
                       <Table
                         headers={stockHeaders}
                         data={stockTableData}
@@ -666,18 +655,21 @@ function App() {
                         bin={true}
                       />
                     </div>
+                    </div>
 
-                    <div className="p-4 bg-white rounded-xl shadow-md mt-6 w-1/2 md:w-full mx-auto">
-                      <p className="text-center text-[#bc4a17] text-xl font-bold mb-6">
+                    <div className="p-4 bg-white rounded-xl shadow-md mt-6 w-full">
+                      <p className="text-center text-[#bc4a17] text-lg sm:text-xl font-bold mb-6">
                         Color Wise Stock Details
                       </p>
-                      <Table
-                        headers={colorWiseHeaders}
-                        data={colorWiseTableData}
-                        formatColumnsQuantity={[]}
-                        editableColumns={[]}
-                        bin={true}
-                      />
+                      <div className="overflow-x-auto">
+                        <Table
+                          headers={colorWiseHeaders}
+                          data={colorWiseTableData}
+                          formatColumnsQuantity={[]}
+                          editableColumns={[]}
+                          bin={true}
+                        />
+                      </div>
                     </div>
                   </div>
                 )}

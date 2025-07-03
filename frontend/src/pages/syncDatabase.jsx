@@ -80,43 +80,38 @@ const Reset = () => {
   
   return (
     <div>
-      <Navbar />
-      <div className="flex">
-        {/* <Sidebar onToggle={handleSidebarToggle} /> */}
-        <div className="flex-1 p-10 ">
-          <div className="mt-24 mb-10 ml-5">
-            <Heading text="Sync Databases" />
-          </div>
+  <Navbar />
+  <div className="flex flex-col min-h-screen">
+    <div className="flex-1 p-2 sm:p-4 md:p-10 ml-2 sm:ml-4 md:ml-5 mr-2 sm:mr-4">
+      <div className="mt-28 sm:mt-24 md:mt-24 mb-2 sm:mb-4 md:mb-10 ml-2 sm:ml-4">
+        <Heading text="Sync Databases" />
+      </div>
 
       {/* Alert Component: Display if alert state is set */}
-      <div className="ml-[-50px]">
-      {alert && (
-        <Alert
-          message={alert.message}
-          type={alert.type}
-          onClose={() => setAlert(null)} // Close alert when clicked
-        />
-      )}
+      <div className="ml-2 sm:ml-4">
+        {alert && (
+          <Alert
+            message={alert.message}
+            type={alert.type}
+            onClose={() => setAlert(null)} // Close alert when clicked
+          />
+        )}
       </div>
-     
-     
-<div className="p-10">
-    <button  onClick={handleDataSubmit}
-    disabled={isDisable}
-                  className={`bg-black hover:bg-gray-800 text-white font-semibold py-2 px-5 rounded-md shadow-md transition-all ${
-                    isDisable ? "opacity-50 cursor-not-allowed" : ""
-                  }`}>
-        Sync OGF Database
-    </button>
-    </div>
 
-
-
-
-          
-        </div>
+      <div className="p-2 sm:p-4 md:p-10 mt-10 md:mt-0">
+        <button
+          onClick={handleDataSubmit}
+          disabled={isDisable}
+          className={`bg-black hover:bg-gray-800 text-white font-semibold py-1 sm:py-2 px-2 sm:px-5 rounded-md shadow-md transition-all w-full sm:w-auto ${
+            isDisable ? "opacity-50 cursor-not-allowed" : ""
+          }`}
+        >
+          Sync OGF Database
+        </button>
       </div>
     </div>
+  </div>
+</div>
   );
 };
 
