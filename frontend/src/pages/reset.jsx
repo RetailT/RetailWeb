@@ -87,37 +87,37 @@ const Reset = () => {
         },
       };
       console.log("Data to be sent:", data);
-      // axios
-      //   .put(`${process.env.REACT_APP_BACKEND_URL}reset-database-connection`, data, config1)
-      //   .then((response) => {
+      axios
+        .put(`${process.env.REACT_APP_BACKEND_URL}reset-database-connection`, data, config1)
+        .then((response) => {
           
-      //     setDisable(false);
-      //     if (
-      //       response.data.message === "Database connection updated successfully"
-      //     ) {
-      //       setAlert({
-      //         message: "Database connection successful!",
-      //         type: "success",
-      //       });
+          setDisable(false);
+          if (
+            response.data.message === "Database connection updated successfully"
+          ) {
+            setAlert({
+              message: "Database connection successful!",
+              type: "success",
+            });
 
-      //       setTimeout(() => {
-      //         setAlert(null);
-      //         navigate("/login");
-      //       }, 1000);
-      //     } else {
-      //       setAlert({ message: response.data.message, type: "error" });
-      //       setTimeout(() => setAlert(null), 3000);
-      //     }
-      //   })
-      //   .catch((error) => {
+            setTimeout(() => {
+              setAlert(null);
+              navigate("/login");
+            }, 1000);
+          } else {
+            setAlert({ message: response.data.message, type: "error" });
+            setTimeout(() => setAlert(null), 3000);
+          }
+        })
+        .catch((error) => {
           
-      //     setDisable(false);
-      //     const errorMessage =
-      //       error.response?.data?.message ||
-      //       "Connection failed. Please try again.";
-      //     setAlert({ message: errorMessage, type: "error" });
-      //     setTimeout(() => setAlert(null), 3000);
-      //   });
+          setDisable(false);
+          const errorMessage =
+            error.response?.data?.message ||
+            "Connection failed. Please try again.";
+          setAlert({ message: errorMessage, type: "error" });
+          setTimeout(() => setAlert(null), 3000);
+        });
     }
   };
 

@@ -375,7 +375,7 @@ function App() {
     <div
   className="transition-all duration-300 flex-1 p-4 sm:p-6 md:p-10 mt-20 sm:mt-16 md:mt-20"
 >
-      <div className="ml-3 mt-1 md:mt-5">
+      <div className="ml-2 md:ml-5 mt-1 ">
         <Heading text="Product View" />
       </div>
 

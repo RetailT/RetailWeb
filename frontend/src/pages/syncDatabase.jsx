@@ -83,7 +83,7 @@ const Reset = () => {
   <Navbar />
   <div className="flex flex-col min-h-screen">
     <div className="flex-1 p-2 sm:p-4 md:p-10 ml-2 sm:ml-4 md:ml-5 mr-2 sm:mr-4">
-      <div className="mt-28 sm:mt-24 md:mt-24 mb-2 sm:mb-4 md:mb-10 ml-2 sm:ml-4">
+      <div className="mt-24 md:mt-17 md:mt-24 mb-2 sm:mb-4 md:mb-10 ml-2 md:ml-0">
         <Heading text="Sync Databases" />
       </div>
 

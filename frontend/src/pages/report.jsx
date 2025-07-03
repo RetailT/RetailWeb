@@ -8,7 +8,6 @@ import MultiSelectDropdown from "../components/MultiSelectDropdown";
 import DatePicker from "../components/DatePicker";
 import ScrollableTable from "../components/Table";
 import axios from "axios";
-import { FadeLoader } from "react-spinners";
 
 const Report = () => {
   const { authToken } = useContext(AuthContext);
@@ -353,145 +352,125 @@ const Report = () => {
 
   return (
     <div>
-      <Navbar />
-      <div className="flex">
-        <div className="flex-1 p-10 ml-16 mt-10 mr-10 ">
-          <div className="mt-16 ml-[-50px]">
-            <Heading text="Invoice Wise Report" />
-          </div>
-          <div className="">
-            {alert && (
-              <Alert
-                message={alert.message}
-                type={alert.type}
-                onClose={() => setAlert(null)}
-              />
-            )}
+  <Navbar />
+  <div className="container mx-auto p-6 md:p-10">
+    <div className="max-w-7xl mx-auto">
+      <div className="mt-20">
+        <Heading text="Invoice Wise Report" />
+      </div>
 
-            {(currentSale && isChecked) && (
-             
+<div className="mt-4">
+  {alert && (
+        <Alert
+          message={alert.message}
+          type={alert.type}
+          onClose={() => setAlert(null)}
+        />
+      )}
+</div>
+      
 
-              <div
-  className="bg-white p-5 mt-10 rounded-md shadow-md"
-  style={{ backgroundColor: "#d8d8d8" }}
->
-  <div className="flex items-center w-full">
-    {/* Checkbox + Label */}
+      {(currentSale && isChecked) && (
+        <div className="bg-gray-200 p-4 rounded-lg shadow-md mt-8" style={{ backgroundColor: "#d8d8d8" }}>
+  {/* First Row - Centered Title */}
+  <div className="text-center text-xl sm:text-2xl font-bold mb-4">
+    Invoice Report
+  </div>
+
+  {/* Second Row - Checkbox on Left, Button on Right */}
+  <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
     <div className="flex items-center">
       <input
         type="checkbox"
         checked={isChecked}
         onChange={handleCheckboxChange}
         id="checkbox"
+        className="h-3 w-3 text-blue-600 focus:ring-blue-500"
       />
-      <label htmlFor="checkbox" className="ml-3">
-        <strong>Current Invoice Report</strong>
+      <label htmlFor="checkbox" className="ml-2 text-md font-semibold">
+        Current Invoice Report
       </label>
     </div>
+    <button
+      onClick={handleRefresh}
+      disabled={loading}
+      className={`px-4 py-2 bg-black text-white rounded-md shadow-md hover:bg-gray-800 transition duration-200 ${
+        loading ? "opacity-50 cursor-not-allowed" : ""
+      }`}
+    >
+      Refresh
+    </button>
+  </div>
+</div>
+      )}
 
-    {/* Centered Title */}
-    <div className="flex font-bold mb-3 text-2xl flex-grow justify-center">
-      Invoice Report
+      {!isChecked && (
+        <div className="bg-white p-4 sm:p-6 mt-6 rounded-lg shadow-md" style={{ backgroundColor: "#d8d8d8" }}>
+  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+      <DatePicker
+        label="Select Date Range:"
+        onDateChange={handleDateChange}
+      />
+      <label className="block text-sm font-medium text-gray-700 mb-[-10px] md:mb-0 ml-0 md:ml-10">Select Company:</label>
+      
+      <div className="w-full sm:w-auto flex flex-col justify-center items-center mt-0 md:mt-5 ml-0 md:ml-[-120px]">
+  <MultiSelectDropdown
+    // label="Select Company:"
+    options={companyOptions}
+    onDropdownChange={handleDropdownChange}
+    selected={selectedOptions}
+  />
+</div>
     </div>
-
-    {/* Button(s) */}
-    <div>
+    <div className="flex flex-col sm:flex-row justify-center sm:justify-end gap-4 mt-3 md:mt-6">
+      <button
+        onClick={handleSubmit}
+        disabled={loading}
+        className={`px-4 py-2 bg-black text-white rounded-md shadow-md hover:bg-gray-800 transition duration-200 ${
+          loading ? "opacity-50 cursor-not-allowed" : ""
+        } w-full sm:w-auto`}
+      >
+        Submit
+      </button>
       <button
         onClick={handleRefresh}
         disabled={loading}
-        className={`bg-black text-white px-4 py-2 rounded-md shadow-md hover:bg-gray-800 ${
+        className={`px-4 py-2 bg-black text-white rounded-md shadow-md hover:bg-gray-800 transition duration-200 ${
           loading ? "opacity-50 cursor-not-allowed" : ""
-        }`}
+        } w-full sm:w-auto mt-2 sm:mt-0`}
       >
         Refresh
       </button>
     </div>
   </div>
-            </div>
+</div>
+      )}
 
-            )}
-
-            {!isChecked && (
-              <div
-                className="bg-white p-5 mt-10 rounded-md shadow-md"
-                style={{ backgroundColor: "#d8d8d8" }}
-              >
-                <div className="flex flex-col md:flex-row items-center gap-4 justify-between">
-                  <DatePicker
-                    label="Select Date Range:"
-                    onDateChange={handleDateChange}
-                  />
-
-                  <MultiSelectDropdown
-                    label="Select Company:"
-                    options={companyOptions}
-                    onDropdownChange={handleDropdownChange}
-                    selected={selectedOptions}
-                  />
-                  <div className="space-x-4 ml-12 md:ml-0 md:mt-0 mt-4">
-                    <button
-                      onClick={handleSubmit}
-                      disabled={loading}
-                      className={`bg-black text-white px-4 py-2 rounded-md shadow-md hover:bg-gray-800 ${
-                        loading ? "opacity-50 cursor-not-allowed" : ""
-                      }`}
-                    >
-                      Submit
-                    </button>
-                    <button
-                      onClick={handleRefresh}
-                      disabled={loading}
-                      className={`bg-black text-white px-4 py-2 rounded-md shadow-md hover:bg-gray-800 ml-5 ${
-                        loading ? "opacity-50 cursor-not-allowed" : ""
-                      }`}
-                    >
-                      Refresh
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {loading && (
-              <div className="mt-10 flex justify-center items-center">
-                <FadeLoader
-                  cssOverride={null}
-                  height={50}
-                  loading
-                  margin={30}
-                  radius={30}
-                  speedMultiplier={1}
-                  width={8}
-                  color="#ce521a"
-                />
-              </div>
-            )}
-
-            {reportData.length > 0 && (
-              <div className="mt-10">
-                <ScrollableTable
-                  headers={reportHeaders}
-                  data={reportData}
-                  onRowClick={handleRowClick}
-                  rightAlignedColumns={rightAlignedColumns}
-                />
-              </div>
-            )}
-
-            {invoiceData.length > 0 && (
-              <div className="mt-14">
-                <ScrollableTable
-                  headers={invoiceHeaders}
-                  data={invoiceData}
-                  onRowClick={rowClick}
-                  rightAlignedColumns={rightAlignedColumnsInvoice}
-                />
-              </div>
-            )}
-          </div>
+      {reportData.length > 0 && (
+        <div className="mt-6">
+          <ScrollableTable
+            headers={reportHeaders}
+            data={reportData}
+            onRowClick={handleRowClick}
+            rightAlignedColumns={rightAlignedColumns}
+          />
         </div>
-      </div>
+      )}
+
+      {invoiceData.length > 0 && (
+        <div className="mt-6">
+          <ScrollableTable
+            headers={invoiceHeaders}
+            data={invoiceData}
+            onRowClick={rowClick}
+            rightAlignedColumns={rightAlignedColumnsInvoice}
+          />
+        </div>
+      )}
     </div>
+  </div>
+</div>
   );
 };
 
