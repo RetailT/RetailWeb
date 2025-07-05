@@ -2308,7 +2308,7 @@ exports.loadingDashboard = async (req, res) => {
       SUM(PAIDOUT) AS PAIDOUT,
       SUM(CASHINHAND) AS CASHINHAND
     FROM tb_SALES_DASHBOARD_VIEW
-    WHERE REPUSER = @username AND COMPANY_CODE IN (${companyCodesList});
+    WHERE COMPANY_CODE IN (${companyCodesList});
   `);
 
     // Per company summary
@@ -2329,7 +2329,7 @@ exports.loadingDashboard = async (req, res) => {
       SUM(PAIDOUT) AS PAIDOUT,
       SUM(CASHINHAND) AS CASHINHAND
     FROM tb_SALES_DASHBOARD_VIEW
-    WHERE REPUSER = @username AND COMPANY_CODE IN (${companyCodesList})
+    WHERE COMPANY_CODE IN (${companyCodesList})
     GROUP BY COMPANY_CODE;
   `);
 
@@ -2352,7 +2352,7 @@ exports.loadingDashboard = async (req, res) => {
       SUM(PAIDOUT) AS PAIDOUT,
       SUM(CASHINHAND) AS CASHINHAND
     FROM tb_SALES_DASHBOARD_VIEW
-    WHERE REPUSER = @username AND COMPANY_CODE IN (${companyCodesList})
+    WHERE COMPANY_CODE IN (${companyCodesList})
     GROUP BY COMPANY_CODE, UNITNO;
   `);
 
@@ -2788,6 +2788,7 @@ exports.vendorDashboard = async (req, res) => {
       const formattedToDate = formatDate(toDate);
       const reportType = "SALESDET";
       const inClause = buildSqlInClause(selectedOptions);
+      // console.log("In Clause:", inClause);
 
       try {
         await mssql.query`USE [RT_WEB]; DELETE FROM tb_SALESVIEW WHERE REPUSER = '${username}'`;
