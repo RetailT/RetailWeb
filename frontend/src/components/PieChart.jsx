@@ -4,65 +4,81 @@ import { Chart, ArcElement, Tooltip, Legend, PieController, Title } from 'chart.
 // Register necessary elements and controller
 Chart.register(ArcElement, Tooltip, Legend, PieController, Title);
 
-const PieChart = ({ data, labels, colors, title, position,align }) => {
+const PieChart = ({ data, labels, colors, title = '', position = 'bottom', align = 'start' }) => {
   const canvasRef = useRef(null);
-  const chartInstanceRef = useRef(null); // Ref to store the chart instance
+  const chartInstanceRef = useRef(null);
 
   useEffect(() => {
-    const ctx = canvasRef.current.getContext('2d');
+    const ctx = canvasRef.current?.getContext('2d');
+    if (!ctx) return;
 
-    // Destroy the previous chart instance if it exists
     if (chartInstanceRef.current) {
       chartInstanceRef.current.destroy();
     }
 
-    // Create a new chart instance
     chartInstanceRef.current = new Chart(ctx, {
       type: 'pie',
       data: {
-        labels: labels,
+        labels: labels && labels.length ? labels : ['No Data'],
         datasets: [
           {
-            data: data,
-            backgroundColor: colors,
+            data: data && data.length ? data : [1],
+            backgroundColor: colors && colors.length ? colors : ['#CCCCCC'],
           },
         ],
       },
       options: {
         responsive: true,
+        maintainAspectRatio: false,
         plugins: {
           legend: {
-            position: position, // Position legend to the right
+            position: position,
             align: align,
             labels: {
-              boxWidth: 20, // Size of the box next to the label
-              padding: 10,   // Space between the box and the label text
+              boxWidth: 30,
+              boxHeight: 20,
+              padding: 12,
+              font: { size: 14, weight: 'bold', family: "'Helvetica Neue', 'Helvetica', 'Arial', sans-serif" },
+              color: '#333',
+              generateLabels: (chart) => {
+                const { data } = chart;
+                return data.labels.map((label, index) => ({
+                  text: label,
+                  fillStyle: data.datasets[0].backgroundColor[index] || '#CCCCCC',
+                  hidden: chart.getDataVisibility(index) === false,
+                  index,
+                  lineWidth: 1,
+                  strokeStyle: '#333',
+                }));
+              },
             },
+            maxHeight: 200,
           },
           title: {
-            display: true, // Show the title
-            text: title, // Use the title prop passed to the component
-            font: {
-              size: 18, // Font size of the title
-            },
-            padding: {
-              top: 10, // Padding above the title
-              bottom: 20, // Padding below the title
-            },
+            display: !!title,
+            text: title,
+            font: { size: 18 },
+            padding: { top: 10, bottom: 20 },
           },
+        },
+        layout: {
+          padding: { bottom: 50 },
         },
       },
     });
 
-    // Cleanup the chart on component unmount
     return () => {
       if (chartInstanceRef.current) {
         chartInstanceRef.current.destroy();
       }
     };
-  }, [data, labels, colors, title]); // Recreate chart when data, labels, colors, or title change
+  }, [data, labels, colors, title, position, align]);
 
-  return <canvas ref={canvasRef}></canvas>;
+  return (
+    <div style={{ position: 'relative', width: '100%', height: '400px' }}>
+      <canvas ref={canvasRef} style={{ width: '100%', height: '100%' }} />
+    </div>
+  );
 };
 
 export default PieChart;

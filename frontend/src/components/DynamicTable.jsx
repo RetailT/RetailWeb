@@ -11,7 +11,7 @@ const NestedDynamicTable = ({ data, mainHeadings, title }) => {
 
   // Ensure data exists
   if (!data || data.length === 0) {
-    return <p>No data available</p>;
+    return <p className="text-center">No data available</p>;
   }
 
   // Format function for Amount
@@ -158,41 +158,45 @@ const NestedDynamicTable = ({ data, mainHeadings, title }) => {
 
   const renderDropdown = () => {
     return (
-      <div className="relative flex flex-col gap-2 w-1/4 lg:w-60 mb-5">
-        <label className="block text-sm font-medium text-gray-700">
-          Select File Type
-        </label>
-        <select
-          value={selectedType}
-          onChange={handleTypeChange}
-          className="w-full border border-gray-300 p-2 rounded-md shadow-sm bg-white text-left overflow-hidden text-ellipsis whitespace-nowrap"
-          style={{ minHeight: "40px" }}
-        >
-          <option value="" disabled>
-            Select a Type
-          </option>
-          {typeOptions.map((name, index) => (
-            <option key={index} value={name}>
-              {name}
-            </option>
-          ))}
-        </select>
-      </div>
+     <div className="relative flex flex-col gap-2 w-full md:w-60 lg:w-96 mb-5 pl-0 md:pl-44">
+  <label className="block text-sm font-medium text-gray-700 w-full mb-3">
+    Select File Type:
+  </label>
+  <select
+    value={selectedType}
+    onChange={handleTypeChange}
+    className="w-full lg:w-full border border-gray-300 p-2 rounded-md shadow-sm bg-white text-left overflow-hidden text-ellipsis whitespace-nowrap h-10"
+    style={{ minHeight: "40px" }}
+  >
+    <option value="" disabled>
+      Select a Type
+    </option>
+    {typeOptions.map((name, index) => (
+      <option key={index} value={name}>
+        {name}
+      </option>
+    ))}
+  </select>
+  {typeError && (
+    <p className="text-red-500 text-sm mt-[-5px] mb-4">{typeError}</p>
+  )}
+  <button
+    onClick={handleExport}
+    className="bg-[#f17e21] hover:bg-[#efa05f] text-white px-4 py-1.5 rounded-md shadow-md w-full mt-5 md:mt-3 mb-10 h-10"
+  >
+    Export
+  </button>
+</div>
+    
     );
   };
 
   return (
     <div>
+     
+        
       {renderDropdown()}
-      {typeError && (
-        <p className="text-red-500 text-sm mt-[-5px] mb-4">{typeError}</p>
-      )}
-      <button
-        onClick={handleExport}
-        className="bg-[#f17e21] hover:bg-[#efa05f] text-white px-4 py-2 rounded-md shadow-md mb-7"
-      >
-        Export
-      </button>
+      
       <div className="overflow-x-auto overflow-y-auto max-h-96 max-w-screen-lg mx-auto rounded-lg border border-gray-400">
         <table className="min-w-full divide-y divide-gray-200 border border-gray-300">
           <thead className="bg-gray-100">

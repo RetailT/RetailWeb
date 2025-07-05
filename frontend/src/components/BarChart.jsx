@@ -1,63 +1,62 @@
-import React, { useEffect, useRef } from 'react';
-import { Chart, BarElement, CategoryScale, LinearScale, Tooltip, Legend, Title, BarController } from 'chart.js';
+import React, { useRef } from 'react';
+import Chart from 'chart.js/auto';
+import { CategoryScale } from 'chart.js';
+import zoomPlugin from 'chartjs-plugin-zoom';
 
-// Register necessary elements and controller
-Chart.register(BarElement, CategoryScale, LinearScale, Tooltip, Legend, Title, BarController);
+Chart.register(CategoryScale, zoomPlugin);
 
-const BarChart = ({ data, labels, colors, title }) => {
-  const canvasRef = useRef(null);
-  const chartInstanceRef = useRef(null); // Ref to store the chart instance
+const BarChartComponent = ({ data = [], labels = [], colors, title}) => {
+  const chartRef = useRef(null);
 
-  useEffect(() => {
-    const ctx = canvasRef.current.getContext('2d');
+  React.useEffect(() => {
+    if (chartRef.current) {
+      const ctx = chartRef.current.getContext('2d');
+      const existingChart = Chart.getChart(ctx);
+      if (existingChart) existingChart.destroy();
 
-    // Destroy the previous chart instance if it exists
-    if (chartInstanceRef.current) {
-      chartInstanceRef.current.destroy();
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: title,
+            data: data,
+            backgroundColor: colors,
+            barPercentage: 0.8,
+          }]
+        },
+        options: {
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: { display: true, text: title }
+            },
+            x: {
+              title: { display: true, text: 'Categories' }
+            }
+          },
+          plugins: {
+            legend: { display: false },
+            zoom: {
+              pan: { enabled: true, mode: 'x' },
+              zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' }
+            }
+          },
+          maintainAspectRatio: false,
+          responsive: true,
+          indexAxis: 'x'
+        }
+      });
     }
+  }, [data, labels, colors, title]);
 
-    // Create a new chart instance
-    chartInstanceRef.current = new Chart(ctx, {
-      type: 'bar',
-      data: {
-        labels: labels,
-        datasets: [{
-          label: title,  // Add a label for the dataset to appear in the legend
-          data: data,
-          backgroundColor: colors,
-        }],
-      },
-      options: {
-        responsive: true,
-        plugins: {
-          title: {
-            display: true,
-              // Title will be displayed at the top of the chart
-          },
-          legend: {
-            position: 'top', // Position legend at the top
-          },
-        },
-        scales: {
-          x: {
-            beginAtZero: true,
-          },
-          y: {
-            beginAtZero: true,
-          },
-        },
-      },
-    });
-
-    // Cleanup the chart on component unmount
-    return () => {
-      if (chartInstanceRef.current) {
-        chartInstanceRef.current.destroy();
-      }
-    };
-  }, [data, labels, colors, title]); // Recreate chart when data, labels, colors, or title change
-
-  return <canvas ref={canvasRef}></canvas>;
+  return (
+    <div className="overflow-x-auto max-w-full flex justify-center">
+  <div className="w-[400px] h-[300px] md:w-[1000px]">
+    <canvas ref={chartRef} className="w-full h-full" />
+  </div>
+</div>
+  );
 };
 
-export default BarChart;
+export default BarChartComponent;

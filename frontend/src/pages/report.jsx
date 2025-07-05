@@ -353,9 +353,9 @@ const Report = () => {
   return (
     <div>
   <Navbar />
-  <div className="container mx-auto p-6 md:p-10">
-    <div className="max-w-7xl mx-auto">
-      <div className="mt-20">
+  <div className="container mx-auto p-6 md:p-16">
+    {/* <div className="max-w-8xl mx-auto"> */}
+      <div className="mt-14">
         <Heading text="Invoice Wise Report" />
       </div>
 
@@ -385,16 +385,16 @@ const Report = () => {
         checked={isChecked}
         onChange={handleCheckboxChange}
         id="checkbox"
-        className="h-3 w-3 text-blue-600 focus:ring-blue-500"
+        className="h-3 w-3 text-blue-600 focus:ring-blue-500 mt-4 md:mt-0"
       />
-      <label htmlFor="checkbox" className="ml-2 text-md font-semibold">
+      <label htmlFor="checkbox" className="ml-2 text-md font-semibold mt-4 md:mt-0">
         Current Invoice Report
       </label>
     </div>
     <button
       onClick={handleRefresh}
       disabled={loading}
-      className={`px-4 py-2 bg-black text-white rounded-md shadow-md hover:bg-gray-800 transition duration-200 ${
+      className={`px-4 py-2 bg-black text-white rounded-md shadow-md hover:bg-gray-800 transition duration-200 mt-4 md:mt-0 ${
         loading ? "opacity-50 cursor-not-allowed" : ""
       }`}
     >
@@ -405,7 +405,7 @@ const Report = () => {
       )}
 
       {!isChecked && (
-        <div className="bg-white p-4 sm:p-6 mt-6 rounded-lg shadow-md" style={{ backgroundColor: "#d8d8d8" }}>
+        <div className="bg-white p-4 sm:p-6 mt-6 rounded-lg shadow-md mt-10" style={{ backgroundColor: "#d8d8d8" }}>
   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
     <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
       <DatePicker
@@ -468,7 +468,7 @@ const Report = () => {
           />
         </div>
       )}
-    </div>
+    {/* </div> */}
   </div>
 </div>
   );

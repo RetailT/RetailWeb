@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useContext, useRef } from "react";
 import Navbar from "../components/NavBar";
-import Sidebar from "../components/SideBar";
 import Heading from "../components/Heading";
 import DatePicker from "../components/DatePicker";
 import MultiSelectDropdown from "../components/MultiSelectDropdown";
@@ -9,11 +8,9 @@ import { Navigate } from "react-router-dom";
 import { AuthContext } from "../AuthContext";
 import BarChart from "../components/BarChart";
 import axios from "axios";
-// import PieChart from "../components/PieChart";
 import NestedDynamicTable from "../components/DynamicTable";
-import { FadeLoader } from "react-spinners";
 
-const Dashboard = () => {
+const DepartmentDashboard = () => {
   const { authToken } = useContext(AuthContext);
   const [userData, setUserData] = useState(null);
   const [amountBarChartRecords, setAmountBarChartRecords] = useState([]);
@@ -274,30 +271,9 @@ const Dashboard = () => {
     }
   }, [firstOption, isChecked]);
 
-  if (loading) {
-    return (
-      <div className="fixed inset-0 flex justify-center items-center bg-black bg-opacity-100 z-50">
-        <FadeLoader
-          cssOverride={null}
-          height={50}
-          loading
-          margin={30}
-          radius={30}
-          speedMultiplier={1}
-          width={8}
-          color="#ce521a"
-        />
-      </div>
-    );
-  }
-
   if (!authToken) {
     return <Navigate to="/login" replace />;
   }
-
-  const handleSidebarToggle = (isOpen) => {
-    setIsSidebarOpen(isOpen);
-  };
 
   const handleDateChange = (dates) => {
     setSelectedDates(dates);
@@ -312,12 +288,6 @@ const Dashboard = () => {
   };
 
   const handleSubmit = async () => {
-    // if (selectedRowData) {
-    //   setSelectedRowData(null);
-    // }
-    // if (selectedRowLabels) {
-    //   setSelectedRowLabels(null);
-    // }
 
     if (newToDate === null && newFromDate === null) {
       setAlert({
@@ -343,49 +313,6 @@ const Dashboard = () => {
     window.location.reload();
   };
 
-  // const renderAmountPieChart = (amountValues, amountLabels, colors) => {
-  //   if (amountValues && amountValues.length > 0) {
-  //     return (
-  //       <div className="w-1/2 md:w-3/4 lg:w-100 mx-auto">
-  //         <PieChart
-  //           data={amountValues}
-  //           labels={amountLabels}
-  //           colors={colors}
-  //           title="Amount"
-  //           position="bottom"
-  //           align="start"
-  //         />
-  //       </div>
-  //     );
-  //   } else {
-  //     return <p>No data available</p>;
-  //   }
-  // };
-
-  // const renderQuantityPieChart = (
-  //   quantityValues,
-  //   quantityLabels,
-  //   colors,
-  //   position
-  // ) => {
-  //   if (quantityValues && quantityValues.length > 0) {
-  //     return (
-  //       <div className="w-1/2 md:w-3/4 lg:w-100 mx-auto">
-  //         <PieChart
-  //           data={quantityValues}
-  //           labels={quantityLabels}
-  //           colors={colors}
-  //           title="Quantity"
-  //           position="bottom"
-  //           align="start"
-  //         />
-  //       </div>
-  //     );
-  //   } else {
-  //     return <p>No data available</p>;
-  //   }
-  // };
-
   const companyOptions = userData
     ? userData.map((item) => ({
         code: item.COMPANY_CODE.trim(),
@@ -398,31 +325,11 @@ const Dashboard = () => {
       <Navbar />
 
       {/* Main Layout */}
-      <div className="flex">
-        {/* Sidebar */}
-        {/* <div
-          className="sidebar bg-gradient-to-t from-[#ce521a] to-[#000000] text-white shadow-md fixed top-24 left-0 z-40"
-          style={{
-            height: "calc(100vh - 96px)", // Sidebar height fills remaining screen below Navbar
-            width: isSidebarOpen ? "15rem" : "4rem", // Adjust width based on state
-            transition: "width 0.3s",
-          }}
-        >
-          <Sidebar onToggle={handleSidebarToggle} />
-        </div> */}
-
-        {/* Page Content */}
-        <div
-          className={`transition-all duration-300 flex-1 p-10`}
-          style={{
-            marginLeft: isSidebarOpen ? "15rem" : "4rem", // Space for sidebar
-            marginTop: "96px", // Space for Navbar
-          }}
-        >
-          <div className="ml-[-50px]">
+       <div className="container mx-auto p-6 md:p-16">
+        <div className="mt-20 md:mt-14">
             <Heading text="Department Sales Dashboard" />
           </div>
-          <div className="mt-10 ml-[-50px]">
+          <div className="mt-4">
             {alert && (
               <Alert
                 message={alert.message}
@@ -430,122 +337,146 @@ const Dashboard = () => {
                 onClose={() => setAlert(null)}
               />
             )}
-            <div
-              className="bg-white p-5 rounded-md shadow-md mb-5"
-              style={{ backgroundColor: "#d8d8d8" }}
-            >
+           <div
+            className="bg-gray-200 p-4 rounded-lg shadow-md mt-4"
+            style={{ backgroundColor: "#d8d8d8" }}
+          >
               {isChecked ? (
-                <div className="flex items-center w-full">
+               <div className="mt-8">
+                {/* First Row - Centered Title */}
+                <div className="text-center text-xl sm:text-2xl font-bold mb-4">
+                  Current Department Sales
+                </div>
+
+                {/* Second Row - Checkbox on Left, Button on Right */}
+                <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
                   <div className="flex items-center">
                     <input
                       type="checkbox"
                       checked={isChecked}
                       onChange={handleCheckboxChange}
                       id="checkbox"
+                      className="h-3 w-3 text-blue-600 focus:ring-blue-500 mt-4 md:mt-0"
                     />
-                    <label htmlFor="checkbox" className="ml-3">
-                      <strong>Current Department Sales</strong>
+                    <label
+                      htmlFor="checkbox"
+                      className="ml-2 text-md font-semibold mt-4 md:mt-0"
+                    >
+                      Current Sales
                     </label>
                   </div>
-
-                  <div className="flex font-bold mb-3 text-2xl flex-grow justify-center">
-                    Current Department Sales
-                  </div>
-
-                  <div>
                   <button
-                      onClick={handleRefresh}
-                      className="bg-black text-white px-4 py-2 rounded-md shadow-md hover:bg-gray-800"
-                    >
-                      Refresh
-                    </button>
-                  </div>
+                    onClick={handleRefresh}
+                    disabled={loading}
+                    className={`px-4 py-2 bg-black text-white rounded-md shadow-md hover:bg-gray-800 transition duration-200 mt-4 md:mt-0 ${
+                      loading ? "opacity-50 cursor-not-allowed" : ""
+                    }`}
+                  >
+                    Refresh
+                  </button>
                 </div>
+              </div>
               ) : (
-                <div className="flex flex-col md:flex-row items-center gap-4 justify-between">
-                  <DatePicker
-                    label="Select Date Range:"
-                    onDateChange={handleDateChange}
-                  />
-                  <MultiSelectDropdown
-                    label="Select Company:"
-                    options={companyOptions}
-                    onDropdownChange={handleDropdownChange}
-                    selected={selectedOptions}
-                  />
-                  <div className="space-x-4 ml-12 md:ml-0 md:mt-0 mt-4">
-                    <button
-                      onClick={handleSubmit}
-                      className="bg-black text-white px-4 py-2 rounded-md shadow-md hover:bg-gray-800"
-                    >
-                      Submit
-                    </button>
-                    <button
-                      onClick={handleRefresh}
-                      className="bg-black text-white px-4 py-2 rounded-md shadow-md hover:bg-gray-800"
-                    >
-                      Refresh
-                    </button>
-                  </div>
-                </div>
+                 <div className="mt-10">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                  <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+                                    <DatePicker
+                                      label="Select Date Range:"
+                                      onDateChange={handleDateChange}
+                                    />
+                                    <label className="block text-sm font-medium text-gray-700 mb-[-10px] md:mb-0 ml-0 md:ml-10">
+                                      Select Company:
+                                    </label>
+                
+                                    <div className="w-full sm:w-auto flex flex-col justify-center items-center mt-0 md:mt-5 ml-0 md:ml-[-120px]">
+                                      <MultiSelectDropdown
+                                        // label="Select Company:"
+                                        options={companyOptions}
+                                        onDropdownChange={handleDropdownChange}
+                                        selected={selectedOptions}
+                                      />
+                                    </div>
+                                  </div>
+                                  <div className="flex flex-col sm:flex-row justify-center sm:justify-end gap-4 mt-3 md:mt-6">
+                                    <button
+                                      onClick={handleSubmit}
+                                      disabled={loading}
+                                      className={`px-4 py-2 bg-black text-white rounded-md shadow-md hover:bg-gray-800 transition duration-200 ${
+                                        loading ? "opacity-50 cursor-not-allowed" : ""
+                                      } w-full sm:w-auto`}
+                                    >
+                                      Submit
+                                    </button>
+                                    <button
+                                      onClick={handleRefresh}
+                                      disabled={loading}
+                                      className={`px-4 py-2 bg-black text-white rounded-md shadow-md hover:bg-gray-800 transition duration-200 ${
+                                        loading ? "opacity-50 cursor-not-allowed" : ""
+                                      } w-full sm:w-auto mt-2 sm:mt-0`}
+                                    >
+                                      Refresh
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
               )}
             </div>
 
             {!isChecked && (
               <div
-                className="bg-white p-5 rounded-md shadow-md mt-5 mb-5"
-                style={{ backgroundColor: "#d8d8d8" }}
-              >
-                <div className="flex justify-start font-bold mb-3">
-                  <p>{displayDate}</p>
-                </div>
-
-                <div className="flex justify-center text-2xl font-bold text-black">
-                  {/* {displayCompany()} */} Department Sales Summary
-                </div>
+              className="bg-white p-4 sm:p-5 rounded-md shadow-md mt-3 mb-5"
+              style={{ backgroundColor: "#d8d8d8" }}
+            >
+              <div className="flex justify-center text-xl sm:text-2xl font-bold text-black">
+                Department Sales Summary
               </div>
+
+              <div className="flex justify-center font-bold mt-4">
+                <p>{displayDate}</p>
+              </div>
+            </div>
             )}
 
             {(submitted || isChecked) && (
-              <div
-                className="flex flex-col lg:flex-row bg-white p-5 rounded-md shadow-md w-full"
-                style={{ backgroundColor: "#d8d8d8" }}
-              >
-                <div className="flex flex-col w-full space-y-5 ">
-                  <div className="flex-1 bg-white p-5 rounded-md shadow-md">
-                    {/* {renderTable(tableLabels, tableData, handleRowClick)} */}
-                    <NestedDynamicTable
-                      data={tableRecords}
-                      mainHeadings={tableHeadings}
-                      title = "Department Sales Data"
-                    />
-                  </div>
-
-                  <div className="flex flex-col lg:flex-row w-full space-y-4 lg:space-y-0 lg:space-x-3 text-center bg-white p-5 rounded-md shadow-md justify-center items-center">
-                    <BarChart
-                      data={amountBarChartRecords}
-                      labels={amountBarChartLabels}
-                      colors="#ce521a"
-                      title="Amount"
-                    />
-                  </div>
-
-                  <div className="flex flex-col lg:flex-row w-full space-y-4 lg:space-y-0 lg:space-x-3 text-center bg-white p-5 rounded-md shadow-md justify-center items-center">
-                    <BarChart
-                      data={quantityBarChartRecords}
-                      labels={quantityBarChartLabels}
-                      colors="#000000"
-                      title="Quantity"
-                    />
-                  </div>
-                </div>
-              </div>
+              <div className="flex flex-col w-full space-y-5 mt-10">
+                            <div className="overflow-x-auto">
+                              <div className="bg-white p-4 border border-gray-300 rounded-md shadow-md min-w-[300px]">
+                                <NestedDynamicTable
+                                  data={tableRecords}
+                                  mainHeadings={tableHeadings}
+                                  title="Department Sales Data"
+                                />
+                              </div>
+                            </div>
+              
+                            <div className="overflow-x-auto">
+                              <div className="w-full bg-white p-4 border border-gray-300 rounded-md shadow-md">
+                                <BarChart
+                                  data={amountBarChartRecords}
+                                  labels={amountBarChartLabels}
+                                  colors="#ce521a"
+                                  title="Amount"
+                                />
+                              </div>
+                            </div>
+              
+                            <div className="overflow-x-auto">
+                              <div className="w-full bg-white p-4 border border-gray-300 rounded-md shadow-md">
+                                <BarChart
+                                  data={quantityBarChartRecords}
+                                  labels={quantityBarChartLabels}
+                                  colors="#000000"
+                                  title="Quantity"
+                                />
+                              </div>
+                            </div>
+                          </div>
             )}
           </div>
         </div>
-      </div>
+      
     </div>
   );
 };
 
-export default Dashboard;
+export default DepartmentDashboard;

@@ -97,10 +97,8 @@ const ScrollableTable = ({ headers, data, onRowClick, rightAlignedColumns = [] }
   };
   const renderDropdown = () => {
     return (
-      <div className="relative flex flex-col gap-2 w-1/4 lg:w-60 mb-5">
-        <label className="block text-sm font-medium text-gray-700">
-          Select File Type
-        </label>
+      <div className="relative flex flex-col gap-2 w-full md:w-60 mb-5">
+       
         <select
           value={selectedType}
           onChange={handleTypeChange}
@@ -124,8 +122,8 @@ const ScrollableTable = ({ headers, data, onRowClick, rightAlignedColumns = [] }
     <div className="space-y-4">
   <div className="flex flex-col sm:flex-row items-center gap-4">
     {/* Wrapper for label and dropdown */}
-    <div className="w-full flex flex-col gap-2">
-      <label className="block text-sm font-medium text-gray-700 w-full">
+    <div className="w-full sm:w-auto flex flex-col gap-2">
+      <label className="block text-sm font-medium text-gray-700 w-full mt-5">
         Select File Type:
       </label>
       <div className="w-full">
@@ -137,7 +135,7 @@ const ScrollableTable = ({ headers, data, onRowClick, rightAlignedColumns = [] }
     </div>
     <button
       onClick={handleDataSubmit}
-      className="bg-[#f17e21] hover:bg-[#efa05f] text-white px-4 py-2 rounded-md shadow-md w-full sm:w-auto mb-0 md:mb-5"
+      className="bg-[#f17e21] hover:bg-[#efa05f] text-white px-4 py-2 rounded-md shadow-md w-full sm:w-auto mt-0 md:mt-6"
     >
       Export
     </button>
