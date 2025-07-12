@@ -7,6 +7,7 @@ import Alert from "../components/Alert";
 import { Navigate } from "react-router-dom";
 import { AuthContext } from "../AuthContext";
 import BarChart from "../components/BarChart";
+import CircleBounceLoader from "../components/Loader";
 import axios from "axios";
 import NestedDynamicTable from "../components/DynamicTable";
 
@@ -17,7 +18,7 @@ const DepartmentDashboard = () => {
   const [quantityBarChartRecords, setQuantityBarChartRecords] = useState([]);
   const [amountBarChartLabels, setAmountBarChartLabels] = useState([]);
   const [quantityBarChartLabels, setQuantityBarChartLabels] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [disable, setDisable] = useState(true);
   const [error, setError] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [selectedDates, setSelectedDates] = useState({});
@@ -126,7 +127,7 @@ const DepartmentDashboard = () => {
 
   const fetchData = async () => {
     if (firstOption) {
-      setLoading(true);
+      setDisable(true);
       const token = localStorage.getItem("authToken");
       try {
         const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}department-data`, {
@@ -239,7 +240,7 @@ const DepartmentDashboard = () => {
         const aggregatedResults = aggregateData(transformedData);
 
         setTableRecords(aggregatedResults);
-        setLoading(false);
+        setDisable(false);
       } catch (err) {
         console.error("Error sending parameters:", err);
       }
@@ -322,6 +323,10 @@ const DepartmentDashboard = () => {
 
   return (
     <div>
+      {disable && (
+          <CircleBounceLoader />
+        )}
+        
       <Navbar />
 
       {/* Main Layout */}
@@ -367,9 +372,9 @@ const DepartmentDashboard = () => {
                   </div>
                   <button
                     onClick={handleRefresh}
-                    disabled={loading}
+                    disabled={disable}
                     className={`px-4 py-2 bg-black text-white rounded-md shadow-md hover:bg-gray-800 transition duration-200 mt-4 md:mt-0 ${
-                      loading ? "opacity-50 cursor-not-allowed" : ""
+                      disable ? "opacity-50 cursor-not-allowed" : ""
                     }`}
                   >
                     Refresh
@@ -400,18 +405,18 @@ const DepartmentDashboard = () => {
                                   <div className="flex flex-col sm:flex-row justify-center sm:justify-end gap-4 mt-3 md:mt-6">
                                     <button
                                       onClick={handleSubmit}
-                                      disabled={loading}
+                                      disabled={disable}
                                       className={`px-4 py-2 bg-black text-white rounded-md shadow-md hover:bg-gray-800 transition duration-200 ${
-                                        loading ? "opacity-50 cursor-not-allowed" : ""
+                                        disable ? "opacity-50 cursor-not-allowed" : ""
                                       } w-full sm:w-auto`}
                                     >
                                       Submit
                                     </button>
                                     <button
                                       onClick={handleRefresh}
-                                      disabled={loading}
+                                      disabled={disable}
                                       className={`px-4 py-2 bg-black text-white rounded-md shadow-md hover:bg-gray-800 transition duration-200 ${
-                                        loading ? "opacity-50 cursor-not-allowed" : ""
+                                        disable ? "opacity-50 cursor-not-allowed" : ""
                                       } w-full sm:w-auto mt-2 sm:mt-0`}
                                     >
                                       Refresh

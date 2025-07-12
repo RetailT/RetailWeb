@@ -14,7 +14,7 @@ function App() {
 
   const [error, setError] = useState(null);
   const [alert, setAlert] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [disable, setDisable] = useState(false);
   const [headers, setHeaders] = useState([]);
   const [repUserFilter, setRepUserFilter] = useState("");
   const [invoiceFilter, setInvoiceFilter] = useState("");
@@ -99,7 +99,7 @@ function App() {
 
   const handleTableDataSubmit = async () => {
     try {
-      setLoading(true);
+      setDisable(true);
 
       if (
         selectedType !== "STOCK" &&
@@ -114,7 +114,7 @@ function App() {
         setTimeout(() => {
           setAlert(null);
         }, 3000);
-        setLoading(false);
+        setDisable(false);
         
         return;
       } 
@@ -153,7 +153,14 @@ function App() {
       }
 
       if (response.data.message === "Data moved successfully") {
-       setLoading(true);
+      //  setDisable(true);
+      setAlert({
+          message: "Uploaded Successfully",
+          type: "success",
+        });
+        // Dismiss alert after 3 seconds
+        setTimeout(() => setAlert(null), 3000);
+        
        setInvoiceFilter("");
         requestData();
 
@@ -166,11 +173,11 @@ function App() {
         });
         // Dismiss alert after 3 seconds
         setTimeout(() => setAlert(null), 3000);
-        setLoading(false);
+        
       }
-      
+      setDisable(false);
     } catch (err) {
-      setLoading(false);
+      
       // Handle any errors that occur
       setAlert({
         message: err.response?.data?.message || "Data deletion failed",
@@ -180,11 +187,12 @@ function App() {
       // Dismiss alert after 3 seconds
       setTimeout(() => setAlert(null), 3000);
     }
+    setDisable(false);
   };
 
   const requestData = async () => {
     try {
-      setLoading(true);
+      setDisable(true);
       const response = await axios.get(
         `${process.env.REACT_APP_BACKEND_URL}stock-update`,
         {
@@ -252,7 +260,7 @@ function App() {
       }
 
       if (stockData.length === 0) {
-        setLoading(false);
+        
         setAlert({
           message: "No data available",
           type: "error",
@@ -264,9 +272,9 @@ function App() {
         }, 3000);
       }
 
-      setLoading(false);
+      setDisable(false);
     } catch (err) {
-      setLoading(false);
+      
       setAlert({
         message: err.response?.data?.message || "Stock data finding failed",
         type: "error",
@@ -277,6 +285,7 @@ function App() {
         setAlert(null);
         window.location.reload(); // Full page reload
       }, 3000);
+      setDisable(false);
     }
   };
 
@@ -311,7 +320,7 @@ function App() {
   });
 
   const handleDeleteRow = async (rowIndex) => {
-    setLoading(true);
+    setDisable(true);
     const deletedRow = data[rowIndex];
     const idxValue = deletedRow.idx; // Access the IDX value of the row being deleted
 
@@ -348,7 +357,7 @@ function App() {
       }
 
       if (response.data.message === "Data deleted successfully") {
-        setLoading(false);
+        
         setAlert({
           message: response.data.message || "Item deleted successfully",
           type: "success",
@@ -358,7 +367,7 @@ function App() {
           requestData(); // Now it runs after the alert is dismissed
         }, 3000);
       }
-      setLoading(false);
+      setDisable(false);
       // requestData();
     } catch (err) {
       // Handle any errors that occur
@@ -369,6 +378,7 @@ function App() {
 
       // Dismiss alert after 3 seconds
       setTimeout(() => setAlert(null), 3000);
+      setDisable(false);
     }
   };
 
@@ -492,9 +502,9 @@ function App() {
             <div className="w-full lg:w-auto flex justify-center lg:justify-end">
               <button
                 onClick={handleCompanySubmit}
-                disabled={loading}
+                disabled={disable}
                 className={`bg-black hover:bg-gray-800 text-white font-semibold py-1 sm:py-2 px-2 sm:px-4 rounded-md shadow-md transition-all w-full lg:w-auto text-sm ${
-                  loading ? "opacity-50 cursor-not-allowed" : ""
+                  disable ? "opacity-50 cursor-not-allowed" : ""
                 }`}
               >
                 Submit
@@ -592,9 +602,9 @@ function App() {
                   >
                     <button
                       onClick={handleTableDataSubmit}
-                      disabled={loading}
+                      disabled={disable}
                       className={`mt-2 sm:mt-4 bg-black hover:bg-gray-800 text-white font-semibold px-2 sm:px-4 py-1 sm:py-2 rounded-md shadow-md w-full text-sm ${
-                        loading ? "opacity-50 cursor-not-allowed" : ""
+                        disable ? "opacity-50 cursor-not-allowed" : ""
                       }`}
                     >
                       Save

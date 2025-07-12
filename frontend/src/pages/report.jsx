@@ -5,6 +5,7 @@ import { Navigate } from "react-router-dom";
 import { AuthContext } from "../AuthContext";
 import Alert from "../components/Alert";
 import MultiSelectDropdown from "../components/MultiSelectDropdown";
+import CircleBounceLoader from "../components/Loader";
 import DatePicker from "../components/DatePicker";
 import ScrollableTable from "../components/Table";
 import axios from "axios";
@@ -13,7 +14,7 @@ const Report = () => {
   const { authToken } = useContext(AuthContext);
   const [alert, setAlert] = useState(null);
   const [userData, setUserData] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [disable, setDisable] = useState(false);
   const [selectedOptions, setSelectedOptions] = useState([]);
   const [selectedDates, setSelectedDates] = useState({});
   const [reportData, setReportData] = useState([]);
@@ -91,7 +92,7 @@ const Report = () => {
   }, [userData]);
 
   const currentSalesReport = async (companyCodes, invoiceNo) => {
-    setLoading(true);
+    setDisable(true);
     const token = localStorage.getItem("authToken");
     const currentDate = new Date().toISOString().split("T")[0];
 
@@ -134,7 +135,7 @@ const Report = () => {
 
         setReportHeaders(headers);
         setReportData(formattedData);
-        setLoading(false);
+        setDisable(false);
       }
       if (response.data.invoiceData.length !== 0) {
         const invoiceData = response.data.invoiceData;
@@ -162,7 +163,7 @@ const Report = () => {
         setInvoiceData(formattedInvoiceData);
       }
 
-      setLoading(false);
+      setDisable(false);
     } catch (error) {
       console.error("Error sending company codes:", error);
     }
@@ -186,7 +187,7 @@ const Report = () => {
   };
 
   const fetchData = async (invoiceNo) => {
-    setLoading(true);
+    setDisable(true);
     const token = localStorage.getItem("authToken");
     try {
       const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}report-data`, {
@@ -228,7 +229,7 @@ const Report = () => {
 
         setReportHeaders(headers);
         setReportData(formattedData);
-        setLoading(false);
+        setDisable(false);
       }
       else{
         
@@ -265,14 +266,14 @@ const Report = () => {
         setInvoiceData(formattedInvoiceData);
       }
 
-      setLoading(false);
+      setDisable(false);
     } catch (err) {
       setAlert({
         message: "Error sending data",
         type: "error",
       });
       setTimeout(() => setAlert(null), 3000);
-      setLoading(false);
+      setDisable(false);
     }
   };
 
@@ -352,6 +353,9 @@ const Report = () => {
 
   return (
     <div>
+      {disable && (
+    <CircleBounceLoader />
+  )}
   <Navbar />
   <div className="container mx-auto p-6 md:p-16">
     {/* <div className="max-w-8xl mx-auto"> */}
@@ -393,9 +397,9 @@ const Report = () => {
     </div>
     <button
       onClick={handleRefresh}
-      disabled={loading}
+      disabled={disable}
       className={`px-4 py-2 bg-black text-white rounded-md shadow-md hover:bg-gray-800 transition duration-200 mt-4 md:mt-0 ${
-        loading ? "opacity-50 cursor-not-allowed" : ""
+        disable ? "opacity-50 cursor-not-allowed" : ""
       }`}
     >
       Refresh
@@ -426,18 +430,18 @@ const Report = () => {
     <div className="flex flex-col sm:flex-row justify-center sm:justify-end gap-4 mt-3 md:mt-6">
       <button
         onClick={handleSubmit}
-        disabled={loading}
+        disabled={disable}
         className={`px-4 py-2 bg-black text-white rounded-md shadow-md hover:bg-gray-800 transition duration-200 ${
-          loading ? "opacity-50 cursor-not-allowed" : ""
+          disable ? "opacity-50 cursor-not-allowed" : ""
         } w-full sm:w-auto`}
       >
         Submit
       </button>
       <button
         onClick={handleRefresh}
-        disabled={loading}
+        disabled={disable}
         className={`px-4 py-2 bg-black text-white rounded-md shadow-md hover:bg-gray-800 transition duration-200 ${
-          loading ? "opacity-50 cursor-not-allowed" : ""
+          disable ? "opacity-50 cursor-not-allowed" : ""
         } w-full sm:w-auto mt-2 sm:mt-0`}
       >
         Refresh

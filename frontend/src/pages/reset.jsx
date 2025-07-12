@@ -20,7 +20,6 @@ const Reset = () => {
   const [CustomerID1, setCustomerID1] = useState("");
   const [nameError, setNameError] = useState("");
   const [disable, setDisable] = useState(false);
-  const [disableNew, setDisableNew] = useState(false);
   const [loading, setLoading] = useState(false);
   const [alert, setAlert] = useState(null);
   const [permissionSetting, setPermissionSetting] = useState(false);
@@ -126,13 +125,13 @@ const Reset = () => {
     e.preventDefault();
     setNameError("");
     let isValid = true;
-    setDisableNew(true);
+    setDisable(true);
     setLoading(true);
 
     if (!name) {
       setNameError("Username is required.");
       isValid = false;
-      setDisableNew(false);
+      setDisable(false);
       setLoading(false);
     }
 
@@ -151,7 +150,7 @@ const Reset = () => {
       axios
         .get(`${process.env.REACT_APP_BACKEND_URL}find-user-connection`, config1)
         .then((response) => {
-          setDisableNew(false);
+          setDisable(false);
           setLoading(false);
           if (
             response.data.message ===
@@ -196,7 +195,7 @@ const Reset = () => {
           
         })
         .catch((error) => {
-          setDisableNew(false);
+          setDisable(false);
           setLoading(false);
           const errorMessage =
             error.response?.data?.message ||
@@ -251,9 +250,9 @@ const Reset = () => {
                 {/* Find User Button */}
                 <button
                   onClick={handleButtonClick}
-                  disabled={disableNew}
+                  disabled={disable}
                   className={`px-2 sm:px-4 py-1 sm:py-2 w-full md:w-1/3 bg-black text-white font-semibold rounded-md shadow-md hover:bg-gray-800 text-sm ${
-                    disableNew ? "opacity-50 cursor-not-allowed" : ""
+                    disable ? "opacity-50 cursor-not-allowed" : ""
                   }`}
                 >
                   Find User

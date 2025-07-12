@@ -6,6 +6,7 @@ import MultiSelectDropdown from "../components/MultiSelectDropdown";
 import Alert from "../components/Alert";
 import { Navigate } from "react-router-dom";
 import { AuthContext } from "../AuthContext";
+import CircleBounceLoader from "../components/Loader";
 import qs from "qs";
 import axios from "axios";
 import PieChart from "../components/PieChart";
@@ -16,9 +17,8 @@ const Dashboard = () => {
   const { authToken } = useContext(AuthContext);
   const [userData, setUserData] = useState(null);
   const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [disable, setDisable] = useState(false);
   const [error, setError] = useState(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [selectedDates, setSelectedDates] = useState({});
   const [selectedOptions, setSelectedOptions] = useState([]);
   const [firstOption, setFirstOption] = useState(null);
@@ -149,7 +149,7 @@ const Dashboard = () => {
 
   const fetchData = async () => {
     if (firstOption) {
-      setLoading(true);
+      setDisable(true);
       const token = localStorage.getItem("authToken");
       try {
         
@@ -165,7 +165,7 @@ const Dashboard = () => {
           },
           paramsSerializer: (params) => qs.stringify(params, { arrayFormat: "repeat" }),
         });
-        setLoading(false);
+        setDisable(false);
         if (response.data.cashierPointRecord.length === 0 && response.data.record.length === 0 && response.data.result.length === 0) {
           setAlert({
             message: "No data available",
@@ -284,7 +284,7 @@ const Dashboard = () => {
             : [salesData]
         ); // Ensure tableData is always an array of arrays
         setTableLabels(rearrangedLabels.map((label) => label)); // Include company code and sales date for table
-        setLoading(false);
+        setDisable(false);
         
       } catch (err) {
         console.error("Error sending parameters:", err);
@@ -619,12 +619,18 @@ const Dashboard = () => {
 
   return (
     <div>
-      <Navbar />
+      {disable && (
+    <CircleBounceLoader />
+  )}
+   
+    <Navbar />
 
         <div className="container mx-auto p-6 md:p-16">
         <div className="mt-20 md:mt-14">
             <Heading text="Company Sales Dashboard" />
           </div>
+      
+
           <div className="mt-4">
             {alert && (
               <Alert
@@ -663,9 +669,9 @@ const Dashboard = () => {
                   </div>
                   <button
                     onClick={handleRefresh}
-                    disabled={loading}
+                    disabled={disable}
                     className={`px-4 py-2 bg-black text-white rounded-md shadow-md hover:bg-gray-800 transition duration-200 mt-4 md:mt-0 ${
-                      loading ? "opacity-50 cursor-not-allowed" : ""
+                      disable ? "opacity-50 cursor-not-allowed" : ""
                     }`}
                   >
                     Refresh
@@ -696,18 +702,18 @@ const Dashboard = () => {
                                                  <div className="flex flex-col sm:flex-row justify-center sm:justify-end gap-4 mt-3 md:mt-6">
                                                    <button
                                                      onClick={handleSubmit}
-                                                     disabled={loading}
+                                                     disabled={disable}
                                                      className={`px-4 py-2 bg-black text-white rounded-md shadow-md hover:bg-gray-800 transition duration-200 ${
-                                                       loading ? "opacity-50 cursor-not-allowed" : ""
+                                                       disable ? "opacity-50 cursor-not-allowed" : ""
                                                      } w-full sm:w-auto`}
                                                    >
                                                      Submit
                                                    </button>
                                                    <button
                                                      onClick={handleRefresh}
-                                                     disabled={loading}
+                                                     disabled={disable}
                                                      className={`px-4 py-2 bg-black text-white rounded-md shadow-md hover:bg-gray-800 transition duration-200 ${
-                                                       loading ? "opacity-50 cursor-not-allowed" : ""
+                                                       disable ? "opacity-50 cursor-not-allowed" : ""
                                                      } w-full sm:w-auto mt-2 sm:mt-0`}
                                                    >
                                                      Refresh
@@ -757,6 +763,7 @@ const Dashboard = () => {
           </div>
         </div>
       
+    
     </div>
   );
 };
