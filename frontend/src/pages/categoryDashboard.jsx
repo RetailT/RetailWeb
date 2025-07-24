@@ -94,8 +94,16 @@ const CategoryDashboard = () => {
         setFirstOption(allOptions);
         setSelectedOptions(allOptions); // Set the selected options to all options as well
       }
+      else{
+        setDisable(false);
+        setAlert({ message: "Unnable to fetch companies", type: "error" });
+      setTimeout(() => setAlert(null), 3000);
+      }
     } catch (err) {
       setError("Failed to fetch dashboard data");
+
+        setAlert({ message: "Unnable to fetch companies", type: "error" });
+      setTimeout(() => setAlert(null), 3000);
 
       console.error("Error fetching dashboard data:", err);
     }
@@ -122,6 +130,8 @@ const CategoryDashboard = () => {
             },
           }
         );
+
+        if(response.data.message==='Processed parameters for company codes'){
 
         const amountBarChartData = response.data.categoryAmountBarChart;
         const quantityBarChartData = response.data.categoryQuantityBarChart;
@@ -221,7 +231,19 @@ const CategoryDashboard = () => {
         setTableRecords(aggregatedResults);
         console.log("tableData", tableRecords);
         setDisable(false);
+        }
+        else{
+          setDisable(false);
+        setAlert({ message: response.data.message, type: "error" });
+      setTimeout(() => setAlert(null), 3000);
+      
+        }
+
       } catch (err) {
+       setDisable(false);
+        setAlert({ message: "Unnable to fetch companies", type: "error" });
+      setTimeout(() => setAlert(null), 3000);
+      
         console.error("Error sending parameters:", err);
       }
     }

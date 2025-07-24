@@ -37,6 +37,16 @@ const Reset = () => {
   const [grn, setGRN] = useState(false);
   const [prn, setPRN] = useState(false);
   const [tog, setTOG] = useState(false);
+  const [cStProductWise, setCStProductWise] = useState(false);
+  const [cStDepartment, setCStDepartment] = useState(false);
+  const [cStCategory, setCStCategory] = useState(false);
+  const [cStSCategory, setCStSCategory] = useState(false);
+  const [cStVendor, setCStVendor] = useState(false);
+  const [cSaProductWise, setCSaProductWise] = useState(false);
+  const [cSaDepartment, setCSaDepartment] = useState(false);
+  const [cSaCategory, setCSaCategory] = useState(false);
+  const [cSaSCategory, setCSaSCategory] = useState(false);
+  const [cSaVendor, setCSaVendor] = useState(false);
 
   const token = localStorage.getItem("authToken");
   const navigate = useNavigate();
@@ -73,8 +83,10 @@ const Reset = () => {
         CustomerID1,
         admin: [{ a_permission: permissionSetting, a_sync: databaseSync }],
         dashboard: [{d_company: company, d_category:category, d_department:department, d_scategory:subCategory, d_vendor:vendor, d_invoice:invoice, d_productView:productView}],
-        stock: [{t_scan:scan, t_stock:stock, t_stock_update:stockUpdate, t_grn:grn, t_prn:prn, t_tog:tog}]
-      };
+        stock: [{t_scan:scan, t_stock:stock, t_stock_update:stockUpdate, t_grn:grn, t_prn:prn, t_tog:tog}],
+        colorSize_stock: [{c_st_product_wise:cStProductWise, c_st_department:cStDepartment, c_st_category:cStCategory, c_st_scategory:cStSCategory, c_st_vendor:cStVendor}],
+        colorSize_sales: [{c_sa_product_wise:cSaProductWise, c_sa_department:cSaDepartment, c_sa_category:cSaCategory, c_sa_scategory:cSaSCategory, c_sa_vendor:cSaVendor}],
+        };
 
       const config1 = {
         headers: {
@@ -185,6 +197,16 @@ const Reset = () => {
             setGRN(user.t_grn === 'T');
             setPRN(user.t_prn === 'T');
             setTOG(user.t_tog === 'T');
+            setCStProductWise(user.c_st_product_wise === 'T');
+            setCStDepartment(user.c_st_department === 'T');
+            setCStCategory(user.c_st_category === 'T');
+            setCStSCategory(user.c_st_scategory === 'T');
+            setCStVendor(user.c_st_vendor === 'T');
+            setCSaProductWise(user.c_sa_product_wise === 'T');
+            setCSaDepartment(user.c_sa_department === 'T');
+            setCSaCategory(user.c_sa_category === 'T');
+            setCSaSCategory(user.c_sa_scategory === 'T');
+            setCSaVendor(user.c_sa_vendor === 'T');
 
             // setData(user);
             // userPermisionDetails(user);
@@ -271,7 +293,7 @@ const Reset = () => {
               </div>
             </div>
 
-            <div className="bg-white p-4 sm:p-6 md:p-6 rounded-md shadow-md flex flex-col lg:flex-row lg:justify-between items-center gap-2 sm:gap-4 overflow-x-auto">
+            <div className="bg-white p-4 sm:p-6 md:p-6 rounded-md shadow-md flex flex-col lg:flex-row lg:justify-between items-start gap-2 sm:gap-4 overflow-x-auto">
               {/* Card 1 */}
               <div className="bg-white p-2 sm:p-4 rounded-md shadow-md w-full md:w-[calc(25%-0.5rem)] min-w-[250px] mb-2 sm:mb-4">
                 <h2 className="text-sm sm:text-lg font-semibold text-gray-800 mb-2 sm:mb-4">
@@ -396,7 +418,117 @@ const Reset = () => {
                 </div>
               </div>
 
-              {/* Card 3 */}
+           {/* Card 3 */}
+            <div className="bg-white p-2 sm:p-4 rounded-md shadow-md w-full md:w-[calc(25%-0.5rem)] min-w-[250px] mb-2 sm:mb-4">
+                <h2 className="text-sm sm:text-lg font-semibold text-gray-800 mb-2 sm:mb-4">
+                  Color Size Stock
+                </h2>
+                <div className="flex flex-col gap-2 sm:gap-4">
+                  <label className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={cStProductWise}
+                      onChange={(e) => setCStProductWise(e.target.checked)}
+                      className="w-4 h-4 sm:w-5 sm:h-5"
+                    />
+                    <span className="text-gray-700 text-sm">Product Wise</span>
+                  </label>
+                  <label className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={cStDepartment}
+                      onChange={(e) => setCStDepartment(e.target.checked)}
+                      className="w-4 h-4 sm:w-5 sm:h-5"
+                    />
+                    <span className="text-gray-700 text-sm">Department</span>
+                  </label>
+                  <label className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={cStCategory}
+                      onChange={(e) => setCStCategory(e.target.checked)}
+                      className="w-4 h-4 sm:w-5 sm:h-5"
+                    />
+                    <span className="text-gray-700 text-sm">Category</span>
+                  </label>
+                  <label className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={cStSCategory}
+                      onChange={(e) => setCStSCategory(e.target.checked)}
+                      className="w-4 h-4 sm:w-5 sm:h-5"
+                    />
+                    <span className="text-gray-700 text-sm">Sub Category</span>
+                  </label>
+                  <label className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={cStVendor}
+                      onChange={(e) => setCStVendor(e.target.checked)}
+                      className="w-4 h-4 sm:w-5 sm:h-5"
+                    />
+                    <span className="text-gray-700 text-sm">Vendor</span>
+                  </label>
+                  
+                </div>
+              </div>
+
+              {/* Card 4 */}
+            <div className="bg-white p-2 sm:p-4 rounded-md shadow-md w-full md:w-[calc(25%-0.5rem)] min-w-[250px] mb-2 sm:mb-4">
+                <h2 className="text-sm sm:text-lg font-semibold text-gray-800 mb-2 sm:mb-4">
+                  Color Size Sales
+                </h2>
+                <div className="flex flex-col gap-2 sm:gap-4">
+                  <label className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={cSaProductWise}
+                      onChange={(e) => setCSaProductWise(e.target.checked)}
+                      className="w-4 h-4 sm:w-5 sm:h-5"
+                    />
+                    <span className="text-gray-700 text-sm">Product Wise</span>
+                  </label>
+                  <label className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={cSaDepartment}
+                      onChange={(e) => setCSaDepartment(e.target.checked)}
+                      className="w-4 h-4 sm:w-5 sm:h-5"
+                    />
+                    <span className="text-gray-700 text-sm">Department</span>
+                  </label>
+                  <label className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={cSaCategory}
+                      onChange={(e) => setCSaCategory(e.target.checked)}
+                      className="w-4 h-4 sm:w-5 sm:h-5"
+                    />
+                    <span className="text-gray-700 text-sm">Category</span>
+                  </label>
+                  <label className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={cSaSCategory}
+                      onChange={(e) => setCSaSCategory(e.target.checked)}
+                      className="w-4 h-4 sm:w-5 sm:h-5"
+                    />
+                    <span className="text-gray-700 text-sm">Sub Category</span>
+                  </label>
+                  <label className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={cSaVendor}
+                      onChange={(e) => setCSaVendor(e.target.checked)}
+                      className="w-4 h-4 sm:w-5 sm:h-5"
+                    />
+                    <span className="text-gray-700 text-sm">Vendor</span>
+                  </label>
+                  
+                </div>
+              </div>
+            
+              {/* Card 5 */}
               <div className="bg-white p-2 sm:p-4 rounded-md shadow-md w-full md:w-[calc(25%-0.5rem)] min-w-[250px] mb-2 sm:mb-4">
                 <h2 className="text-sm sm:text-lg font-semibold text-gray-800 mb-2 sm:mb-4">
                   Transaction
@@ -459,7 +591,7 @@ const Reset = () => {
                 </div>
               </div>
 
-              {/* Card 4 */}
+              {/* Card 6 */}
               <div className="bg-white p-2 sm:p-4 rounded-md shadow-md w-full md:w-[calc(25%-0.5rem)] min-w-[250px] mb-2 sm:mb-4">
                 <h2 className="text-sm sm:text-lg font-semibold text-gray-800 mb-2 sm:mb-4">
                   Administration
@@ -485,6 +617,8 @@ const Reset = () => {
                   </label>
                 </div>
               </div>
+
+              
             </div>
           </form>
         </div>

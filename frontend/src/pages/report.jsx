@@ -56,7 +56,18 @@ const Report = () => {
           Authorization: `Bearer ${token}`,
         },
       });
-      setUserData(response.data.userData);
+
+      if(response.data.userData && response.data.userData.length>0){
+setUserData(response.data.userData);
+      }
+      else{
+         setAlert({
+            message: "Companies not found",
+            type: "error",
+          });
+          setTimeout(() => setAlert(null), 3000);
+      }
+      
     } catch (err) {
       console.error("Error fetching dashboard data:", err);
     }
@@ -136,6 +147,13 @@ const Report = () => {
         setReportHeaders(headers);
         setReportData(formattedData);
         setDisable(false);
+      }
+      else{
+         setAlert({
+            message: response.data.message ||"Invoice data not found",
+            type: "error",
+          });
+          setTimeout(() => setAlert(null), 3000);
       }
       if (response.data.invoiceData.length !== 0) {
         const invoiceData = response.data.invoiceData;

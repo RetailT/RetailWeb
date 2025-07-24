@@ -5,6 +5,7 @@ import { Navigate } from "react-router-dom";
 import Navbar from "../components/NavBar";
 import { AuthContext } from "../AuthContext";
 import Table from "../components/EditableTable";
+import DatePicker from "../components/DatePicker";
 import Heading from "../components/Heading";
 import Alert from "../components/Alert";
 import { CameraOff } from "lucide-react";
@@ -27,6 +28,9 @@ function App() {
   const [colorWiseTableData, setColorWiseTableData] = useState([]);
   const [priceHeaders, setPriceHeaders] = useState([]);
   const [colorWiseHeaders, setColorWiseHeaders] = useState([]);
+  const [salesData, setSalesData] = useState([]);
+  const [salesHeaders, setSalesHeaders] = useState([]);
+  const [selectedDates, setSelectedDates] = useState({});
   const [stockHeaders, setStockHeaders] = useState([]);
   const [repUserFilter, setRepUserFilter] = useState("");
   const [isData, setIsData] = useState(false);
@@ -100,6 +104,11 @@ function App() {
         );
         setNames(productNames);
       }
+      else{
+        setDisable(false);
+        setAlert({ message: response.data.message || "Error Occured", type: "error" });
+      setTimeout(() => setAlert(null), 3000);
+      }
     } catch (err) {
       setAlert({
         message: err.response?.data?.message || "Product name finding failed",
@@ -130,6 +139,10 @@ function App() {
     requestData("", code, name);
   };
 
+  const handleDateChange = (dates) => {
+    setSelectedDates(dates);
+  };
+
   const requestData = async (mode, data, inputValue) => {
     try {
       setDisable(true);
@@ -147,7 +160,6 @@ function App() {
         }
       );
       if (response.data.message === "Item Found Successfully") {
-        
         setCode("");
         setInputValue("");
         setProductData(response.data.result);
@@ -157,7 +169,6 @@ function App() {
         const prices = response.data.prices;
         const companyStockData = response.data.companyStockData;
         const colorWiseData = response.data.colorWiseData;
-        
 
         // Step 1: Merge each stock item with its company name
         const mergedData = stockData.map((stockItem) => {
@@ -316,7 +327,6 @@ function App() {
           item.SIZECODE,
         ]);
 
-        
         setColorWiseTableData(colorWiseTableDataFormatted);
 
         setAlert({
@@ -326,12 +336,98 @@ function App() {
         setTimeout(() => setAlert(null), 3000);
         setDisable(false);
       }
-
+      else{
+        setDisable(false);
+        setAlert({ message: response.data.message || "Error Occured", type: "error" });
+      setTimeout(() => setAlert(null), 3000);
+      }
     } catch (err) {
       setIsData(false);
 
       setAlert({
         message: err.response?.data?.message || "Item finding failed",
+        type: "error",
+      });
+      setTimeout(() => setAlert(null), 3000);
+      setDisable(false);
+    }
+  };
+
+  const requestSalesData = async (code) => {
+    try {
+      setDisable(true);
+      const response = await axios.get(
+        `${process.env.REACT_APP_BACKEND_URL}product-view-sales`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          params: {
+            code: code,
+            fromDate: selectedDates.fromDate,
+            toDate: selectedDates.toDate,
+          },
+        }
+      );
+      if (response.data.message === "Item Found Successfully") {
+        const salesData = response.data.salesData;
+
+        const headings = [
+          "SALESDATE",
+          "COMPANY_CODE",
+          // "PRODUCT_CODE",
+          "COST_PRICE",
+          "UNIT_PRICE",
+          "QTY",
+          "DISCOUNT",
+          "AMOUNT",
+          
+        ];
+
+        const headingMap = {
+          SALESDATE: "Sales Date",
+          COMPANY_CODE: "Company Code",
+          // PRODUCT_CODE: "Product Code",
+          COST_PRICE: "Cost Price",
+          UNIT_PRICE: "Unit Price",
+          QTY: "Quantity",
+          DISCOUNT: "Discount",
+          AMOUNT: "Amount",
+        };
+
+        const headers = headings.map((key) => headingMap[key] || key);
+        setSalesHeaders(headers);
+
+        const tableDataFormatted = salesData.map((item) => [
+          item.SALESDATE.split("T")[0],
+          item.COMPANY_CODE,
+          // item.PRODUCT_CODE,
+          item.COST_PRICE,
+          item.UNIT_PRICE,
+          item.QTY,
+          item.DISCOUNT,
+          item.AMOUNT,
+        ]);
+
+        setSalesData(tableDataFormatted);
+
+        setAlert({
+          message: "Sales Found Successfully",
+          type: "success",
+        });
+        setTimeout(() => setAlert(null), 3000);
+        setDisable(false);
+      }
+      else{
+        setDisable(false);
+        setAlert({ message: response.data.message || "Error Occured", type: "error" });
+      setTimeout(() => setAlert(null), 3000);
+      }
+    } catch (err) {
+      setIsData(false);
+
+      setAlert({
+        message: err.response?.data?.message || "Sales Finding Failed",
         type: "error",
       });
       setTimeout(() => setAlert(null), 3000);
@@ -377,6 +473,27 @@ function App() {
     }
     if (valid) {
       requestData("", code, inputValue);
+    }
+  };
+
+  const handleSalesSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (
+      !selectedDates ||
+      selectedDates.fromDate === "" ||
+      selectedDates.toDate === ""
+    ) {
+      setAlert({
+        message: "Please select dates",
+        type: "error",
+      });
+      setTimeout(() => setAlert(null), 3000);
+      setDisable(false);
+      valid = false;
+    }
+    if (valid && productData.PRODUCT_CODE !== "") {
+      requestSalesData(productData.PRODUCT_CODE);
     }
   };
 
@@ -450,9 +567,7 @@ function App() {
                     <button
                       type="submit"
                       className={`bg-[#f17e21] hover:bg-[#efa05f] text-white px-4 py-2 rounded-lg w-full sm:w-auto text-sm mt-3 sm:mt-0
-                        ${
-                    disable ? "opacity-50 cursor-not-allowed" : ""
-                  }`}
+                        ${disable ? "opacity-50 cursor-not-allowed" : ""}`}
                     >
                       Search
                     </button>
@@ -493,9 +608,7 @@ function App() {
                     </div>
                     <button
                       className={`bg-[#f17e21] hover:bg-[#efa05f] text-white px-4 py-2 rounded mt-6 text-sm
-                        ${
-                    disable ? "opacity-50 cursor-not-allowed" : ""
-                  }`}
+                        ${disable ? "opacity-50 cursor-not-allowed" : ""}`}
                       onClick={() => setScannerEnabled(!scannerEnabled)}
                     >
                       {scannerEnabled ? "Disable Scanner" : "Enable Scanner"}
@@ -655,58 +768,115 @@ function App() {
                 )}
                 {isData && (
                   <div className="mt-6 w-full max-w-4xl mx-auto">
-                    {Array.isArray(priceTableData) && priceTableData.length > 0 &&(
-                      <div className="p-4 bg-white rounded-xl shadow-md w-full">
-                        <p className="text-center text-[#bc4a17] text-lg sm:text-xl font-bold mb-6">
-                          Company Wise Price Details
-                        </p>
+                    {Array.isArray(priceTableData) &&
+                      priceTableData.length > 0 && (
+                        <div className="p-4 bg-white rounded-xl shadow-md w-full">
+                          <p className="text-center text-[#bc4a17] text-lg sm:text-xl font-bold mb-6">
+                            Company Wise Price Details
+                          </p>
 
+                          <div className="overflow-x-auto">
+                            <Table
+                              headers={priceHeaders}
+                              data={priceTableData}
+                              editableColumns={[]}
+                              bin={true}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                    {Array.isArray(stockTableData) &&
+                      priceTableData.length > 0 && (
+                        <div className="p-4 bg-white rounded-xl shadow-md mt-6 w-full">
+                          <p className="text-center text-[#bc4a17] text-lg sm:text-xl font-bold mb-6">
+                            Company Wise Stock Details
+                          </p>
+
+                          <div className="overflow-x-auto">
+                            <Table
+                              headers={stockHeaders}
+                              data={stockTableData}
+                              formatColumnsQuantity={[2]}
+                              editableColumns={[]}
+                              bin={true}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                    {Array.isArray(colorWiseTableData) &&
+                      colorWiseTableData.length > 0 && (
+                        <div className="p-4 bg-white rounded-xl shadow-md mt-6 w-full">
+                          <p className="text-center text-[#bc4a17] text-lg sm:text-xl font-bold mb-6">
+                            Color Wise Stock Details
+                          </p>
+
+                          <div className="overflow-x-auto">
+                            <Table
+                              headers={colorWiseHeaders}
+                              data={colorWiseTableData}
+                              formatColumnsQuantity={[1]}
+                              editableColumns={[]}
+                              bin={true}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                    <div className="p-4 bg-white rounded-xl shadow-md mt-6 w-full">
+                      <p className="text-center text-[#bc4a17] text-lg sm:text-xl font-bold mb-6">
+                        Sales Details
+                      </p>
+
+                      <div className="mt-5">
+                        {alert && (
+                          <Alert
+                            message={alert.message}
+                            type={alert.type}
+                            onClose={() => setAlert(null)}
+                          />
+                        )}
+                      </div>
+
+                      <div
+                        className="mt-10 bg-gray-200 p-4 rounded-lg shadow-md mb-10"
+                        style={{ backgroundColor: "#d8d8d8" }}
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                          <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+                            <DatePicker
+                              label="Select Date Range:"
+                              onDateChange={handleDateChange}
+                            />
+                          </div>
+                          <div className="flex flex-col sm:flex-row justify-center sm:justify-end gap-4 mt-3 md:mt-6">
+                            <button
+                              onClick={handleSalesSubmit}
+                              disabled={disable}
+                              className={`px-4 py-2 bg-black text-white rounded-md shadow-md hover:bg-gray-800 transition duration-200 ${
+                                disable ? "opacity-50 cursor-not-allowed" : ""
+                              } w-full sm:w-auto`}
+                            >
+                              Submit
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {Array.isArray(salesData) && salesData.length > 0 && (
                         <div className="overflow-x-auto">
                           <Table
-                            headers={priceHeaders}
-                            data={priceTableData}
+                            headers={salesHeaders}
+                            data={salesData}
+                            formatColumns = {[2,3,5,6]}
+                            formatColumnsQuantity={[4]}
                             editableColumns={[]}
                             bin={true}
                           />
                         </div>
-                      </div>
-                    )}
-
-                    {Array.isArray(stockTableData) && priceTableData.length > 0 &&(
-                      <div className="p-4 bg-white rounded-xl shadow-md mt-6 w-full">
-                        <p className="text-center text-[#bc4a17] text-lg sm:text-xl font-bold mb-6">
-                          Company Wise Stock Details
-                        </p>
-
-                        <div className="overflow-x-auto">
-                          <Table
-                            headers={stockHeaders}
-                            data={stockTableData}
-                            formatColumnsQuantity={[2]}
-                            editableColumns={[]}
-                            bin={true}
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    {Array.isArray(colorWiseTableData) && colorWiseTableData.length > 0 && (
-                      <div className="p-4 bg-white rounded-xl shadow-md mt-6 w-full">
-                        <p className="text-center text-[#bc4a17] text-lg sm:text-xl font-bold mb-6">
-                          Color Wise Stock Details
-                        </p>
-
-                        <div className="overflow-x-auto">
-                          <Table
-                            headers={colorWiseHeaders}
-                            data={colorWiseTableData}
-                            formatColumnsQuantity={[1]}
-                            editableColumns={[]}
-                            bin={true}
-                          />
-                        </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

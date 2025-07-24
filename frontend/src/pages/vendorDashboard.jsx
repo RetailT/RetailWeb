@@ -93,9 +93,16 @@ const VendorDashboard = () => {
         setFirstOption(allOptions);
         setSelectedOptions(allOptions); // Set the selected options to all options as well
       }
+      else{
+        setDisable(false);
+        setAlert({ message: response.data.message || "Error Occured", type: "error" });
+      setTimeout(() => setAlert(null), 3000);
+      }
     } catch (err) {
       setError("Failed to fetch dashboard data");
-
+setDisable(false);
+        setAlert({ message: err.response?.data?.message || "Error Occured", type: "error" });
+      setTimeout(() => setAlert(null), 3000);
       console.error("Error fetching dashboard data:", err);
     }
   };
@@ -122,7 +129,8 @@ const VendorDashboard = () => {
           }
         );
 
-        const amountBarChartData = response.data.vendorAmountBarChart;
+        if(response.data.message==='Processed parameters for company codes'){
+const amountBarChartData = response.data.vendorAmountBarChart;
         const quantityBarChartData = response.data.vendorQuantityBarChart;
         const tableData = response.data.vendorTableRecords;
 
@@ -221,8 +229,18 @@ const VendorDashboard = () => {
 
         setTableRecords(aggregatedResults);
         setDisable(false);
+        }
+        else{
+          setDisable(false);
+        setAlert({ message: response.data.message || "Error Occured", type: "error" });
+      setTimeout(() => setAlert(null), 3000);
+        }
+        
       } catch (err) {
         console.error("Error sending parameters:", err);
+        setDisable(false);
+        setAlert({ message: err.response?.data?.message || "Error Occured", type: "error" });
+      setTimeout(() => setAlert(null), 3000);
       }
     }
   };

@@ -10,6 +10,10 @@ import SubCategoryDashboard from "./pages/subCategoryDashboard";
 import VendorDashboard from "./pages/vendorDashboard";
 import StockUpdate from "./pages/stockUpdate";
 import SyncDatabase from "./pages/syncDatabase";
+import ColorSizeSalesDepartment from "./pages/colorSizeSalesDepartment"
+import ColorSizeSalesCategory from "./pages/colorSizeSalesCategoryDashboard"
+import ColorSizeSalesSubCategory from "./pages/colorSizeSalesSubCategoryDashboard"
+import ColorSizeSalesVendor from "./pages/colorSizeSalesVendorDashboard"
 import Report from "./pages/report";
 import Scan from "./pages/scan";
 import Reset from "./pages/reset";
@@ -41,7 +45,11 @@ function App() {
         <Route path="/report" element={<ProtectedRoute> <Report /> </ProtectedRoute>}/>
         <Route path="/vendor-dashboard" element={<ProtectedRoute> <VendorDashboard /> </ProtectedRoute>}/>
         <Route path="/sync-databases" element={<ProtectedRoute> <SyncDatabase /> </ProtectedRoute>}/> 
-        <Route path="/product-view" element={<ProtectedRoute> <ProductView /> </ProtectedRoute>}/>      
+        <Route path="/product-view" element={<ProtectedRoute> <ProductView /> </ProtectedRoute>}/> 
+        <Route path="/color-size-sales-department" element={<ProtectedRoute> <ColorSizeSalesDepartment /> </ProtectedRoute>}/>   
+        <Route path="/color-size-sales-category" element={<ProtectedRoute> <ColorSizeSalesCategory /> </ProtectedRoute>}/>  
+        <Route path="/color-size-sales-subcategory" element={<ProtectedRoute> <ColorSizeSalesSubCategory /> </ProtectedRoute>}/>
+        <Route path="/color-size-sales-vendor" element={<ProtectedRoute> <ColorSizeSalesVendor /> </ProtectedRoute>}/>    
       </Routes>
     </Router>
     </AuthProvider>

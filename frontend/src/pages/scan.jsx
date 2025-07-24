@@ -110,6 +110,11 @@ function App() {
         }));
         setCompanies(companies);
       }
+      else{
+        setDisable(false);
+        setAlert({ message: response.data.message || "Error Occured", type: "error" });
+      setTimeout(() => setAlert(null), 3000);
+      }
     } catch (err) {
       setError("Failed to fetch dashboard data");
 
@@ -134,6 +139,11 @@ function App() {
           name: data.VENDORNAME.trim(),
         }));
         setVendors(vendors);
+      }
+      else{
+        setDisable(false);
+        setAlert({ message: response.data.message || "Error Occured", type: "error" });
+      setTimeout(() => setAlert(null), 3000);
       }
     } catch (err) {
       setError("Failed to fetch dashboard data");
@@ -402,6 +412,11 @@ function App() {
         );
         setNames(productNames);
       }
+      else{
+        setDisable(false);
+        setAlert({ message: response.data.message || "Error Occured", type: "error" });
+      setTimeout(() => setAlert(null), 3000);
+      }
     } catch (err) {
       setAlert({
         message: err.response?.data?.message || "Product name finding failed",
@@ -530,6 +545,11 @@ function App() {
           ),
         ];
         setUniqueRepUsers(repUsers);
+      }
+      else{
+        setDisable(false);
+        setAlert({ message: response.data.message || "Error Occured", type: "error" });
+      setTimeout(() => setAlert(null), 3000);
       }
 
       setDisable(false);
@@ -679,6 +699,11 @@ function App() {
               }
             }, 100);
           }
+          else{
+            setDisable(false);
+        setAlert({ message: response.data.message || "Error Occured", type: "error" });
+      setTimeout(() => setAlert(null), 3000);
+          }
         } else if (selectedType === "GRN" || selectedType === "PRN") {
           const response = await axios.post(
             `${process.env.REACT_APP_BACKEND_URL}update-temp-grn-table`,
@@ -719,6 +744,11 @@ function App() {
                 codeRef.current.focus(); // Focus after scrolling
               }
             }, 100);
+          }
+          else{
+            setDisable(false);
+        setAlert({ message: response.data.message || "Error Occured", type: "error" });
+      setTimeout(() => setAlert(null), 3000);
           }
         } else if (selectedType === "TOG") {
           const response = await axios.post(

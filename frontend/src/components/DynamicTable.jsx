@@ -4,20 +4,19 @@ import "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 
-const NestedDynamicTable = ({ data, mainHeadings, title }) => {
+const NestedDynamicTable = ({ data, mainHeadings, title, onRowSelect }) => {
   const [selectedType, setSelectedType] = useState("");
   const [typeError, setTypeError] = useState("");
+  const [selectedRowIndex, setSelectedRowIndex] = useState(null);
   const typeOptions = ["PDF", "EXCEL"];
 
-  // Ensure data exists
   if (!data || data.length === 0) {
     return <p className="text-center">No data available</p>;
   }
 
-  // Format function for Amount
   const formatAmount = (value) => {
-    if (!value) return "0.00"; // Handle empty or null values
-    const num = parseFloat(value); // Ensure the value is a number
+    if (!value) return "0.00";
+    const num = parseFloat(value);
     return num.toLocaleString("en-US", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
@@ -26,22 +25,16 @@ const NestedDynamicTable = ({ data, mainHeadings, title }) => {
 
   const exportToExcel = () => {
     const sheetData = [];
-
-    // Add main headings
     const mainHeadingsRow = mainHeadings.map((main) => main.label);
     sheetData.push(mainHeadingsRow);
-
-    // Add subheadings
     const subHeadingsRow = mainHeadings.flatMap((main) => main.subHeadings);
     sheetData.push(subHeadingsRow);
 
-    // Add data rows
     data.forEach((row) => {
       const rowData = mainHeadings.flatMap((main) =>
         main.subHeadings.map((sub) => {
           const key = `${main.label.replace(/\s+/g, "_")}_${sub}`;
-          return sub.toLowerCase() === "amount" ||
-            sub.toLowerCase() === "quantity"
+          return sub.toLowerCase() === "amount" || sub.toLowerCase() === "quantity"
             ? formatAmount(row[key])
             : row[key] || "";
         })
@@ -49,51 +42,21 @@ const NestedDynamicTable = ({ data, mainHeadings, title }) => {
       sheetData.push(rowData);
     });
 
-    // Create worksheet and workbook
     const ws = XLSX.utils.aoa_to_sheet(sheetData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, title);
 
-    // Apply styles (black background, white text)
-    const range = XLSX.utils.decode_range(ws["!ref"]); // Get cell range
-
-    for (let C = range.s.c; C <= range.e.c; C++) {
-      const cellMainHeading = XLSX.utils.encode_cell({ r: 0, c: C }); // Main heading row
-      const cellSubHeading = XLSX.utils.encode_cell({ r: 1, c: C }); // Subheading row
-
-      if (ws[cellMainHeading]) {
-        ws[cellMainHeading].s = {
-          fill: { fgColor: { rgb: "000000" } }, // Black background
-          font: { color: { rgb: "FFFFFF" }, bold: true }, // White text, bold
-          alignment: { horizontal: "center" },
-        };
-      }
-
-      if (ws[cellSubHeading]) {
-        ws[cellSubHeading].s = {
-          fill: { fgColor: { rgb: "000000" } }, // Black background
-          font: { color: { rgb: "FFFFFF" }, bold: true }, // White text, bold
-          alignment: { horizontal: "center" },
-        };
-      }
-    }
-
-    // Write file
     const excelBuffer = XLSX.write(wb, {
       bookType: "xlsx",
       type: "array",
-      cellStyles: true, // Ensure styles are applied
+      cellStyles: true,
     });
 
     const excelBlob = new Blob([excelBuffer], {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8",
     });
 
-    // Set filename dynamically based on title prop, with a fallback name
-    const filename = title
-      ? `${title.replace(/\s+/g, "_")}.xlsx`
-      : "table_data.xlsx";
-
+    const filename = title ? `${title.replace(/\s+/g, "_")}.xlsx` : "table_data.xlsx";
     saveAs(excelBlob, filename);
   };
 
@@ -106,8 +69,7 @@ const NestedDynamicTable = ({ data, mainHeadings, title }) => {
       mainHeadings.flatMap((main) =>
         main.subHeadings.map((sub) => {
           const key = `${main.label.replace(/\s+/g, "_")}_${sub}`;
-          return sub.toLowerCase() === "amount" ||
-            sub.toLowerCase() === "quantity"
+          return sub.toLowerCase() === "amount" || sub.toLowerCase() === "quantity"
             ? formatAmount(row[key])
             : row[key] || "";
         })
@@ -120,87 +82,73 @@ const NestedDynamicTable = ({ data, mainHeadings, title }) => {
       startY: 20,
       theme: "grid",
       headStyles: {
-        fillColor: [0, 0, 0], // Black background
-        textColor: [255, 255, 255], // White text
-        fontStyle: "bold", // Bold text for headings
-        halign: "center", // Center the header text
+        fillColor: [0, 0, 0],
+        textColor: [255, 255, 255],
+        fontStyle: "bold",
+        halign: "center",
       },
     });
-    // Set filename dynamically based on title prop, with a fallback name
-    const filename = title
-      ? `${title.replace(/\s+/g, "_")}.pdf`
-      : "table_data.pdf";
 
+    const filename = title ? `${title.replace(/\s+/g, "_")}.pdf` : "table_data.pdf";
     doc.save(filename);
   };
 
-  // Handle dropdown selection
   const handleTypeChange = (event) => {
     setSelectedType(event.target.value);
-    setTypeError(""); // Reset error when selection changes
+    setTypeError("");
   };
 
-  // Handle export action
   const handleExport = (e) => {
     e.preventDefault();
-
     if (!selectedType) {
       setTypeError("Type is required.");
       return;
     }
-
-    if (selectedType === "PDF") {
-      exportToPDF();
-    } else if (selectedType === "EXCEL") {
-      exportToExcel();
-    }
+    selectedType === "PDF" ? exportToPDF() : exportToExcel();
   };
 
-  const renderDropdown = () => {
-    return (
-     <div className="relative flex flex-col gap-2 w-full md:w-60 lg:w-96 mb-5 pl-0 md:pl-44">
-  <label className="block text-sm font-medium text-gray-700 w-full mb-3">
-    Select File Type:
-  </label>
-  <select
-    value={selectedType}
-    onChange={handleTypeChange}
-    className="w-full lg:w-full border border-gray-300 p-2 rounded-md shadow-sm bg-white text-left overflow-hidden text-ellipsis whitespace-nowrap h-10"
-    style={{ minHeight: "40px" }}
-  >
-    <option value="" disabled>
-      Select a Type
-    </option>
-    {typeOptions.map((name, index) => (
-      <option key={index} value={name}>
-        {name}
-      </option>
-    ))}
-  </select>
-  {typeError && (
-    <p className="text-red-500 text-sm mt-[-5px] mb-4">{typeError}</p>
-  )}
-  <button
-    onClick={handleExport}
-    className="bg-[#f17e21] hover:bg-[#efa05f] text-white px-4 py-1.5 rounded-md shadow-md w-full mt-5 md:mt-3 mb-10 h-10"
-  >
-    Export
-  </button>
-</div>
-    
-    );
+  const handleRowClick = (rowData, rowIndex) => {
+    setSelectedRowIndex(rowIndex);
+    if (onRowSelect) onRowSelect(rowData);
   };
+
+  const renderDropdown = () => (
+    <div className="relative flex flex-col gap-2 w-full md:w-60 lg:w-96 mb-5 pl-0 md:pl-44">
+      <label className="block text-sm font-medium text-gray-700 w-full mb-3">
+        Select File Type:
+      </label>
+      <select
+        value={selectedType}
+        onChange={handleTypeChange}
+        className="w-full border border-gray-300 p-2 rounded-md shadow-sm bg-white h-10"
+      >
+        <option value="" disabled>
+          Select a Type
+        </option>
+        {typeOptions.map((name, index) => (
+          <option key={index} value={name}>
+            {name}
+          </option>
+        ))}
+      </select>
+      {typeError && (
+        <p className="text-red-500 text-sm mt-[-5px] mb-4">{typeError}</p>
+      )}
+      <button
+        onClick={handleExport}
+        className="bg-[#f17e21] hover:bg-[#efa05f] text-white px-4 py-1.5 rounded-md shadow-md w-full mt-5 md:mt-3 mb-10 h-10"
+      >
+        Export
+      </button>
+    </div>
+  );
 
   return (
     <div>
-     
-        
       {renderDropdown()}
-      
       <div className="overflow-x-auto overflow-y-auto max-h-96 max-w-screen-lg mx-auto rounded-lg border border-gray-400">
         <table className="min-w-full divide-y divide-gray-200 border border-gray-300">
           <thead className="bg-gray-100">
-            {/* Main Headings */}
             <tr>
               {mainHeadings.map((main, index) => (
                 <th
@@ -212,7 +160,6 @@ const NestedDynamicTable = ({ data, mainHeadings, title }) => {
                 </th>
               ))}
             </tr>
-            {/* Subheadings */}
             <tr>
               {mainHeadings.map((main, index) =>
                 main.subHeadings.map((sub, subIndex) => (
@@ -228,13 +175,17 @@ const NestedDynamicTable = ({ data, mainHeadings, title }) => {
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {data.map((row, rowIndex) => (
-              <tr key={rowIndex} className="hover:bg-gray-100">
+              <tr
+                key={rowIndex}
+                className={`cursor-pointer hover:bg-gray-100 ${
+                  selectedRowIndex === rowIndex ? "bg-blue-100" : ""
+                }`}
+                onClick={() => handleRowClick(row, rowIndex)}
+              >
                 {mainHeadings.map((main, index) =>
                   main.subHeadings.map((sub, subIndex) => {
-                    // Construct key based on main heading and subheading
                     const dataKey = `${main.label.replace(/\s+/g, "_")}_${sub}`;
                     const cellValue = row[dataKey] || "";
-
                     return (
                       <td
                         key={`${rowIndex}-${index}-${subIndex}`}
@@ -244,9 +195,7 @@ const NestedDynamicTable = ({ data, mainHeadings, title }) => {
                             : "text-center"
                         }`}
                       >
-                        {/* Format Amount values; otherwise, render as-is */}
-                        {sub.toLowerCase() === "amount" ||
-                        sub.toLowerCase() === "quantity"
+                        {["amount", "quantity"].includes(sub.toLowerCase())
                           ? formatAmount(cellValue)
                           : cellValue}
                       </td>

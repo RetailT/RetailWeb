@@ -140,9 +140,16 @@ const Dashboard = () => {
         setFirstOption(allOptions);
         setSelectedOptions(allOptions); // Set the selected options to all options as well
       }
+      else{
+        setDisable(false);
+        setAlert({ message: response.data.message || "Error Occured", type: "error" });
+      setTimeout(() => setAlert(null), 3000);
+      }
     } catch (err) {
       setError("Failed to fetch dashboard data");
-
+setDisable(false);
+        setAlert({ message: err.response?.data?.message || "Error Occured", type: "error" });
+      setTimeout(() => setAlert(null), 3000);
       console.error("Error fetching dashboard data:", err);
     }
   };
@@ -174,8 +181,8 @@ const Dashboard = () => {
           setTimeout(() => setAlert(null), 3000);
 
         }
-
-        const rearrangedLabels = [
+        else{
+           const rearrangedLabels = [
           "Company Code",
           // "Sales Date",
           "Net Sales",
@@ -284,9 +291,15 @@ const Dashboard = () => {
             : [salesData]
         ); // Ensure tableData is always an array of arrays
         setTableLabels(rearrangedLabels.map((label) => label)); // Include company code and sales date for table
+       
+        }
+
         setDisable(false);
         
       } catch (err) {
+        setDisable(false);
+        setAlert({ message: err.response?.data?.message || "Error Occured", type: "error" });
+      setTimeout(() => setAlert(null), 3000);
         console.error("Error sending parameters:", err);
       }
     }

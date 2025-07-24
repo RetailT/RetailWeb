@@ -307,6 +307,11 @@ function App() {
         }));
         setCompanies(companies);
       }
+      else{
+        setDisable(false);
+        setAlert({ message: response.data.message || "Error Occured", type: "error" });
+      setTimeout(() => setAlert(null), 3000);
+      }
     } catch (err) {
       setError("Failed to fetch dashboard data");
 
@@ -366,6 +371,11 @@ function App() {
           setAlert(null);
           requestData(); // Now it runs after the alert is dismissed
         }, 3000);
+      }
+      else{
+        setDisable(false);
+        setAlert({ message: response.data.message || "Error Occured", type: "error" });
+      setTimeout(() => setAlert(null), 3000);
       }
       setDisable(false);
       // requestData();
