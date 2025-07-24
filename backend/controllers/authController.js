@@ -573,6 +573,17 @@ exports.login = async (req, res) => {
         t_prn: user.t_prn,
         t_tog: user.t_tog,
         t_stock_update: user.t_stock_update,
+        c_st_product_wise: user.c_st_product_wise,
+        c_st_department: user.c_st_department,
+        c_st_category: user.c_st_category,
+        c_st_scategory: user.c_st_scategory,
+        c_st_vendor: user.c_st_vendor,
+        c_sa_product_wise: user.c_sa_product_wise,
+        c_sa_department: user.c_sa_department,
+        c_sa_category: user.c_sa_category,
+        c_sa_scategory: user.c_sa_scategory,
+        c_sa_vendor: user.c_sa_vendor
+
       },
       process.env.JWT_SECRET,
       { expiresIn: "1h" }
@@ -2195,7 +2206,7 @@ exports.loadingDashboard = async (req, res) => {
     });
   } catch (error) {
     console.error("Error loading dashboard:", error);
-    res.status(500).json({ message: "Failed to load dashboard data" });
+    res.status(500).json({ message: "Failed to load campany dashboard data" });
   }
 };
 
@@ -2328,6 +2339,7 @@ await request.query(`
           tableRecords: tableRecords.recordset || [],
           amountBarChart: amountBarChart.recordset || [],
           quantityBarChart: quantityBarChart.recordset || [],
+
         });
       } catch (fetchErr) {
         console.error("Error fetching department data:", fetchErr);
@@ -2720,6 +2732,286 @@ exports.vendorDashboard = async (req, res) => {
   } catch (error) {
     console.error("Unhandled error in vendorDashboard:", error);
     res.status(500).json({ message: "Failed to load vendor dashboard" });
+  }
+};
+
+//color size sales department dashboard
+exports.colorSizeSalesDepartment = async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res
+        .status(403)
+        .json({ message: "No authorization token provided" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    if (!token) {
+      return res.status(403).json({ message: "Token is missing" });
+    }
+
+    jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
+      if (err) {
+        return res.status(403).json({ message: "Invalid or expired token" });
+      }
+
+      const username = decoded.username;
+      let { code, selectedOptions } = req.query;
+
+      if (typeof selectedOptions === 'string') {
+  selectedOptions = selectedOptions.split(',');
+}
+
+      const inClause = selectedOptions.map(code => `'${code.trim()}'`).join(',');
+
+      try {
+        const [tableRecords] =
+          await Promise.all([
+            mssql.query(`
+            USE [${rtweb}];
+            SELECT   
+            LTRIM(RTRIM(SERIALNO)) AS SERIALNO,
+              PRODUCT_CODE,
+              PRODUCT_NAME,
+              SUM(COSTPRICE) AS COSTPRICE,
+              SUM(UNITPRICE) AS UNITPRICE,
+              SUM(DISCOUNT) AS DISCOUNT,
+              SUM(AMOUNT) AS AMOUNT
+            FROM tb_SALESVIEW
+            WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause}) AND DEPTCODE = ${code}
+            GROUP BY PRODUCT_CODE,
+              PRODUCT_NAME, SERIALNO`),
+
+          ]);
+          
+        return res.status(200).json({
+          message: "Processed parameters for company codes",
+          success: true,
+          records: tableRecords.recordset || []
+
+        });
+      } catch (fetchErr) {
+        console.error("Error fetching department data:", fetchErr);
+        return res
+          .status(500)
+          .json({ message: "Failed to fetch department data" });
+      }
+    });
+  } catch (error) {
+    console.error("Unhandled error in departmentDashboard:", error);
+    return res
+      .status(500)
+      .json({ message: "Failed to load department dashboard" });
+  }
+};
+
+//color size sales category dashboard
+exports.colorSizeSalesCategory = async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res
+        .status(403)
+        .json({ message: "No authorization token provided" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    if (!token) {
+      return res.status(403).json({ message: "Token is missing" });
+    }
+
+    jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
+      if (err) {
+        return res.status(403).json({ message: "Invalid or expired token" });
+      }
+
+      const username = decoded.username;
+      let { code, selectedOptions } = req.query;
+
+      if (typeof selectedOptions === 'string') {
+  selectedOptions = selectedOptions.split(',');
+}
+
+      const inClause = selectedOptions.map(code => `'${code.trim()}'`).join(',');
+
+      try {
+        const [tableRecords] =
+          await Promise.all([
+            mssql.query(`
+            USE [${rtweb}];
+            SELECT   
+            LTRIM(RTRIM(SERIALNO)) AS SERIALNO,
+              PRODUCT_CODE,
+              PRODUCT_NAME,
+              SUM(COSTPRICE) AS COSTPRICE,
+              SUM(UNITPRICE) AS UNITPRICE,
+              SUM(DISCOUNT) AS DISCOUNT,
+              SUM(AMOUNT) AS AMOUNT
+            FROM tb_SALESVIEW
+            WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause}) AND CATCODE = ${code}
+            GROUP BY PRODUCT_CODE,
+              PRODUCT_NAME, SERIALNO`),
+
+          ]);
+
+        return res.status(200).json({
+          message: "Processed parameters for company codes",
+          success: true,
+          records: tableRecords.recordset || []
+
+        });
+      } catch (fetchErr) {
+        console.error("Error fetching category data:", fetchErr);
+        return res
+          .status(500)
+          .json({ message: "Failed to fetch category data" });
+      }
+    });
+  } catch (error) {
+    console.error("Unhandled error in categoryDashboard:", error);
+    return res
+      .status(500)
+      .json({ message: "Failed to load category dashboard" });
+  }
+};
+
+//color size sales category dashboard
+exports.colorSizeSalesSubCategory = async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res
+        .status(403)
+        .json({ message: "No authorization token provided" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    if (!token) {
+      return res.status(403).json({ message: "Token is missing" });
+    }
+
+    jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
+      if (err) {
+        return res.status(403).json({ message: "Invalid or expired token" });
+      }
+
+      const username = decoded.username;
+      let { code, selectedOptions } = req.query;
+
+      if (typeof selectedOptions === 'string') {
+  selectedOptions = selectedOptions.split(',');
+}
+
+      const inClause = selectedOptions.map(code => `'${code.trim()}'`).join(',');
+
+      try {
+        const [tableRecords] =
+          await Promise.all([
+            mssql.query(`
+            USE [${rtweb}];
+            SELECT   
+            LTRIM(RTRIM(SERIALNO)) AS SERIALNO,
+              PRODUCT_CODE,
+              PRODUCT_NAME,
+              SUM(COSTPRICE) AS COSTPRICE,
+              SUM(UNITPRICE) AS UNITPRICE,
+              SUM(DISCOUNT) AS DISCOUNT,
+              SUM(AMOUNT) AS AMOUNT
+            FROM tb_SALESVIEW
+            WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause}) AND SCATCODE = ${code}
+            GROUP BY PRODUCT_CODE,
+              PRODUCT_NAME, SERIALNO`),
+
+          ]);
+
+        return res.status(200).json({
+          message: "Processed parameters for company codes",
+          success: true,
+          records: tableRecords.recordset || []
+
+        });
+      } catch (fetchErr) {
+        console.error("Error fetching sub category data:", fetchErr);
+        return res
+          .status(500)
+          .json({ message: "Failed to fetch sub category data" });
+      }
+    });
+  } catch (error) {
+    console.error("Unhandled error in sub category Dashboard:", error);
+    return res
+      .status(500)
+      .json({ message: "Failed to load sub category dashboard" });
+  }
+};
+
+//color size sales vendor dashboard
+exports.colorSizeSalesVendor = async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res
+        .status(403)
+        .json({ message: "No authorization token provided" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    if (!token) {
+      return res.status(403).json({ message: "Token is missing" });
+    }
+
+    jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
+      if (err) {
+        return res.status(403).json({ message: "Invalid or expired token" });
+      }
+
+      const username = decoded.username;
+      let { code, selectedOptions } = req.query;
+
+      if (typeof selectedOptions === 'string') {
+  selectedOptions = selectedOptions.split(',');
+}
+
+      const inClause = selectedOptions.map(code => `'${code.trim()}'`).join(',');
+
+      try {
+        const [tableRecords] =
+          await Promise.all([
+            mssql.query(`
+            USE [${rtweb}];
+            SELECT   
+            LTRIM(RTRIM(SERIALNO)) AS SERIALNO,
+              PRODUCT_CODE,
+              PRODUCT_NAME,
+              SUM(COSTPRICE) AS COSTPRICE,
+              SUM(UNITPRICE) AS UNITPRICE,
+              SUM(DISCOUNT) AS DISCOUNT,
+              SUM(AMOUNT) AS AMOUNT
+            FROM tb_SALESVIEW
+            WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause}) AND VENDORCODE = ${code}
+            GROUP BY PRODUCT_CODE,
+              PRODUCT_NAME, SERIALNO`),
+
+          ]);
+
+        return res.status(200).json({
+          message: "Processed parameters for company codes",
+          success: true,
+          records: tableRecords.recordset || []
+
+        });
+      } catch (fetchErr) {
+        console.error("Error fetching sub category data:", fetchErr);
+        return res
+          .status(500)
+          .json({ message: "Failed to fetch sub category data" });
+      }
+    });
+  } catch (error) {
+    console.error("Unhandled error in sub category Dashboard:", error);
+    return res
+      .status(500)
+      .json({ message: "Failed to load sub category dashboard" });
   }
 };
 
@@ -3185,6 +3477,45 @@ exports.productView = async (req, res) => {
   }
 };
 
+// product view page sales
+exports.productViewSales = async (req, res) => {
+  const code = req.query.code?.trim();
+  const fromDate = formatDate(req.query.fromDate?.trim());
+  const toDate = formatDate(req.query.toDate?.trim());
+  
+  if (!code || fromDate === "" || toDate==="") {
+    return res.status(400).json({
+      message: "Please provide a from date and to date",
+    });
+  }
+
+  try {
+      const salesQuery = `
+          USE [${posback}];
+          SELECT SALESDATE, COMPANY_CODE, PRODUCT_CODE, COST_PRICE, UNIT_PRICE, SUM(QTY) AS QTY, 
+          SUM(DISCOUNT) AS DISCOUNT, SUM(AMOUNT) AS AMOUNT FROM tb_SALES
+          WHERE CONVERT(DATETIME,SALESDATE,103)>= CONVERT(DATETIME,@from,103) AND 
+          CONVERT(DATETIME,SALESDATE,103) <= CONVERT(DATETIME,@to,103) AND PRODUCT_CODE = @code
+          GROUP BY SALESDATE, COMPANY_CODE, PRODUCT_CODE, COST_PRICE, UNIT_PRICE
+         `;
+
+      const salesRequest = new mssql.Request();
+      salesRequest.input("from", fromDate);
+      salesRequest.input("to", toDate);
+      salesRequest.input("code", code);
+      const sales = await salesRequest.query(salesQuery);
+      const salesData = sales.recordset;
+   
+    return res.status(200).json({
+      message: "Item Found Successfully",
+      salesData: salesData || [],
+    });
+  } catch (error) {
+    console.error("Error retrieving barcode data:", error);
+    return res.status(500).json({ message: "Failed to fetch product view data" });
+  }
+};
+
 // stock update
 exports.stockUpdate = async (req, res) => {
   const { code, selectedType } = req.query;
@@ -3403,7 +3734,9 @@ exports.findUserConnection = async (req, res) => {
     const query = `
   USE [${posmain}];
   SELECT [ip_address], [port], [CUSTOMERID], [a_permission], [a_sync], [d_company], [d_department], [d_category], [d_scategory], 
-         [d_vendor], [d_invoice],[d_productView], [t_scan], [t_stock], [t_grn], [t_prn], [t_tog],[t_stock_update]
+         [d_vendor], [d_invoice],[d_productView], [t_scan], [t_stock], [t_grn], [t_prn], [t_tog],[t_stock_update],[c_st_product_wise],
+         [c_st_department],[c_st_category],[c_st_scategory],[c_st_vendor],[c_sa_product_wise],[c_sa_department], [c_sa_category], 
+         [c_sa_scategory],[c_sa_vendor]
   FROM tb_USERS
   WHERE username = @username;
 `;
@@ -3442,6 +3775,8 @@ exports.resetDatabaseConnection = async (req, res) => {
     admin = [],
     dashboard = [],
     stock = [],
+    colorSize_stock = [],
+    colorSize_sales = [],
     removeAdmin = [],
     removeStock = [],
     removeDashboard = [],
@@ -3554,6 +3889,8 @@ const updatePermissions = async (permissionArray) => {
 await updatePermissions(admin);
 await updatePermissions(dashboard);
 await updatePermissions(stock);
+await updatePermissions(colorSize_stock);
+await updatePermissions(colorSize_sales);
     // Check if nothing was sent
     const isEmptyOrAllFalse = (arr) => {
       return (
@@ -3574,6 +3911,8 @@ await updatePermissions(stock);
       isEmptyOrAllFalse(admin) &&
       isEmptyOrAllFalse(dashboard) &&
       isEmptyOrAllFalse(stock) &&
+      isEmptyOrAllFalse(colorSize_stock) &&
+      isEmptyOrAllFalse(colorSize_sales) &&
       isEmptyOrAllFalse(removeAdmin) &&
       isEmptyOrAllFalse(removeDashboard) &&
       isEmptyOrAllFalse(removeStock);
