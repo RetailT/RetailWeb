@@ -14,10 +14,6 @@ const posback = process.env.DB_DATABASE3;
 const rtweb = process.env.DB_DATABASE2;
 const posmain = process.env.DB_DATABASE1;
 
-function buildSqlInClause(array) {
-  return array.map((code) => `'${code}'`).join(", ");
-}
-
 const dbConfig1 = {
   user: process.env.DB_USER, // Database username
   password: process.env.DB_PASSWORD, // Database password
@@ -29,6 +25,18 @@ const dbConfig1 = {
   },
   port: 1443, // Default MSSQL port (1433)
 };
+
+const dbConnection = {
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+      server: process.env.DB_SERVER,
+      database: process.env.DB_DATABASE1,
+      options: {
+        encrypt: false,
+        trustServerCertificate: true,
+      },
+      port: 1443, // verify this port is correct for your DB server
+    };
 
 //report data, current report, company dashboard,
 // department dashboard, category dashboard,
@@ -582,8 +590,7 @@ exports.login = async (req, res) => {
         c_sa_department: user.c_sa_department,
         c_sa_category: user.c_sa_category,
         c_sa_scategory: user.c_sa_scategory,
-        c_sa_vendor: user.c_sa_vendor
-
+        c_sa_vendor: user.c_sa_vendor,
       },
       process.env.JWT_SECRET,
       { expiresIn: "1h" }
@@ -788,7 +795,6 @@ exports.closeConnection = async (req, res) => {
 
 //temp sales table
 exports.updateTempSalesTable = async (req, res) => {
-  
   try {
     const authHeader = req.headers.authorization;
 
@@ -808,7 +814,7 @@ exports.updateTempSalesTable = async (req, res) => {
     }
 
     const username = decoded.username;
-    
+
     const {
       company,
       count,
@@ -823,16 +829,15 @@ exports.updateTempSalesTable = async (req, res) => {
     } = req.body;
 
     const { trDate, trTime } = currentDateTime();
-const pool = await connectToDatabase();
+    const pool = await connectToDatabase();
     // Switch DB manually using a USE statement
-    
+
     await mssql.query(`USE [${rtweb}];`);
 
     let result;
 
     if (colorWiseTableData.length > 0) {
       for (let i = 0; i < colorWiseTableData.length; i++) {
-       
         const row = colorWiseTableData[i];
 
         const [productCodeRaw, colorRaw, sizeRaw, quantityRaw] = row;
@@ -1057,7 +1062,9 @@ exports.updateTempTogTable = async (req, res) => {
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(403).json({ message: "No authorization token provided" });
+      return res
+        .status(403)
+        .json({ message: "No authorization token provided" });
     }
 
     const token = authHeader.split(" ")[1];
@@ -1086,7 +1093,7 @@ exports.updateTempTogTable = async (req, res) => {
 
     const { trDate, trTime } = currentDateTime();
 
-const pool = await connectToDatabase();
+    const pool = await connectToDatabase();
     // ✅ Switch database explicitly
     await mssql.query(`USE [${rtweb}];`);
 
@@ -1094,7 +1101,6 @@ const pool = await connectToDatabase();
 
     if (colorWiseTableData.length > 0) {
       for (let i = 0; i < colorWiseTableData.length; i++) {
-       
         const row = colorWiseTableData[i];
         const [productCodeRaw, colorRaw, sizeRaw, quantityRaw] = row;
         const serialNo = productCodeRaw.trim();
@@ -1336,9 +1342,11 @@ exports.finalStockUpdate = async (req, res) => {
     transaction = new mssql.Transaction(pool);
     await transaction.begin();
 
-    const selectResult = await new mssql.Request(transaction)
-      .input("COMPANY_CODE", mssql.NChar(10), company)
-      .query(`
+    const selectResult = await new mssql.Request(transaction).input(
+      "COMPANY_CODE",
+      mssql.NChar(10),
+      company
+    ).query(`
         SELECT * FROM tb_STOCKRECONCILATION_DATAENTRYTEMP
         WHERE COMPANY_CODE = @COMPANY_CODE
       `);
@@ -1408,9 +1416,11 @@ exports.finalStockUpdate = async (req, res) => {
       });
     }
 
-    const deleteResult = await new mssql.Request(transaction)
-      .input("COMPANY_CODE", mssql.NChar(10), company)
-      .query(`
+    const deleteResult = await new mssql.Request(transaction).input(
+      "COMPANY_CODE",
+      mssql.NChar(10),
+      company
+    ).query(`
         DELETE FROM tb_STOCKRECONCILATION_DATAENTRYTEMP
         WHERE COMPANY_CODE = @COMPANY_CODE
       `);
@@ -1766,9 +1776,9 @@ exports.dashboardOptions = async (req, res) => {
       });
     }
 
-    await mssql.query(`USE [${rtweb}];`);  // run separately
+    await mssql.query(`USE [${rtweb}];`); // run separately
 
-const result = await mssql.query(`
+    const result = await mssql.query(`
   SELECT COMPANY_CODE, COMPANY_NAME FROM tb_COMPANY;
 `);
 
@@ -2116,11 +2126,11 @@ exports.loadingDashboard = async (req, res) => {
       .join(", ");
 
     // One row summary
-   const loadingDashboardResult = await new mssql.Request().input(
-  "username",
-  mssql.VarChar,
-  username
-).query(`
+    const loadingDashboardResult = await new mssql.Request().input(
+      "username",
+      mssql.VarChar,
+      username
+    ).query(`
   USE [${rtweb}];
   SELECT 
     SUM(NETSALES) AS NETSALES,
@@ -2134,7 +2144,6 @@ exports.loadingDashboard = async (req, res) => {
   FROM tb_SALES_DASHBOARD_VIEW
   WHERE COMPANY_CODE IN (${companyCodesList});
 `);
-
 
     // Per company summary
     const record = await new mssql.Request().input(
@@ -2265,9 +2274,9 @@ exports.departmentDashboard = async (req, res) => {
       // Step 1: Clear previous user records
       try {
         const request = new mssql.Request();
-request.input('username', mssql.VarChar, username);
+        request.input("username", mssql.VarChar, username);
 
-await request.query(`
+        await request.query(`
   DELETE FROM tb_SALESVIEW WHERE REPUSER = @username;
 `);
       } catch (deleteErr) {
@@ -2339,7 +2348,6 @@ await request.query(`
           tableRecords: tableRecords.recordset || [],
           amountBarChart: amountBarChart.recordset || [],
           quantityBarChart: quantityBarChart.recordset || [],
-
         });
       } catch (fetchErr) {
         console.error("Error fetching department data:", fetchErr);
@@ -2396,11 +2404,10 @@ exports.categoryDashboard = async (req, res) => {
   DELETE FROM tb_SALESVIEW WHERE REPUSER = @username;
 `;
 
-const request = new mssql.Request();
-request.input("username", mssql.VarChar, username);
+        const request = new mssql.Request();
+        request.input("username", mssql.VarChar, username);
 
-await request.query(query);
-
+        await request.query(query);
       } catch (err) {
         console.error("Error clearing tb_SALESVIEW:", err);
       }
@@ -2513,18 +2520,17 @@ exports.subCategoryDashboard = async (req, res) => {
       const reportType = "SALESDET";
 
       // Clear previous data
-     try {
-  const query = `
+      try {
+        const query = `
     USE [${rtweb}];
     DELETE FROM tb_SALESVIEW WHERE REPUSER = @username;
   `;
-  const request = new mssql.Request();
-  request.input("username", mssql.VarChar, username);
-  await request.query(query);
-} catch (error) {
-  console.error("Error clearing tb_SALESVIEW:", error);
-}
-
+        const request = new mssql.Request();
+        request.input("username", mssql.VarChar, username);
+        await request.query(query);
+      } catch (error) {
+        console.error("Error clearing tb_SALESVIEW:", error);
+      }
 
       // Execute SP for each company code
       for (const companyCode of selectedOptions) {
@@ -2554,14 +2560,12 @@ exports.subCategoryDashboard = async (req, res) => {
       const inClause = selectedOptions.map((code) => `'${code}'`).join(", ");
 
       // Perform summary queries
-     const [
-  subCategoryTableRecords,
-  subCategoryAmountBarChart,
-  subCategoryQuantityBarChart,
-] = await Promise.all([
-  new mssql.Request()
-    .input("username", mssql.VarChar, username)
-    .query(`
+      const [
+        subCategoryTableRecords,
+        subCategoryAmountBarChart,
+        subCategoryQuantityBarChart,
+      ] = await Promise.all([
+        new mssql.Request().input("username", mssql.VarChar, username).query(`
       USE [${rtweb}];
       SELECT
         LTRIM(RTRIM(COMPANY_CODE)) AS COMPANY_CODE,
@@ -2573,24 +2577,20 @@ exports.subCategoryDashboard = async (req, res) => {
       WHERE REPUSER = @username AND COMPANY_CODE IN (${inClause})
       GROUP BY COMPANY_CODE, SCATCODE, SCATNAME`),
 
-  new mssql.Request()
-    .input("username", mssql.VarChar, username)
-    .query(`
+        new mssql.Request().input("username", mssql.VarChar, username).query(`
       USE [${rtweb}];
       SELECT SCATNAME, SUM(AMOUNT) AS AMOUNT
       FROM tb_SALESVIEW
       WHERE REPUSER = @username AND COMPANY_CODE IN (${inClause})
       GROUP BY SCATNAME`),
 
-  new mssql.Request()
-    .input("username", mssql.VarChar, username)
-    .query(`
+        new mssql.Request().input("username", mssql.VarChar, username).query(`
       USE [${rtweb}];
       SELECT SCATNAME, SUM(QTY) AS QUANTITY
       FROM tb_SALESVIEW
       WHERE REPUSER = @username AND COMPANY_CODE IN (${inClause})
       GROUP BY SCATNAME`),
-]);
+      ]);
 
       return res.status(200).json({
         message: "Processed parameters for company codes",
@@ -2676,7 +2676,9 @@ exports.vendorDashboard = async (req, res) => {
       const dbTable = `[${rtweb}].dbo.tb_SALESVIEW`;
 
       // Use parameterized IN clause
-      const companyParams = selectedOptions.map((_, i) => `@code${i}`).join(", ");
+      const companyParams = selectedOptions
+        .map((_, i) => `@code${i}`)
+        .join(", ");
       const companyRequest1 = new mssql.Request();
       const companyRequest2 = new mssql.Request();
       const companyRequest3 = new mssql.Request();
@@ -2718,7 +2720,7 @@ exports.vendorDashboard = async (req, res) => {
             FROM ${dbTable}
             WHERE REPUSER = @username AND COMPANY_CODE IN (${companyParams})
             GROUP BY VENDORNAME
-          `)
+          `),
         ]);
 
       return res.status(200).json({
@@ -2758,16 +2760,17 @@ exports.colorSizeSalesDepartment = async (req, res) => {
       const username = decoded.username;
       let { code, selectedOptions } = req.query;
 
-      if (typeof selectedOptions === 'string') {
-  selectedOptions = selectedOptions.split(',');
-}
+      if (typeof selectedOptions === "string") {
+        selectedOptions = selectedOptions.split(",");
+      }
 
-      const inClause = selectedOptions.map(code => `'${code.trim()}'`).join(',');
+      const inClause = selectedOptions
+        .map((code) => `'${code.trim()}'`)
+        .join(",");
 
       try {
-        const [tableRecords] =
-          await Promise.all([
-            mssql.query(`
+        const [tableRecords] = await Promise.all([
+          mssql.query(`
             USE [${rtweb}];
             SELECT   
             LTRIM(RTRIM(SERIALNO)) AS SERIALNO,
@@ -2781,14 +2784,12 @@ exports.colorSizeSalesDepartment = async (req, res) => {
             WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause}) AND DEPTCODE = ${code}
             GROUP BY PRODUCT_CODE,
               PRODUCT_NAME, SERIALNO`),
+        ]);
 
-          ]);
-          
         return res.status(200).json({
           message: "Processed parameters for company codes",
           success: true,
-          records: tableRecords.recordset || []
-
+          records: tableRecords.recordset || [],
         });
       } catch (fetchErr) {
         console.error("Error fetching department data:", fetchErr);
@@ -2828,16 +2829,17 @@ exports.colorSizeSalesCategory = async (req, res) => {
       const username = decoded.username;
       let { code, selectedOptions } = req.query;
 
-      if (typeof selectedOptions === 'string') {
-  selectedOptions = selectedOptions.split(',');
-}
+      if (typeof selectedOptions === "string") {
+        selectedOptions = selectedOptions.split(",");
+      }
 
-      const inClause = selectedOptions.map(code => `'${code.trim()}'`).join(',');
+      const inClause = selectedOptions
+        .map((code) => `'${code.trim()}'`)
+        .join(",");
 
       try {
-        const [tableRecords] =
-          await Promise.all([
-            mssql.query(`
+        const [tableRecords] = await Promise.all([
+          mssql.query(`
             USE [${rtweb}];
             SELECT   
             LTRIM(RTRIM(SERIALNO)) AS SERIALNO,
@@ -2851,14 +2853,12 @@ exports.colorSizeSalesCategory = async (req, res) => {
             WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause}) AND CATCODE = ${code}
             GROUP BY PRODUCT_CODE,
               PRODUCT_NAME, SERIALNO`),
-
-          ]);
+        ]);
 
         return res.status(200).json({
           message: "Processed parameters for company codes",
           success: true,
-          records: tableRecords.recordset || []
-
+          records: tableRecords.recordset || [],
         });
       } catch (fetchErr) {
         console.error("Error fetching category data:", fetchErr);
@@ -2898,16 +2898,17 @@ exports.colorSizeSalesSubCategory = async (req, res) => {
       const username = decoded.username;
       let { code, selectedOptions } = req.query;
 
-      if (typeof selectedOptions === 'string') {
-  selectedOptions = selectedOptions.split(',');
-}
+      if (typeof selectedOptions === "string") {
+        selectedOptions = selectedOptions.split(",");
+      }
 
-      const inClause = selectedOptions.map(code => `'${code.trim()}'`).join(',');
+      const inClause = selectedOptions
+        .map((code) => `'${code.trim()}'`)
+        .join(",");
 
       try {
-        const [tableRecords] =
-          await Promise.all([
-            mssql.query(`
+        const [tableRecords] = await Promise.all([
+          mssql.query(`
             USE [${rtweb}];
             SELECT   
             LTRIM(RTRIM(SERIALNO)) AS SERIALNO,
@@ -2921,14 +2922,12 @@ exports.colorSizeSalesSubCategory = async (req, res) => {
             WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause}) AND SCATCODE = ${code}
             GROUP BY PRODUCT_CODE,
               PRODUCT_NAME, SERIALNO`),
-
-          ]);
+        ]);
 
         return res.status(200).json({
           message: "Processed parameters for company codes",
           success: true,
-          records: tableRecords.recordset || []
-
+          records: tableRecords.recordset || [],
         });
       } catch (fetchErr) {
         console.error("Error fetching sub category data:", fetchErr);
@@ -2968,16 +2967,17 @@ exports.colorSizeSalesVendor = async (req, res) => {
       const username = decoded.username;
       let { code, selectedOptions } = req.query;
 
-      if (typeof selectedOptions === 'string') {
-  selectedOptions = selectedOptions.split(',');
-}
+      if (typeof selectedOptions === "string") {
+        selectedOptions = selectedOptions.split(",");
+      }
 
-      const inClause = selectedOptions.map(code => `'${code.trim()}'`).join(',');
+      const inClause = selectedOptions
+        .map((code) => `'${code.trim()}'`)
+        .join(",");
 
       try {
-        const [tableRecords] =
-          await Promise.all([
-            mssql.query(`
+        const [tableRecords] = await Promise.all([
+          mssql.query(`
             USE [${rtweb}];
             SELECT   
             LTRIM(RTRIM(SERIALNO)) AS SERIALNO,
@@ -2991,14 +2991,12 @@ exports.colorSizeSalesVendor = async (req, res) => {
             WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause}) AND VENDORCODE = ${code}
             GROUP BY PRODUCT_CODE,
               PRODUCT_NAME, SERIALNO`),
-
-          ]);
+        ]);
 
         return res.status(200).json({
           message: "Processed parameters for company codes",
           success: true,
-          records: tableRecords.recordset || []
-
+          records: tableRecords.recordset || [],
         });
       } catch (fetchErr) {
         console.error("Error fetching sub category data:", fetchErr);
@@ -3048,9 +3046,9 @@ exports.scan = async (req, res) => {
       status = colorSize.recordset[0].COLORSIZE_ACTIVE;
     }
 
-     if (status === "T") {
+    if (status === "T") {
       if (codeData && codeData !== "No result") {
-      const barcodeQuery = `
+        const barcodeQuery = `
           SELECT PRODUCT_CODE FROM [${posback}].dbo.tb_STOCKRELOAD WHERE SERIALNO = @serial;
         `;
         const request = new mssql.Request();
@@ -3060,9 +3058,9 @@ exports.scan = async (req, res) => {
           productCode = barcodeResult.recordset[0].PRODUCT_CODE;
         }
 
-      // If not found in barcode link, use product table directly
-      const productQuery = productCode
-       ? `
+        // If not found in barcode link, use product table directly
+        const productQuery = productCode
+          ? `
               SELECT PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE 
               FROM [${posback}].dbo.tb_PRODUCT WHERE PRODUCT_CODE = @code;`
           : `
@@ -3070,18 +3068,18 @@ exports.scan = async (req, res) => {
               FROM [${posback}].dbo.tb_PRODUCT 
               WHERE PRODUCT_CODE = @code OR BARCODE = @code OR BARCODE2 = @code;`;
 
-      const productRequest = new mssql.Request();
+        const productRequest = new mssql.Request();
         productRequest.input("code", productCode || codeData);
-      QueryData = await productRequest.query(productQuery);
-salesData = QueryData.recordset;
+        QueryData = await productRequest.query(productQuery);
+        salesData = QueryData.recordset;
 
-if (!salesData || salesData.length === 0) {
-  return res.status(404).json({ message: "Product not found" });
-}
+        if (!salesData || salesData.length === 0) {
+          return res.status(404).json({ message: "Product not found" });
+        }
 
-foundCode = salesData[0].PRODUCT_CODE;
+        foundCode = salesData[0].PRODUCT_CODE;
 
-      const stockQuery = `
+        const stockQuery = `
         USE [${posback}];
         SELECT ISNULL(SUM(STOCK), 0) AS STOCK 
         FROM tb_STOCK 
@@ -3089,28 +3087,27 @@ foundCode = salesData[0].PRODUCT_CODE;
           AND (BIN = 'F' OR BIN IS NULL) 
           AND PRODUCT_CODE = '${foundCode}';
       `;
-      const stockResult = await mssql.query(stockQuery);
-      stockQty = stockResult.recordset[0]?.STOCK ?? 0;
+        const stockResult = await mssql.query(stockQuery);
+        stockQty = stockResult.recordset[0]?.STOCK ?? 0;
+      }
 
-    }
-
-    if (name && name !== "") {
-      const productQuery = `
+      if (name && name !== "") {
+        const productQuery = `
         USE [${posback}];
         SELECT PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE 
         FROM tb_PRODUCT 
         WHERE PRODUCT_NAMELONG = '${name}';
       `;
-      const salesDataResult = await mssql.query(productQuery);
-      salesData = salesDataResult.recordset;
+        const salesDataResult = await mssql.query(productQuery);
+        salesData = salesDataResult.recordset;
 
-      if (!salesData || salesData.length === 0) {
-        return res.status(404).json({ message: "Product not found" });
-      }
+        if (!salesData || salesData.length === 0) {
+          return res.status(404).json({ message: "Product not found" });
+        }
 
-      foundCode = salesData[0].PRODUCT_CODE;
+        foundCode = salesData[0].PRODUCT_CODE;
 
-      const stockQuery = `
+        const stockQuery = `
         USE [${posback}];
         SELECT ISNULL(SUM(STOCK), 0) AS STOCK 
         FROM tb_STOCK 
@@ -3118,8 +3115,8 @@ foundCode = salesData[0].PRODUCT_CODE;
           AND (BIN = 'F' OR BIN IS NULL) 
           AND PRODUCT_CODE = '${foundCode}';
       `;
-      const stockResult = await mssql.query(stockQuery);
-      stockQty = stockResult.recordset[0]?.STOCK ?? 0;
+        const stockResult = await mssql.query(stockQuery);
+        stockQty = stockResult.recordset[0]?.STOCK ?? 0;
 
         const codeQuery = `
           USE [${posback}];
@@ -3130,11 +3127,10 @@ foundCode = salesData[0].PRODUCT_CODE;
         if (PCode.recordset && PCode.recordset.length > 0) {
           productCode = PCode.recordset[0].PRODUCT_CODE;
         }
-
-    }
+      }
 
       if (productCode !== "" || foundCode !== "") {
-        const code = productCode? productCode: foundCode
+        const code = productCode ? productCode : foundCode;
         const colorSizeQuery = `
           USE [${posback}];
           SELECT SERIALNO, COLORCODE, SIZECODE, 0 AS STOCK 
@@ -3145,45 +3141,43 @@ foundCode = salesData[0].PRODUCT_CODE;
         colorWiseData = colorSizeData.recordset;
         colorwiseActive = true;
       }
-
-     }
-     else{
+    } else {
       if (codeData && codeData !== "No result") {
-      // Try finding a product code via barcode link table
-      const query = `
+        // Try finding a product code via barcode link table
+        const query = `
         USE [${posback}];
         SELECT PRODUCT_CODE FROM tb_BARCODELINK WHERE BARCODE = '${codeData}';
       `;
-      const barcodeResult = await mssql.query(query);
+        const barcodeResult = await mssql.query(query);
 
-      if (barcodeResult.recordset.length > 0) {
-        productCode = barcodeResult.recordset[0].PRODUCT_CODE;
-      }
+        if (barcodeResult.recordset.length > 0) {
+          productCode = barcodeResult.recordset[0].PRODUCT_CODE;
+        }
 
-      // If not found in barcode link, use product table directly
-      const productQuery = productCode
-        ? `
+        // If not found in barcode link, use product table directly
+        const productQuery = productCode
+          ? `
           USE [${posback}];
           SELECT PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE 
           FROM tb_PRODUCT WHERE PRODUCT_CODE = '${productCode}';
         `
-        : `
+          : `
           USE [${posback}];
           SELECT PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE 
           FROM tb_PRODUCT 
           WHERE PRODUCT_CODE = '${codeData}' OR BARCODE = '${codeData}' OR BARCODE2 = '${codeData}';
         `;
 
-      const salesDataResult = await mssql.query(productQuery);
-      salesData = salesDataResult.recordset;
+        const salesDataResult = await mssql.query(productQuery);
+        salesData = salesDataResult.recordset;
 
-      if (!salesData || salesData.length === 0) {
-        return res.status(404).json({ message: "Product not found" });
-      }
+        if (!salesData || salesData.length === 0) {
+          return res.status(404).json({ message: "Product not found" });
+        }
 
-      foundCode = salesData[0].PRODUCT_CODE;
+        foundCode = salesData[0].PRODUCT_CODE;
 
-      const stockQuery = `
+        const stockQuery = `
         USE [${posback}];
         SELECT ISNULL(SUM(STOCK), 0) AS STOCK 
         FROM tb_STOCK 
@@ -3191,27 +3185,27 @@ foundCode = salesData[0].PRODUCT_CODE;
           AND (BIN = 'F' OR BIN IS NULL) 
           AND PRODUCT_CODE = '${foundCode}';
       `;
-      const stockResult = await mssql.query(stockQuery);
-      stockQty = stockResult.recordset[0]?.STOCK ?? 0;
-    }
+        const stockResult = await mssql.query(stockQuery);
+        stockQty = stockResult.recordset[0]?.STOCK ?? 0;
+      }
 
-    if (name && name !== "") {
-      const productQuery = `
+      if (name && name !== "") {
+        const productQuery = `
         USE [${posback}];
         SELECT PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE 
         FROM tb_PRODUCT 
         WHERE PRODUCT_NAMELONG = '${name}';
       `;
-      const salesDataResult = await mssql.query(productQuery);
-      salesData = salesDataResult.recordset;
+        const salesDataResult = await mssql.query(productQuery);
+        salesData = salesDataResult.recordset;
 
-      if (!salesData || salesData.length === 0) {
-        return res.status(404).json({ message: "Product not found" });
-      }
+        if (!salesData || salesData.length === 0) {
+          return res.status(404).json({ message: "Product not found" });
+        }
 
-      foundCode = salesData[0].PRODUCT_CODE;
+        foundCode = salesData[0].PRODUCT_CODE;
 
-      const stockQuery = `
+        const stockQuery = `
         USE [${posback}];
         SELECT ISNULL(SUM(STOCK), 0) AS STOCK 
         FROM tb_STOCK 
@@ -3219,20 +3213,18 @@ foundCode = salesData[0].PRODUCT_CODE;
           AND (BIN = 'F' OR BIN IS NULL) 
           AND PRODUCT_CODE = '${foundCode}';
       `;
-      const stockResult = await mssql.query(stockQuery);
-      stockQty = stockResult.recordset[0]?.STOCK ?? 0;
+        const stockResult = await mssql.query(stockQuery);
+        stockQty = stockResult.recordset[0]?.STOCK ?? 0;
+      }
     }
-     }
-     
+
     return res.status(200).json({
       message: "Item Found Successfully",
       salesData: salesData,
       amount: stockQty,
       colorWiseData,
-      colorwiseActive
+      colorwiseActive,
     });
-
-    
   } catch (error) {
     console.error("Error retrieving barcode data:", error);
     return res.status(500).json({ message: "Failed to scan data" });
@@ -3428,11 +3420,15 @@ exports.productView = async (req, res) => {
     `;
     const companyStockRequest = new mssql.Request();
     companyStockRequest.input("code", new_code);
-    const companyWiseStock = await companyStockRequest.query(companyWiseStockQuery);
+    const companyWiseStock = await companyStockRequest.query(
+      companyWiseStockQuery
+    );
 
     let companies = [];
     if (companyCodes.length > 0) {
-      const formattedCodes = companyCodes.map((c) => `'${c.trim()}'`).join(", ");
+      const formattedCodes = companyCodes
+        .map((c) => `'${c.trim()}'`)
+        .join(", ");
       const companyNamesQuery = `
         SELECT COMPANY_CODE, COMPANY_NAME 
         FROM POSBACK_SYSTEM.dbo.tb_COMPANY 
@@ -3444,7 +3440,6 @@ exports.productView = async (req, res) => {
 
     let colorWiseData = [];
     if (status === "T") {
-
       const codeValue = mode === "scan" ? codeData : new_code;
       const product_code = productCode || codeValue;
 
@@ -3461,7 +3456,6 @@ exports.productView = async (req, res) => {
       colorWiseData = colorResult.recordset;
     }
 
-    
     return res.status(200).json({
       message: "Item Found Successfully",
       result,
@@ -3473,7 +3467,9 @@ exports.productView = async (req, res) => {
     });
   } catch (error) {
     console.error("Error retrieving barcode data:", error);
-    return res.status(500).json({ message: "Failed to fetch product view data" });
+    return res
+      .status(500)
+      .json({ message: "Failed to fetch product view data" });
   }
 };
 
@@ -3482,15 +3478,15 @@ exports.productViewSales = async (req, res) => {
   const code = req.query.code?.trim();
   const fromDate = formatDate(req.query.fromDate?.trim());
   const toDate = formatDate(req.query.toDate?.trim());
-  
-  if (!code || fromDate === "" || toDate==="") {
+
+  if (!code || fromDate === "" || toDate === "") {
     return res.status(400).json({
       message: "Please provide a from date and to date",
     });
   }
 
   try {
-      const salesQuery = `
+    const salesQuery = `
           USE [${posback}];
           SELECT SALESDATE, COMPANY_CODE, PRODUCT_CODE, COST_PRICE, UNIT_PRICE, SUM(QTY) AS QTY, 
           SUM(DISCOUNT) AS DISCOUNT, SUM(AMOUNT) AS AMOUNT FROM tb_SALES
@@ -3499,20 +3495,22 @@ exports.productViewSales = async (req, res) => {
           GROUP BY SALESDATE, COMPANY_CODE, PRODUCT_CODE, COST_PRICE, UNIT_PRICE
          `;
 
-      const salesRequest = new mssql.Request();
-      salesRequest.input("from", fromDate);
-      salesRequest.input("to", toDate);
-      salesRequest.input("code", code);
-      const sales = await salesRequest.query(salesQuery);
-      const salesData = sales.recordset;
-   
+    const salesRequest = new mssql.Request();
+    salesRequest.input("from", fromDate);
+    salesRequest.input("to", toDate);
+    salesRequest.input("code", code);
+    const sales = await salesRequest.query(salesQuery);
+    const salesData = sales.recordset;
+
     return res.status(200).json({
       message: "Item Found Successfully",
       salesData: salesData || [],
     });
   } catch (error) {
     console.error("Error retrieving barcode data:", error);
-    return res.status(500).json({ message: "Failed to fetch product view data" });
+    return res
+      .status(500)
+      .json({ message: "Failed to fetch product view data" });
   }
 };
 
@@ -3528,7 +3526,7 @@ exports.stockUpdate = async (req, res) => {
 
   const company = String(code).trim();
   const type = String(selectedType).trim();
-  
+
   try {
     await mssql.query(`USE [${rtweb}];`); // ✅ Explicit DB switch
 
@@ -3591,12 +3589,14 @@ exports.grnprnTableData = async (req, res) => {
   const { name, code, selectedType } = req.query;
 
   if (!name || !code) {
-    return res.status(400).json({ message: "Missing required query parameters: name and/or code" });
+    return res
+      .status(400)
+      .json({ message: "Missing required query parameters: name and/or code" });
   }
 
   const username = String(name).trim();
   const company = String(code).trim();
-  
+
   try {
     const pool = await mssql.connect(); // Use global pool or connect function
 
@@ -3627,7 +3627,6 @@ exports.grnprnTableData = async (req, res) => {
     const result = await pool.request().query(query);
 
     if (result.recordset.length === 0) {
-    
       return res.status(404).json({ message: "No GRN/PRN/TOG data found" });
     }
 
@@ -3685,7 +3684,7 @@ exports.productName = async (req, res) => {
   SELECT PRODUCT_NAMELONG FROM tb_PRODUCT;
 `;
 
-const productNames = await new mssql.Request().query(query);
+    const productNames = await new mssql.Request().query(query);
 
     const productNamesData = productNames.recordset;
     if (!productNamesData || productNamesData.length === 0) {
@@ -3708,16 +3707,187 @@ const productNames = await new mssql.Request().query(query);
 exports.findUserConnection = async (req, res) => {
   const name = req.query.name;
 
-  if (!name || typeof name !== "string") {
+  if (!name || typeof name !== 'string') {
     return res
       .status(400)
-      .json({ message: "Invalid or missing username parameter" });
+      .json({ message: 'Invalid or missing username parameter' });
   }
 
   try {
-    await mssql.close();
+    // Validate JWT token
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res
+        .status(403)
+        .json({ message: 'No authorization token provided' });
+    }
+    const token = authHeader.split(' ')[1]; // Extract token from "Bearer <token>"
+    try {
+      jwt.verify(token, process.env.JWT_SECRET); // Verify token with secret
+    } catch (jwtError) {
+      console.error('Invalid token:', jwtError);
+      return res.status(401).json({ message: 'Invalid or expired token' });
+    }
 
-    const dbConnection = {
+    // Get the connection pool
+   const pool = await connectToDatabase();
+
+    // Define posmain (e.g., from query parameter, body, or environment variable)
+    const posmain = req.query.posmain || process.env.DB_DATABASE1 || 'your_default_database';
+    if (!posmain) {
+      return res.status(400).json({ message: 'Database name (posmain) is required' });
+    }
+
+    // Sanitize posmain to prevent SQL injection
+    if (!/^[a-zA-Z0-9_]+$/.test(posmain)) {
+      return res.status(400).json({ message: 'Invalid database name' });
+    }
+
+    const query = `
+      USE [${posmain}];
+      SELECT 
+        u.[ip_address], 
+        u.[port], 
+        u.[CUSTOMERID], 
+        u.[a_permission], 
+        u.[a_sync], 
+        u.[d_company], 
+        u.[d_department], 
+        u.[d_category], 
+        u.[d_scategory], 
+        u.[d_vendor], 
+        u.[d_invoice],
+        u.[d_productView], 
+        u.[t_scan], 
+        u.[t_stock], 
+        u.[t_grn], 
+        u.[t_prn], 
+        u.[t_tog],
+        u.[t_stock_update],
+        u.[c_st_product_wise],
+        u.[c_st_department],
+        u.[c_st_category],
+        u.[c_st_scategory],
+        u.[c_st_vendor],
+        u.[c_sa_product_wise],
+        u.[c_sa_department], 
+        u.[c_sa_category], 
+        u.[c_sa_scategory],
+        u.[c_sa_vendor],
+        s.[COMPANY_NAME],
+        s.[START_DATE],
+        s.[END_DATE]
+      FROM tb_USERS u
+      LEFT JOIN tb_SERVER_DETAILS s
+        ON u.CUSTOMERID = s.CUSTOMERID 
+      WHERE u.username = @username;
+    `;
+
+    const request = pool.request(); // Use pool.request() instead of new mssql.Request()
+    request.input('username', mssql.VarChar, name);
+
+    const userPermissionResult = await request.query(query);
+
+    if (userPermissionResult.recordset.length === 0) {
+      return res
+        .status(404)
+        .json({ message: 'User details not found for the given username' });
+    }
+
+    res.status(200).json({
+      message: 'User permission data retrieved successfully',
+      userData: userPermissionResult.recordset,
+    });
+  } catch (error) {
+    console.error('Error retrieving user permission data:', {
+      message: error.message,
+      code: error.code,
+      sqlMessage: error.sqlMessage,
+    });
+    res.status(500).json({
+      message: 'Failed to retrieve user permission data',
+      error: error.message,
+    });
+  }
+};
+
+//reset database connection
+exports.resetDatabaseConnection = async (req, res) => {
+  const {
+    name,
+    ip = '',
+    port = '',
+    username = '',
+    companyName = '',
+    startDate = '',
+    endDate = '',
+    customerID = '',
+    newCustomerID = '',
+    admin = [],
+    dashboard = [],
+    stock = [],
+    colorSize_stock = [],
+    colorSize_sales = [],
+    removeAdmin = [],
+    removeDashboard = [],
+    removeStock = [],
+  } = req.body;
+
+  const trimmedName = name?.trim();
+  const trimmedIP = ip?.trim();
+  const trimmedPort = port?.trim();
+
+  let pool;
+  let transaction;
+
+  try {
+    // Auth validation
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res.status(403).json({ message: 'No authorization token provided' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    if (!token) {
+      return res.status(403).json({ message: 'Token is missing' });
+    }
+
+    jwt.verify(token, process.env.JWT_SECRET);
+    console.log('hi 1: JWT verified');
+
+    // Input validation
+    if (!trimmedName || typeof trimmedName !== 'string') {
+      return res.status(400).json({ message: 'Invalid or missing name' });
+    }
+    if (trimmedIP && !/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(trimmedIP)) {
+      return res.status(400).json({ message: 'Invalid IP address format' });
+    }
+    if (trimmedPort && !/^\d+$/.test(trimmedPort)) {
+      return res.status(400).json({ message: 'Invalid port' });
+    }
+    if (username && typeof username !== 'string') {
+      return res.status(400).json({ message: 'Invalid username' });
+    }
+    if (companyName && typeof companyName !== 'string') {
+      return res.status(400).json({ message: 'Invalid company name' });
+    }
+    if (startDate && isNaN(Date.parse(startDate))) {
+      return res.status(400).json({ message: 'Invalid start date' });
+    }
+    if (endDate && isNaN(Date.parse(endDate))) {
+      return res.status(400).json({ message: 'Invalid end date' });
+    }
+    console.log('hi 2: Input validation passed');
+
+    // Validate customerID and newCustomerID
+    const parsedCustomerID = Number(customerID);
+    const parsedNewCustomerID = Number(newCustomerID) === 0? Number(customerID): Number(newCustomerID);
+    const isValidCustomerID = Number.isInteger(parsedCustomerID) && parsedCustomerID !== 0;
+    const isValidNewCustomerID = Number.isInteger(parsedNewCustomerID) && parsedNewCustomerID !== 0;
+    console.log('hi 3: customerID validation', { parsedCustomerID, parsedNewCustomerID });
+
+    // Connect to the database
+    const config = {
       user: process.env.DB_USER,
       password: process.env.DB_PASSWORD,
       server: process.env.DB_SERVER,
@@ -3726,171 +3896,298 @@ exports.findUserConnection = async (req, res) => {
         encrypt: false,
         trustServerCertificate: true,
       },
-      port: 1443, // verify this port is correct for your DB server
+      port: 1433, // Adjust to 1443 if required
+      connectionTimeout: 30000,
+      requestTimeout: 30000,
     };
-
-    await mssql.connect(dbConnection);
-
-    const query = `
-  USE [${posmain}];
-  SELECT [ip_address], [port], [CUSTOMERID], [a_permission], [a_sync], [d_company], [d_department], [d_category], [d_scategory], 
-         [d_vendor], [d_invoice],[d_productView], [t_scan], [t_stock], [t_grn], [t_prn], [t_tog],[t_stock_update],[c_st_product_wise],
-         [c_st_department],[c_st_category],[c_st_scategory],[c_st_vendor],[c_sa_product_wise],[c_sa_department], [c_sa_category], 
-         [c_sa_scategory],[c_sa_vendor]
-  FROM tb_USERS
-  WHERE username = @username;
-`;
-
-const request = new mssql.Request();
-request.input("username", mssql.VarChar, name);
-
-const userPermissionResult = await request.query(query);
-
-    await mssql.close();
-
-    if (userPermissionResult.recordset.length === 0) {
-      return res
-        .status(404)
-        .json({ message: "User details not found for the given username" });
-    }
-
-    res.status(200).json({
-      message: "User permission data retrieved successfully",
-      userData: userPermissionResult.recordset,
-    });
-  } catch (error) {
-    console.error("Error retrieving user permission data:", error);
-    res.status(500).json({ message: "Failed to retrieve dashboard data" });
-  }
-};
-
-//reset database connection
-exports.resetDatabaseConnection = async (req, res) => {
-  const {
-    name,
-    ip = "",
-    port = "",
-    username,
-    customerID = "",
-    admin = [],
-    dashboard = [],
-    stock = [],
-    colorSize_stock = [],
-    colorSize_sales = [],
-    removeAdmin = [],
-    removeStock = [],
-    removeDashboard = [],
-  } = req.body;
-
-  const trimmedName = name?.trim();
-  const trimmedIP = ip?.trim();
-  const trimmedPort = port?.trim();
-
-  try {
-    // Auth validation
-    const authHeader = req.headers.authorization;
-    if (!authHeader)
-      return res
-        .status(403)
-        .json({ message: "No authorization token provided" });
-
-    const token = authHeader.split(" ")[1];
-    if (!token) return res.status(403).json({ message: "Token is missing" });
-
-    try {
-      jwt.verify(token, process.env.JWT_SECRET);
-    } catch {
-      return res.status(403).json({ message: "Invalid or expired token" });
-    }
-
-    await mssql.close(); // close old connection
-
-    // Connect to primary database
-    const config = {
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
+    console.log('hi 4: Connecting to database', {
       server: process.env.DB_SERVER,
       database: process.env.DB_DATABASE1,
-      options: { encrypt: false, trustServerCertificate: true },
-      port: 1443,
-    };
-    await mssql.connect(config);
+      user: process.env.DB_USER,
+      port: config.port,
+    });
+    pool = await mssql.connect(config);
+    console.log('hi 5: Database connected');
+    transaction = new mssql.Transaction(pool);
+    await transaction.begin();
+    console.log('hi 6: Transaction started');
 
-    if (ip && port) {
-  await mssql.query(`USE [${posmain}];`);
-  dbResult = await mssql.query`
-    UPDATE tb_USERS 
-    SET ip_address = ${trimmedIP}, port = ${trimmedPort}, registered_by = ${username}
-    WHERE username = ${trimmedName}
-  `;
-} else if (ip) {
-  await mssql.query(`USE [${posmain}];`);
-  dbResult = await mssql.query`
-    UPDATE tb_USERS 
-    SET ip_address = ${trimmedIP}, registered_by = ${username}
-    WHERE username = ${trimmedName}
-  `;
-} else if (port) {
-  await mssql.query(`USE [${posmain}];`);
-  dbResult = await mssql.query`
-    UPDATE tb_USERS 
-    SET port = ${trimmedPort}, registered_by = ${username}
-    WHERE username = ${trimmedName}
-  `;
-}
+    let userResult;
+    let serverResult;
 
-// For updating customerID, better to use a request from a pool
-if (customerID) {
-  const req1 = pool.request(); // assume you have pool connected
-  req1.input("customerID", mssql.Int, customerID);
-  req1.input("newName", mssql.NVarChar, trimmedName);
-
-  await pool.query(`USE [${posmain}];`);
-
-  const result = await req1.query(`
-    UPDATE tb_USERS SET CUSTOMERID = @customerID WHERE username = @newName;
+    const checkRequest = new mssql.Request(transaction);
+  checkRequest.input('newCustomerID', mssql.Int, parsedNewCustomerID);
+  const checkResult = await checkRequest.query(`SELECT CUSTOMERID FROM tb_SERVER_DETAILS WHERE CUSTOMERID = @newCustomerID
   `);
 
-  if (result.rowsAffected[0] === 0) {
-    return res.status(404).json({ message: "Customer ID was not updated." });
-  }
-}
-
-const updatePermissions = async (permissionArray) => {
-  if (!Array.isArray(permissionArray)) return;
-
-  // Switch to database once
-  await mssql.query(`USE [${posmain}];`);
-
-  for (const permissionObject of permissionArray) {
-    for (const column in permissionObject) {
-
-      const columnValue = permissionObject[column] ? "T" : "F";
-
-      const query = `
-        UPDATE tb_USERS 
-        SET ${column} = @value, registered_by = @registeredBy
-        WHERE username = @username;
-      `;
-
-      const req2 = new mssql.Request();
-      req2.input("value", columnValue);
-      req2.input("registeredBy", username);
-      req2.input("username", trimmedName);
-
-      const result = await req2.query(query);
-      if (result.rowsAffected[0] === 0) {
-        return res.status(404).json({ message: `Failed to update permission for ${column}` });
+    // Case 1: Invalid customerID
+    if (customerID === 0 || customerID === '' || customerID === null || customerID === undefined) {
+      if (!isValidNewCustomerID) {
+        throw new Error('newCustomerID must be a non-zero integer');
       }
-    }
-  }
-};
+      
+      const serverRequest = new mssql.Request(transaction);
+      serverRequest.input('newCustomerID', mssql.Int, parsedNewCustomerID);
+      serverRequest.input('companyName', mssql.NVarChar(50), companyName || null);
+      serverRequest.input('trimmedIP', mssql.NVarChar(50), trimmedIP || null);
+      serverRequest.input('startDate', mssql.Date, startDate ? new Date(startDate) : null);
+      serverRequest.input('endDate', mssql.Date, endDate ? new Date(endDate) : null);
 
-await updatePermissions(admin);
-await updatePermissions(dashboard);
-await updatePermissions(stock);
-await updatePermissions(colorSize_stock);
-await updatePermissions(colorSize_sales);
+       if (checkResult.recordset.length === 0) {
+        serverResult = await serverRequest.query(`
+        INSERT INTO tb_SERVER_DETAILS (CUSTOMERID, COMPANY_NAME, SERVERIP, START_DATE, END_DATE)
+        VALUES (@newCustomerID, @companyName, @trimmedIP, @startDate, @endDate);
+      `);
+      console.log('hi 9: tb_SERVER_DETAILS inserted', serverResult.rowsAffected);
+       }
+       else{
+        return res.status(400).json({ message: 'Customer ID already exist' });
+       }
+
+      console.log('hi 7: Executing Case 1 - Update tb_USERS and insert tb_SERVER_DETAILS');
+      const userRequest = new mssql.Request(transaction);
+      userRequest.input('newCustomerID', mssql.Int, parsedNewCustomerID);
+      userRequest.input('trimmedIP', mssql.VarChar(20), trimmedIP || null);
+      userRequest.input('trimmedPort', mssql.VarChar(10), trimmedPort || null);
+      userRequest.input('username', mssql.VarChar(20), username || null);
+      userRequest.input('trimmedName', mssql.VarChar(50), trimmedName);
+
+      userResult = await userRequest.query(`
+        UPDATE tb_USERS 
+        SET CUSTOMERID = @newCustomerID, ip_address = @trimmedIP, port = @trimmedPort, registered_by = @username
+        WHERE username = @trimmedName;
+      `);
+      console.log('hi 8: tb_USERS updated', userResult.rowsAffected);
+
+      
+    }
+    // Case 2: Valid customerID and newCustomerID, and they are equal
+    else if (isValidCustomerID && isValidNewCustomerID && parsedCustomerID === parsedNewCustomerID) {
+      console.log('hi 7: Executing Case 2 - Update tb_USERS and tb_SERVER_DETAILS (same CUSTOMERID)');
+      const userRequest = new mssql.Request(transaction);
+      userRequest.input('trimmedIP', mssql.VarChar(20), trimmedIP || null);
+      userRequest.input('trimmedPort', mssql.VarChar(10), trimmedPort || null);
+      userRequest.input('trimmedName', mssql.VarChar(50), trimmedName);
+
+      userResult = await userRequest.query(`
+        UPDATE tb_USERS 
+        SET ip_address = @trimmedIP, port = @trimmedPort
+        WHERE username = @trimmedName;
+      `);
+      console.log('hi 8: tb_USERS updated', userResult.rowsAffected);
+
+      const serverRequest = new mssql.Request(transaction);
+      serverRequest.input('companyName', mssql.NVarChar(50), companyName || null);
+      serverRequest.input('trimmedIP', mssql.NVarChar(50), trimmedIP || null);
+      serverRequest.input('startDate', mssql.Date, startDate ? new Date(startDate) : null);
+      serverRequest.input('endDate', mssql.Date, endDate ? new Date(endDate) : null);
+      serverRequest.input('customerID', mssql.Int, parsedCustomerID);
+
+      serverResult = await serverRequest.query(`
+        UPDATE tb_SERVER_DETAILS 
+        SET COMPANY_NAME = @companyName, SERVERIP = @trimmedIP, START_DATE = @startDate, END_DATE = @endDate
+        WHERE CUSTOMERID = @customerID;
+      `);
+      console.log('hi 9: tb_SERVER_DETAILS updated', serverResult.rowsAffected);
+    }
+    // Case 3: Valid customerID and newCustomerID, but they are not equal
+    else if (isValidCustomerID && isValidNewCustomerID && parsedCustomerID !== parsedNewCustomerID) {
+      console.log('hi 7: Executing Case 3 - Update tb_USERS and tb_SERVER_DETAILS (new CUSTOMERID)');
+      const userRequest = new mssql.Request(transaction);
+      userRequest.input('trimmedIP', mssql.VarChar(20), trimmedIP || null);
+      userRequest.input('trimmedPort', mssql.VarChar(10), trimmedPort || null);
+      userRequest.input('newCustomerID', mssql.Int, parsedNewCustomerID);
+      userRequest.input('trimmedName', mssql.VarChar(50), trimmedName);
+
+      userResult = await userRequest.query(`
+        UPDATE tb_USERS 
+        SET ip_address = @trimmedIP, port = @trimmedPort, CUSTOMERID = @newCustomerID
+        WHERE username = @trimmedName;
+      `);
+      console.log('hi 8: tb_USERS updated', userResult.rowsAffected);
+
+      const serverRequest = new mssql.Request(transaction);
+      serverRequest.input('companyName', mssql.NVarChar(50), companyName || null);
+      serverRequest.input('trimmedIP', mssql.NVarChar(50), trimmedIP || null);
+      serverRequest.input('newCustomerID', mssql.Int, parsedNewCustomerID);
+      serverRequest.input('startDate', mssql.Date, startDate ? new Date(startDate) : null);
+      serverRequest.input('endDate', mssql.Date, endDate ? new Date(endDate) : null);
+      serverRequest.input('customerID', mssql.Int, parsedCustomerID);
+
+      serverResult = await serverRequest.query(`
+        UPDATE tb_SERVER_DETAILS 
+        SET COMPANY_NAME = @companyName, SERVERIP = @trimmedIP, CUSTOMERID = @newCustomerID, 
+            START_DATE = @startDate, END_DATE = @endDate
+        WHERE CUSTOMERID = @customerID;
+      `);
+      console.log('hi 9: tb_SERVER_DETAILS updated', serverResult.rowsAffected);
+    } else {
+      throw new Error('Invalid customerID or newCustomerID');
+    }
+
+    // Check if updates were successful
+    if (userResult.rowsAffected[0] === 0) {
+      throw new Error('Could not update the user table');
+    }
+    if (serverResult.rowsAffected[0] === 0) {
+      throw new Error('Could not update or insert into the server details table');
+    }
+    console.log('hi 10: Table updates successful');
+
+    // Update permissions
+    const updatePermissions = async (permissionArray, permissionType) => {
+      if (!Array.isArray(permissionArray) || permissionArray.length === 0) {
+        console.log(`hi 11: Skipping ${permissionType} - empty or invalid array`);
+        return;
+      }
+
+      // Whitelist of allowed columns (matches tb_USERS schema)
+      const allowedColumns = [
+        'a_permission',
+        'a_sync',
+        'd_company',
+        'd_category',
+        'd_department',
+        'd_scategory',
+        'd_vendor',
+        'd_invoice',
+        'd_productView',
+        't_scan',
+        't_stock',
+        't_stock_update',
+        't_grn',
+        't_prn',
+        't_tog',
+        'c_st_product_wise',
+        'c_st_department',
+        'c_st_category',
+        'c_st_scategory',
+        'c_st_vendor',
+        'c_sa_product_wise',
+        'c_sa_department',
+        'c_sa_category',
+        'c_sa_scategory',
+        'c_sa_vendor',
+      ];
+
+      for (const permissionObject of permissionArray) {
+        console.log(`hi 11: Processing ${permissionType}`, permissionObject);
+        for (const column in permissionObject) {
+          if (!allowedColumns.includes(column)) {
+            console.log(`hi 12: Skipping invalid column ${column} for ${permissionType}. Verify tb_USERS schema.`);
+            continue;
+          }
+
+          const columnValue = permissionObject[column] ? 'T' : 'F';
+          console.log('hi 12: Updating permission', { column, columnValue, username: trimmedName });
+
+          const request = new mssql.Request(transaction);
+          request.input('value', mssql.Char(1), columnValue);
+          request.input('registeredBy', mssql.VarChar(20), username || null);
+          request.input('username', mssql.VarChar(50), trimmedName);
+
+          try {
+            const result = await request.query(`
+              UPDATE tb_USERS 
+              SET ${column} = @value, registered_by = @registeredBy
+              WHERE username = @username;
+            `);
+            console.log('hi 13: Permission updated', { column, rowsAffected: result.rowsAffected });
+
+            if (result.rowsAffected[0] === 0) {
+              console.log(`hi 14: No rows affected for ${column} - user may not exist`);
+            }
+          } catch (err) {
+            console.log(`hi 14: Failed to update ${column} for ${permissionType}: ${err.message}`);
+            throw err;
+          }
+        }
+      }
+    };
+
+    // Remove permissions
+    const removePermissions = async (permissionArray, permissionType) => {
+      if (!Array.isArray(permissionArray) || permissionArray.length === 0) {
+        console.log(`hi 15: Skipping ${permissionType} removal - empty or invalid array`);
+        return;
+      }
+
+      const allowedColumns = [
+        'a_permission',
+        'a_sync',
+        'd_company',
+        'd_category',
+        'd_department',
+        'd_scategory',
+        'd_vendor',
+        'd_invoice',
+        'd_productView',
+        't_scan',
+        't_stock',
+        't_stock_update',
+        't_grn',
+        't_prn',
+        't_tog',
+        'c_st_product_wise',
+        'c_st_department',
+        'c_st_category',
+        'c_st_scategory',
+        'c_st_vendor',
+        'c_sa_product_wise',
+        'c_sa_department',
+        'c_sa_category',
+        'c_sa_scategory',
+        'c_sa_vendor',
+      ];
+
+      for (const permissionObject of permissionArray) {
+        console.log(`hi 15: Processing ${permissionType} removal`, permissionObject);
+        for (const column in permissionObject) {
+          if (!allowedColumns.includes(column)) {
+            console.log(`hi 16: Skipping invalid column ${column} for ${permissionType} removal. Verify tb_USERS schema.`);
+            continue;
+          }
+
+          if (permissionObject[column]) {
+            console.log('hi 16: Removing permission', { column, username: trimmedName });
+            const request = new mssql.Request(transaction);
+            request.input('value', mssql.Char(1), 'F');
+            request.input('registeredBy', mssql.VarChar(20), username || null);
+            request.input('username', mssql.VarChar(50), trimmedName);
+
+            try {
+              const result = await request.query(`
+                UPDATE tb_USERS 
+                SET ${column} = @value, registered_by = @registeredBy
+                WHERE username = @username;
+              `);
+              console.log('hi 17: Permission removed', { column, rowsAffected: result.rowsAffected });
+
+              if (result.rowsAffected[0] === 0) {
+                console.log(`hi 18: No rows affected for ${column} removal - user may not exist`);
+              }
+            } catch (err) {
+              console.log(`hi 18: Failed to remove ${column} for ${permissionType}: ${err.message}`);
+              throw err;
+            }
+          }
+        }
+      }
+    };
+
+    console.log('hi 19: Applying permission updates');
+    await updatePermissions(admin, 'admin');
+    await updatePermissions(dashboard, 'dashboard');
+    await updatePermissions(stock, 'stock');
+    await updatePermissions(colorSize_stock, 'colorSize_stock');
+    await updatePermissions(colorSize_sales, 'colorSize_sales');
+
+    console.log('hi 20: Applying permission removals');
+    await removePermissions(removeAdmin, 'admin');
+    await removePermissions(removeDashboard, 'dashboard');
+    await removePermissions(removeStock, 'stock');
+    console.log('hi 21: Permissions processed');
+
     // Check if nothing was sent
     const isEmptyOrAllFalse = (arr) => {
       return (
@@ -3898,7 +4195,7 @@ await updatePermissions(colorSize_sales);
         arr.length === 0 ||
         arr.every(
           (obj) =>
-            typeof obj === "object" &&
+            typeof obj === 'object' &&
             Object.values(obj).every((value) => value === false)
         )
       );
@@ -3916,20 +4213,70 @@ await updatePermissions(colorSize_sales);
       isEmptyOrAllFalse(removeAdmin) &&
       isEmptyOrAllFalse(removeDashboard) &&
       isEmptyOrAllFalse(removeStock);
+    console.log('hi 22: nothingToUpdate check', nothingToUpdate);
 
     if (nothingToUpdate) {
-      return res
-        .status(400)
-        .json({ message: "Please provide details to update." });
+      throw new Error('Please provide details to update.');
     }
 
-    return res
-      .status(200)
-      .json({ message: "Database connection updated successfully" });
+    await transaction.commit();
+    console.log('hi 23: Transaction committed');
+    return res.status(200).json({ message: 'Database connection updated successfully' });
   } catch (err) {
-    console.error("Error:", err);
+    console.log('hi 24: Error occurred', err);
+    if (transaction) {
+      console.log('hi 25: Rolling back transaction');
+      await transaction.rollback();
+    }
+    console.error('Error:', err);
+    return res.status(500).json({ message: `Failed to update the database connection: ${err.message}` });
+  } finally {
+    if (pool) {
+      console.log('hi 26: Closing database connection');
+      await pool.close();
+    }
+  }
+};
+
+//server connection details for admin page
+exports.serverConnection = async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res
+        .status(403)
+        .json({ message: "No authorization token provided" });
+    }
+
+      try {
+        await mssql.close()
+
+    await mssql.connect(dbConnection);
+
+        const [tableRecords] = await Promise.all([
+          mssql.query(`
+            USE [${posmain}];
+            SELECT   
+            CUSTOMERID, COMPANY_NAME, SERVERIP, START_DATE, END_DATE
+            FROM tb_SERVER_DETAILS`),
+        ]);
+
+        return res.status(200).json({
+          message: "Details fetched successfully",
+          success: true,
+          records: tableRecords.recordset || [],
+        });
+      } catch (fetchErr) {
+        console.error("Error fetching data:", fetchErr);
+        return res
+          .status(500)
+          .json({ message: "Failed to fetch data" });
+      }
+    
+  } catch (error) {
+    console.error("Unhandled error in Dashboard:", error);
     return res
       .status(500)
-      .json({ message: "Failed to update the database connection." });
+      .json({ message: "Failed to load dashboard" });
   }
 };

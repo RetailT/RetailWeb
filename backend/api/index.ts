@@ -44,6 +44,7 @@ app.get('/find-user-connection', authenticateToken, authController.findUserConne
 app.get('/product-view', authenticateToken, authController.productView);
 app.get('/product-view-sales', authenticateToken, authController.productViewSales);
 app.get('/product-names', authenticateToken, authController.productName);
+app.get('/connection-details', authenticateToken, authController.serverConnection);
 
 app.post("/login", authController.login);
 app.post('/register', authController.register);
