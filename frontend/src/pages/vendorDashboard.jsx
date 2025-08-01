@@ -92,16 +92,21 @@ const VendorDashboard = () => {
         // Set the first option to include all options
         setFirstOption(allOptions);
         setSelectedOptions(allOptions); // Set the selected options to all options as well
-      }
-      else{
+      } else {
         setDisable(false);
-        setAlert({ message: response.data.message || "Error Occured", type: "error" });
-      setTimeout(() => setAlert(null), 3000);
+        setAlert({
+          message: response.data.message || "Error Occured",
+          type: "error",
+        });
+        setTimeout(() => setAlert(null), 3000);
       }
     } catch (err) {
       setError("Failed to fetch dashboard data");
-setDisable(false);
-        setAlert({ message: err.response?.data?.message || "Error Occured", type: "error" });
+      setDisable(false);
+      setAlert({
+        message: err.response?.data?.message || "Error Occured",
+        type: "error",
+      });
       setTimeout(() => setAlert(null), 3000);
       console.error("Error fetching dashboard data:", err);
     }
@@ -129,118 +134,128 @@ setDisable(false);
           }
         );
 
-        if(response.data.message==='Processed parameters for company codes'){
-const amountBarChartData = response.data.vendorAmountBarChart;
-        const quantityBarChartData = response.data.vendorQuantityBarChart;
-        const tableData = response.data.vendorTableRecords;
+        if (response.data.message === "Processed parameters for company codes") {
+          const amountBarChartData = response.data.vendorAmountBarChart;
+          const quantityBarChartData = response.data.vendorQuantityBarChart;
+          const tableData = response.data.vendorTableRecords;
 
-        const amountLabels = amountBarChartData.map((item) => item.VENDORNAME);
-        setAmountBarChartLabels(amountLabels);
-
-        const amountData = amountBarChartData.map((item) => item.AMOUNT);
-        setAmountBarChartRecords(amountData);
-
-        const quantityLabels = quantityBarChartData.map(
-          (item) => item.VENDORNAME
-        );
-        setQuantityBarChartLabels(quantityLabels);
-
-        const quantityData = quantityBarChartData.map((item) => item.QUANTITY);
-        setQuantityBarChartRecords(quantityData);
-
-        const updatedTableData = tableData.map((item) => {
-          const matchingOption = firstOption.find(
-            (option) => option.code === item.COMPANY_CODE
+          const amountLabels = amountBarChartData.map(
+            (item) => item.VENDORNAME
           );
-          const companyName = matchingOption ? matchingOption.name : "UNKNOWN"; // Company name or 'UNKNOWN'
+          setAmountBarChartLabels(amountLabels);
 
-          return {
-            VENDOR_NAME: item.VENDOR_NAME,
-            VENDOR_CODE: item.VENDOR_CODE,
-            COMPANY_NAME: companyName, // Company name
-            [`${companyName}_QUANTITY`]: item.QUANTITY, // Dynamic key with company name
-            [`${companyName}_AMOUNT`]: item.AMOUNT, // Dynamic key with company name
-          };
-        });
+          const amountData = amountBarChartData.map((item) => item.AMOUNT);
+          setAmountBarChartRecords(amountData);
 
-        const namesArray = firstOption.map((option) => option.name);
-        const filteredNames = namesArray.filter((name) =>
-          updatedTableData.some((record) => record.COMPANY_NAME === name)
-        );
-        const mainHeadings = [
-          { label: "VENDOR", subHeadings: ["CODE", "NAME"] },
-          ...filteredNames.map((name) => ({
-            // Replace spaces with underscores
-            label: name.replace(/\s+/g, "_"),
-            subHeadings: ["AMOUNT", "QUANTITY"],
-          })),
-        ];
+          const quantityLabels = quantityBarChartData.map(
+            (item) => item.VENDORNAME
+          );
+          setQuantityBarChartLabels(quantityLabels);
 
-        setTableHeadings(mainHeadings);
+          const quantityData = quantityBarChartData.map(
+            (item) => item.QUANTITY
+          );
+          setQuantityBarChartRecords(quantityData);
 
-        const transformedData = updatedTableData.map((row) => {
-          const newRow = {};
-          for (let key in row) {
-            // Replace spaces with underscores in the keys
-            const normalizedKey = key.replace(/\s+/g, "_");
-            newRow[normalizedKey] = row[key];
-          }
-          filteredNames.forEach((name) => {
-            const formattedName = name.replace(/\s+/g, "_");
+          const updatedTableData = tableData.map((item) => {
+            const matchingOption = firstOption.find(
+              (option) => option.code === item.COMPANY_CODE
+            );
+            const companyName = matchingOption
+              ? matchingOption.name
+              : "UNKNOWN"; // Company name or 'UNKNOWN'
 
-            if (!newRow.hasOwnProperty(`${formattedName}_AMOUNT`)) {
-              newRow[`${formattedName}_AMOUNT`] = "";
-            }
-            if (!newRow.hasOwnProperty(`${formattedName}_QUANTITY`)) {
-              newRow[`${formattedName}_QUANTITY`] = "";
-            }
+            return {
+              VENDOR_NAME: item.VENDOR_NAME,
+              VENDOR_CODE: item.VENDOR_CODE,
+              COMPANY_NAME: companyName, // Company name
+              [`${companyName}_QUANTITY`]: item.QUANTITY, // Dynamic key with company name
+              [`${companyName}_AMOUNT`]: item.AMOUNT, // Dynamic key with company name
+            };
           });
-          return newRow;
-        });
 
-        function aggregateData(data) {
-          const aggregatedData = {};
+          const namesArray = firstOption.map((option) => option.name);
+          const filteredNames = namesArray.filter((name) =>
+            updatedTableData.some((record) => record.COMPANY_NAME === name)
+          );
+          const mainHeadings = [
+            { label: "VENDOR", subHeadings: ["CODE", "NAME"] },
+            ...filteredNames.map((name) => ({
+              // Replace spaces with underscores
+              label: name.replace(/\s+/g, "_"),
+              subHeadings: ["AMOUNT", "QUANTITY"],
+            })),
+          ];
 
-          data.forEach((record) => {
-            const { VENDOR_NAME, VENDOR_CODE, ...rest } = record;
+          setTableHeadings(mainHeadings);
 
-            if (!aggregatedData[VENDOR_NAME]) {
-              aggregatedData[VENDOR_NAME] = {
-                VENDOR_NAME,
-                VENDOR_CODE,
-              };
+          const transformedData = updatedTableData.map((row) => {
+            const newRow = {};
+            for (let key in row) {
+              // Replace spaces with underscores in the keys
+              const normalizedKey = key.replace(/\s+/g, "_");
+              newRow[normalizedKey] = row[key];
             }
+            filteredNames.forEach((name) => {
+              const formattedName = name.replace(/\s+/g, "_");
 
-            Object.keys(rest).forEach((key) => {
-              const value = rest[key];
-              if (!aggregatedData[VENDOR_NAME][key] && value !== "") {
-                aggregatedData[VENDOR_NAME][key] = parseFloat(value); // Convert to number
-              } else if (value !== "") {
-                aggregatedData[VENDOR_NAME][key] += parseFloat(value);
+              if (!newRow.hasOwnProperty(`${formattedName}_AMOUNT`)) {
+                newRow[`${formattedName}_AMOUNT`] = "";
+              }
+              if (!newRow.hasOwnProperty(`${formattedName}_QUANTITY`)) {
+                newRow[`${formattedName}_QUANTITY`] = "";
               }
             });
+            return newRow;
           });
 
-          return Object.values(aggregatedData);
-        }
+          function aggregateData(data) {
+            const aggregatedData = {};
 
-        // Aggregating the sample data
-        const aggregatedResults = aggregateData(transformedData);
+            data.forEach((record) => {
+              const { VENDOR_NAME, VENDOR_CODE, ...rest } = record;
 
-        setTableRecords(aggregatedResults);
-        setDisable(false);
-        }
-        else{
+              if (!aggregatedData[VENDOR_NAME]) {
+                aggregatedData[VENDOR_NAME] = {
+                  VENDOR_NAME,
+                  VENDOR_CODE,
+                };
+              }
+
+              Object.keys(rest).forEach((key) => {
+                const value = rest[key];
+                if (!aggregatedData[VENDOR_NAME][key] && value !== "") {
+                  aggregatedData[VENDOR_NAME][key] = parseFloat(value); // Convert to number
+                } else if (value !== "") {
+                  aggregatedData[VENDOR_NAME][key] += parseFloat(value);
+                }
+              });
+            });
+
+            return Object.values(aggregatedData);
+          }
+
+          // Aggregating the sample data
+          const aggregatedResults = aggregateData(transformedData);
+
+          setTableRecords(aggregatedResults);
           setDisable(false);
-        setAlert({ message: response.data.message || "Error Occured", type: "error" });
-      setTimeout(() => setAlert(null), 3000);
+        } else {
+          setDisable(false);
+          setAlert({
+            message: response.data.message || "Error Occured",
+            type: "error",
+          });
+          setTimeout(() => setAlert(null), 3000);
         }
-        
       } catch (err) {
         console.error("Error sending parameters:", err);
         setDisable(false);
-        setAlert({ message: err.response?.data?.message || "Error Occured", type: "error" });
-      setTimeout(() => setAlert(null), 3000);
+        setAlert({
+          message: err.response?.data?.message || "Error Occured",
+          type: "error",
+        });
+        setTimeout(() => setAlert(null), 3000);
       }
     }
   };
@@ -320,9 +335,7 @@ const amountBarChartData = response.data.vendorAmountBarChart;
 
   return (
     <div>
-      {disable && (
-          <CircleBounceLoader />
-        )}
+      {disable && <CircleBounceLoader />}
       <Navbar />
 
       {/* Main Layout */}
