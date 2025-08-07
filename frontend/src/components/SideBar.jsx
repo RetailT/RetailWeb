@@ -261,7 +261,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
                     <ul className="ml-4 pl-4">
                       {c_st_product_wise?.toLowerCase() === "t" && (
                         <li className="flex items-center p-2 mt-2 hover:bg-[#000000]">
-                          <NavLink to="/company-dashboard" className="w-full">
+                          <NavLink to="/color-size-stock-product" className="w-full">
                             Product Wise
                           </NavLink>
                         </li>
@@ -269,7 +269,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
                       {c_st_department?.toLowerCase() === "t" && (
                         <li className="flex items-center p-2 mt-2 hover:bg-[#000000]">
                           <NavLink
-                            to="/department-dashboard"
+                            to="/color-size-stock-department"
                             className="w-full"
                           >
                             Departments
@@ -278,7 +278,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
                       )}
                       {c_st_category?.toLowerCase() === "t" && (
                         <li className="flex items-center p-2 mt-2 hover:bg-[#000000]">
-                          <NavLink to="/category-dashboard" className="w-full">
+                          <NavLink to="/color-size-stock-category" className="w-full">
                             Category
                           </NavLink>
                         </li>
@@ -286,7 +286,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
                       {c_st_scategory?.toLowerCase() === "t" && (
                         <li className="flex items-center p-2 mt-2 hover:bg-[#000000]">
                           <NavLink
-                            to="/sub-category-dashboard"
+                            to="/color-size-stock-subcategory"
                             className="w-full"
                           >
                             Sub Category
@@ -295,7 +295,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
                       )}
                       {c_st_vendor?.toLowerCase() === "t" && (
                         <li className="flex items-center p-2 mt-2 hover:bg-[#000000]">
-                          <NavLink to="/vendor-dashboard" className="w-full">
+                          <NavLink to="/color-size-stock-vendor" className="w-full">
                             Vendor
                           </NavLink>
                         </li>
@@ -330,7 +330,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
                     <ul className="ml-4 pl-4">
                       {c_sa_product_wise?.toLowerCase() === "t" && (
                         <li className="flex items-center p-2 mt-2 hover:bg-[#000000]">
-                          <NavLink to="/company-dashboard" className="w-full">
+                          <NavLink to="/color-size-sales-product" className="w-full">
                             Product Wise
                           </NavLink>
                         </li>

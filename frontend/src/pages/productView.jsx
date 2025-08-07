@@ -144,6 +144,8 @@ function App() {
   };
 
   const requestData = async (mode, data, inputValue) => {
+    setSalesData([]);
+    setSalesHeaders([]);
     try {
       setDisable(true);
       const response = await axios.get(

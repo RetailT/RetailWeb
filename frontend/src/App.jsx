@@ -14,6 +14,8 @@ import ColorSizeSalesDepartment from "./pages/colorSizeSalesDepartment"
 import ColorSizeSalesCategory from "./pages/colorSizeSalesCategoryDashboard"
 import ColorSizeSalesSubCategory from "./pages/colorSizeSalesSubCategoryDashboard"
 import ColorSizeSalesVendor from "./pages/colorSizeSalesVendorDashboard"
+import ColorSizeSalesProduct from "./pages/colorSizeSalesProduct"
+import ColorSizeStockProduct from "./pages/colorSizeStockProduct"
 import Report from "./pages/report";
 import Scan from "./pages/scan";
 import Reset from "./pages/reset";
@@ -49,7 +51,9 @@ function App() {
         <Route path="/color-size-sales-department" element={<ProtectedRoute> <ColorSizeSalesDepartment /> </ProtectedRoute>}/>   
         <Route path="/color-size-sales-category" element={<ProtectedRoute> <ColorSizeSalesCategory /> </ProtectedRoute>}/>  
         <Route path="/color-size-sales-subcategory" element={<ProtectedRoute> <ColorSizeSalesSubCategory /> </ProtectedRoute>}/>
-        <Route path="/color-size-sales-vendor" element={<ProtectedRoute> <ColorSizeSalesVendor /> </ProtectedRoute>}/>    
+        <Route path="/color-size-sales-vendor" element={<ProtectedRoute> <ColorSizeSalesVendor /> </ProtectedRoute>}/>  
+        <Route path="/color-size-sales-product" element={<ProtectedRoute> <ColorSizeSalesProduct /> </ProtectedRoute>}/>   
+        <Route path="/color-size-stock-product" element={<ProtectedRoute> <ColorSizeStockProduct /> </ProtectedRoute>}/> 
       </Routes>
     </Router>
     </AuthProvider>

@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 
-const DatePicker = ({ label, onDateChange }) => {
+const DatePicker = ({ label, onDateChange, range }) => {
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [date, setDate] = useState("");
 
   const handleFromDateChange = (event) => {
     const selectedDate = event.target.value;
@@ -25,11 +26,37 @@ const DatePicker = ({ label, onDateChange }) => {
     onDateChange({ fromDate, toDate: selectedDate });
   };
 
+const handleDateChange = (event) => {
+  const selectedDate = event.target.value;
+  setDate(selectedDate);
+
+  // Use selectedDate instead of outdated state
+  onDateChange({ date: selectedDate });
+};
+
+
   return (
     <div className="flex flex-col gap-2">
   {/* Dynamic Label */}
   <label className="block text-sm font-medium text-gray-700 ">{label}</label>
 
+{range ? (
+  <div className="flex flex-col sm:flex-row items-center gap-4 ml-6 md:ml-0">
+    {/* From Date Section */}
+    <div className="flex items-center gap-2">
+      <label htmlFor="from-date" className="text-gray-700">
+        Date:
+      </label>
+      <input
+        type="date"
+        id="date"
+        value={date}
+        onChange={handleDateChange}
+        className="border border-gray-300 p-2 rounded-md shadow-sm w-full"
+      />
+    </div>
+  </div>
+) : (
   <div className="flex flex-col sm:flex-row items-center gap-4 ml-6 md:ml-0">
     {/* From Date Section */}
     <div className="flex items-center gap-2">
@@ -60,6 +87,8 @@ const DatePicker = ({ label, onDateChange }) => {
       />
     </div>
   </div>
+)}
+  
 </div>
   );
 };

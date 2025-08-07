@@ -34,7 +34,9 @@ const NestedDynamicTable = ({ data, mainHeadings, title, onRowSelect }) => {
       const rowData = mainHeadings.flatMap((main) =>
         main.subHeadings.map((sub) => {
           const key = `${main.label.replace(/\s+/g, "_")}_${sub}`;
-          return sub.toLowerCase() === "amount" || sub.toLowerCase() === "quantity"
+          return sub.toLowerCase() === "amount" || sub.toLowerCase() === "quantity" || sub.toLowerCase() === "costprice" 
+          || sub.toLowerCase() === "unitprice" || sub.toLowerCase() === "scalesvalue"
+          || sub.toLowerCase() === "costvalue"
             ? formatAmount(row[key])
             : row[key] || "";
         })
@@ -69,7 +71,9 @@ const NestedDynamicTable = ({ data, mainHeadings, title, onRowSelect }) => {
       mainHeadings.flatMap((main) =>
         main.subHeadings.map((sub) => {
           const key = `${main.label.replace(/\s+/g, "_")}_${sub}`;
-          return sub.toLowerCase() === "amount" || sub.toLowerCase() === "quantity"
+          return sub.toLowerCase() === "amount" || sub.toLowerCase() === "quantity" || 
+          sub.toLowerCase() === "costprice" || sub.toLowerCase() === "unitprice" || sub.toLowerCase() === "scalesvalue"
+          || sub.toLowerCase() === "costvalue"
             ? formatAmount(row[key])
             : row[key] || "";
         })
@@ -190,12 +194,12 @@ const NestedDynamicTable = ({ data, mainHeadings, title, onRowSelect }) => {
                       <td
                         key={`${rowIndex}-${index}-${subIndex}`}
                         className={`px-6 py-3 whitespace-nowrap text-sm text-gray-900 border border-gray-300 ${
-                          ["amount", "quantity"].includes(sub.toLowerCase())
+                          ["amount", "quantity", "costprice", "unitprice", "salesvalue", "costvalue"].includes(sub.toLowerCase())
                             ? "text-right"
                             : "text-center"
                         }`}
                       >
-                        {["amount", "quantity"].includes(sub.toLowerCase())
+                        {["amount", "quantity", "costprice", "unitprice", "salesvalue", "costvalue"].includes(sub.toLowerCase())
                           ? formatAmount(cellValue)
                           : cellValue}
                       </td>
