@@ -42,6 +42,10 @@ app.get('/color-size-sales-subcategory-data', authenticateToken, authController.
 app.get('/color-size-sales-vendor-data', authenticateToken, authController.colorSizeSalesVendor);
 
 app.get('/color-size-stock-product-dashboard', authenticateToken, authController.colorSizeStockProductDashboard);
+app.get('/color-size-stock-department-dashboard', authenticateToken, authController.colorSizeStockDepartmentDashboard);
+app.get('/color-size-stock-category-dashboard', authenticateToken, authController.colorSizeStockCategoryDashboard);
+app.get('/color-size-stock-sub-category-dashboard', authenticateToken, authController.colorSizeStockSubCategoryDashboard);
+app.get('/color-size-stock-vendor-dashboard', authenticateToken, authController.colorSizeStockVendorDashboard);
 
 app.get('/scan', authenticateToken, authController.scan);
 app.get('/stock-update', authenticateToken, authController.stockUpdate);
@@ -72,15 +76,17 @@ app.delete('/grnprn-delete', authenticateToken, authController.grnprnDelete);
 
 app.put('/reset-database-connection', authenticateToken, authController.resetDatabaseConnection);
 
+
+// // for local development -- comment out in production
 // if (process.env.NODE_ENV !== "production") {
 //   app.listen(5000, () => {
 //     console.log(`Server is running on http://localhost:5000`);
 //   });
 // }
-
 // const handler = serverless(app);
 // export default handler;
 
-// Export as serverless function
+
+// // Uncomment the following lines if you want to export the app for serverless deployment
 module.exports = app;
 module.exports.handler = serverless(app);
