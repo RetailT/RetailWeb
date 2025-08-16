@@ -719,53 +719,56 @@ function App() {
                       </div>
                     </div>
 
-                    <div className="p-4 bg-white rounded-xl shadow-md mt-6">
-                      <p className="text-center text-[#bc4a17] text-lg sm:text-xl font-bold mb-6">
-                        Price Details
-                      </p>
+                   <div className="p-4 bg-white rounded-xl shadow-md mt-6">
+  <p className="text-center text-[#bc4a17] text-lg sm:text-xl font-bold mb-6">
+    Price Details
+  </p>
 
-                      {/* Price */}
-                      <div>
-                        <p className="text-[#bc4a17] font-semibold text-base sm:text-lg mb-2">
-                          Price
-                        </p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 text-gray-800 text-sm sm:text-base">
-                          <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
-                            <span className="font-medium">Cost Price:</span>
-                            <span>{productData.COSTPRICE.toFixed(2)}</span>
-                            <span className="font-medium">Unit Price:</span>
-                            <span>{productData.SCALEPRICE.toFixed(2)}</span>
-                          </div>
-                          <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
-                            <span className="font-medium">Minimum Price:</span>
-                            <span>{productData.MINPRICE.toFixed(2)}</span>
-                            <span className="font-medium">
-                              Wholesale Price:
-                            </span>
-                            <span>{productData.WPRICE.toFixed(2)}</span>
-                          </div>
-                          <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 mt-2">
-                            <span className="font-medium">Average Cost:</span>
-                            <span>{productData.AVGCOST.toFixed(2)}</span>
-                          </div>
-                        </div>
-                      </div>
+  {/* Price */}
+  <div>
+    <p className="text-[#bc4a17] font-semibold text-base sm:text-lg mb-2">
+      Price
+    </p>
+    <div className="grid grid-cols-1 sm:grid-cols-2 text-gray-800 text-sm sm:text-base">
+      <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-2">
+        <span className="font-medium">Cost Price:</span>
+        <span className="text-right mr-10 md:mr-40">{productData.COSTPRICE.toFixed(2)}</span>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-y-4 text-gray-700 mt-8 text-sm sm:text-base">
-                        <p>
-                          <strong>Price 1:</strong>{" "}
-                          {productData.PRICE1.toFixed(2)}
-                        </p>
-                        <p>
-                          <strong>Price 2:</strong>{" "}
-                          {productData.PRICE2.toFixed(2)}
-                        </p>
-                        <p>
-                          <strong>Price 3:</strong>{" "}
-                          {productData.PRICE3.toFixed(2)}
-                        </p>
-                      </div>
-                    </div>
+        <span className="font-medium">Unit Price:</span>
+        <span className="text-right mr-10 md:mr-40">{productData.SCALEPRICE.toFixed(2)}</span>
+      </div>
+
+      <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-2">
+        <span className="font-medium">Minimum Price:</span>
+        <span className="text-right mr-10 md:mr-40">{productData.MINPRICE.toFixed(2)}</span>
+
+        <span className="font-medium">Wholesale Price:</span>
+        <span className="text-right mr-10 md:mr-40">{productData.WPRICE.toFixed(2)}</span>
+      </div>
+
+      <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-2 mt-2">
+        <span className="font-medium">Average Cost:</span>
+        <span className="text-right mr-10 md:mr-40">{productData.AVGCOST.toFixed(2)}</span>
+      </div>
+    </div>
+  </div>
+
+  <div className="grid grid-cols-1 sm:grid-cols-3 gap-y-4 text-gray-700 mt-8 text-sm sm:text-base">
+    <p className="flex justify-between gap-2">
+      <strong>Price 1:</strong>
+      <span className="text-right mr-10 md:mr-40">{productData.PRICE1.toFixed(2)}</span>
+    </p>
+    <p className="flex justify-between gap-2">
+      <strong>Price 2:</strong>
+      <span className="text-right mr-10 md:mr-40">{productData.PRICE2.toFixed(2)}</span>
+    </p>
+    <p className="flex justify-between gap-2">
+      <strong>Price 3:</strong>
+      <span className="text-right mr-10 md:mr-40">{productData.PRICE3.toFixed(2)}</span>
+    </p>
+  </div>
+</div>
+
                   </div>
                 )}
                 {isData && (
