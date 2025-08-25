@@ -46,8 +46,9 @@ const Reset = () => {
         type: "success",
       });
     } else {
+      console.log('error', response.data.errors);
       setAlert({
-        message: "Error syncing databases",
+        message: response.data?.errors || "Error syncing databases",
         type: "error",
       });
     }
