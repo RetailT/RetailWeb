@@ -51,6 +51,10 @@ const Reset = () => {
         type: "error",
       });
     }
+    setTimeout(() => {
+              setAlert(null);
+              navigate("/login");
+            }, 1000);
   } catch (err) {
     const apiError = err.response?.data;
 
