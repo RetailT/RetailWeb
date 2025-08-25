@@ -4,6 +4,8 @@ const jwt = require("jsonwebtoken");
 const moment = require("moment");
 const mssql = require("mssql");
 const crypto = require("crypto");
+const https = require("https");
+const qs = require("qs");
 const nodemailer = require("nodemailer");
 const { sendPasswordResetEmail } = require("../utils/nodemailer");
 const { promisify } = require("util");
@@ -23,7 +25,7 @@ const dbConfig1 = {
     encrypt: false, // Disable encryption
     trustServerCertificate: true, // Trust server certificate (useful for local databases)
   },
-  port: 1443, // Default MSSQL port (1433)
+  port: 1443, 
 };
 
 const dbConnection = {
@@ -317,6 +319,7 @@ async function syncDB() {
         );
 
         const users = await userDetails();
+
         if (!users || users.length === 0) {
           const msg = `No users found for IP: ${syncdbIp}`;
           console.log(msg);
@@ -325,6 +328,7 @@ async function syncDB() {
         }
 
         const payments = await userPaymentDetails();
+
         if (payments.error) {
           errors.push(payments.error);
           continue;
@@ -334,6 +338,7 @@ async function syncDB() {
         const agent = new https.Agent({ family: 4 });
 
         for (const user of users) {
+
           const {
             SalesTaxRate,
             OAUTH_TOKEN_URL,
@@ -374,6 +379,7 @@ async function syncDB() {
               payment.ReceiptDate,
               payment.ReceiptNo
             );
+
             if (items.error) {
               errors.push(items.error);
             }
@@ -387,6 +393,7 @@ async function syncDB() {
           }
 
           const token = await getAccessToken(user);
+
           if (!token) {
             const errorMsg = `Skipping API call for user ${user.AppCode} due to token error.`;
             console.error(errorMsg);
@@ -426,13 +433,15 @@ async function syncDB() {
             apiResponses.push({ error: errorMessage });
           }
         }
-
-        await mssql.close(); // close connection after finishing this customer
+        
       } catch (err) {
         const errMsg = `Database Connection Error for IP ${syncdbIp}: ${err.message}`;
         console.error(errMsg);
         errors.push(errMsg);
       }
+//       finally {
+//   await mssql.close();  // Close once after all work is done
+// }
     }
 
     return { responses: apiResponses, errors };
@@ -440,6 +449,7 @@ async function syncDB() {
     console.error("Unexpected error occurred in syncDB:", error);
     return { responses: [], errors: [error.message] };
   }
+  
 }
 
 function currentDateTime() {
@@ -462,8 +472,44 @@ function currentDateTime() {
   return { trDate, trTime };
 }
 
+//sync db
+exports.syncDatabases = async (req, res) => {
+  try {
+    const responses = await syncDB();
+
+    if (
+      Array.isArray(responses.responses) &&
+      responses.responses[0]?.returnStatus === "Success"
+    ) {
+      const updateTableResult = await updateTables();
+      return res.status(200).json({
+        success: true,
+        message: "Database sync completed successfully.",
+        syncDetails: responses.responses,
+        updateDetails: updateTableResult,
+        errors: responses.errors || [],
+      });
+    } else {
+      return res.status(207).json({
+        success: false,
+        message: "Partial or full sync failure.",
+        syncDetails: responses.responses,
+        errors: responses.errors,
+      });
+    }
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Failed to start database sync.",
+      syncDetails: [],
+      errors: [error.message],
+    });
+  }
+};
+
 //login
 exports.login = async (req, res) => {
+  await mssql.close()
   let pool;
   try {
     pool = await connectToDatabase();
@@ -4772,41 +4818,6 @@ exports.grnprnTableData = async (req, res) => {
   }
 };
 
-//sync db
-exports.syncDatabases = async (req, res) => {
-  try {
-    const responses = await syncDB();
-
-    if (
-      Array.isArray(responses.responses) &&
-      responses.responses[0]?.returnStatus === "Success"
-    ) {
-      const updateTableResult = await updateTables();
-      return res.status(200).json({
-        success: true,
-        message: "Database sync completed successfully.",
-        syncDetails: responses.responses,
-        updateDetails: updateTableResult,
-        errors: responses.errors || [],
-      });
-    } else {
-      return res.status(207).json({
-        success: false,
-        message: "Partial or full sync failure.",
-        syncDetails: responses.responses,
-        errors: responses.errors,
-      });
-    }
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Failed to start database sync.",
-      syncDetails: [],
-      errors: [error.message],
-    });
-  }
-};
-
 // product name
 exports.productName = async (req, res) => {
   try {
@@ -5039,7 +5050,7 @@ exports.resetDatabaseConnection = async (req, res) => {
         encrypt: false,
         trustServerCertificate: true,
       },
-      port: 1433, // Adjust to 1443 if required
+      port: 1443, //---------1433 initialy there
       connectionTimeout: 30000,
       requestTimeout: 30000,
     };
