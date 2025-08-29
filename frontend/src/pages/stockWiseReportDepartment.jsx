@@ -14,14 +14,14 @@ const ProductDashboard = () => {
   const { authToken } = useContext(AuthContext);
   const [userData, setUserData] = useState(null);
   const [productNames, setProductNames] = useState([]);
-  const [categoryNames, setCategoryNames] = useState([]);
+  const [departmentNames, setDepartmentNames] = useState([]);
   const [tableRecords, setTableRecords] = useState([]);
   const [filteredRecords, setFilteredRecords] = useState([]);
   const [tableHeadings, setTableHeadings] = useState([]);
   const [searchInput, setSearchInput] = useState("");
-  const [categorySearchInput, setCategorySearchInput] = useState("");
+  const [departmentSearchInput, setDepartmentSearchInput] = useState("");
   const [showProductSuggestions, setShowProductSuggestions] = useState(false);
-  const [showCategorySuggestions, setShowCategorySuggestions] = useState(false);
+  const [showDepartmentSuggestions, setShowDepartmentSuggestions] = useState(false);
   const [selectedDate, setSelectedDate] = useState({});
   const [selectedOptions, setSelectedOptions] = useState([]);
   const [disable, setDisable] = useState(true);
@@ -79,11 +79,11 @@ const ProductDashboard = () => {
     const productMap = new Map();
 
     data.forEach((record) => {
-      const { PRODUCT_NAME, PRODUCT_CODE, CATEGORY_NAME, CATEGORY_CODE, COMPANY_CODE, COMPANY_NAME, ...rest } = record;
-      const key = `${PRODUCT_NAME}_${CATEGORY_NAME}`;
+      const { PRODUCT_NAME, PRODUCT_CODE, DEPARTMENT_NAME, DEPARTMENT_CODE, COMPANY_CODE, COMPANY_NAME, ...rest } = record;
+      const key = `${PRODUCT_NAME}_${DEPARTMENT_NAME}`;
 
       if (!productMap.has(key)) {
-        productMap.set(key, { PRODUCT_NAME, PRODUCT_CODE, CATEGORY_NAME, CATEGORY_CODE, COMPANY_CODE, COMPANY_NAME });
+        productMap.set(key, { PRODUCT_NAME, PRODUCT_CODE, DEPARTMENT_NAME, DEPARTMENT_CODE, COMPANY_CODE, COMPANY_NAME });
       }
 
       const currentRecord = productMap.get(key);
@@ -92,19 +92,19 @@ const ProductDashboard = () => {
       });
     });
 
-    return { products: Array.from(productMap.values()), categories: [] };
+    return { products: Array.from(productMap.values()), departments: [] };
   }
 
   // ---------------------- FETCH TABLE DATA ----------------------
   const fetchData = async () => {
     setSearchInput("");
-    setCategorySearchInput("");
+    setDepartmentSearchInput("");
     if (!firstOption) return;
     setDisable(true);
 
     try {
       const response = await axios.get(
-        `${process.env.REACT_APP_BACKEND_URL}color-size-stock-category-dashboard`,
+        `${process.env.REACT_APP_BACKEND_URL}stock-wise-department`,
         {
           headers: { Authorization: `Bearer ${token}` },
           params: {
@@ -134,8 +134,8 @@ const ProductDashboard = () => {
         const baseData = {
           PRODUCT_NAME: item.PRODUCT_NAME,
           PRODUCT_CODE: item.PRODUCT_CODE,
-          CATEGORY_NAME: item.CATEGORY_NAME,
-          CATEGORY_CODE: item.CATEGORY_CODE,
+          DEPARTMENT_NAME: item.DEPARTMENT_NAME,
+          DEPARTMENT_CODE: item.DEPARTMENT_CODE,
           COMPANY_CODE: item.COMPANY_CODE,
           COMPANY_NAME: companyName,
           [`${companyName}_COSTPRICE`]: item.COSTPRICE,
@@ -159,7 +159,7 @@ const ProductDashboard = () => {
 
       const mainHeadings = [
         { label: "PRODUCT", subHeadings: ["CODE", "NAME"] },
-        { label: "CATEGORY", subHeadings: ["CODE", "NAME"] },
+        { label: "DEPARTMENT", subHeadings: ["CODE", "NAME"] },
         ...filteredNames.map((name) => ({
           label: name.replace(/\s+/g, "_"),
           subHeadings: isValuationChecked
@@ -193,7 +193,7 @@ const ProductDashboard = () => {
       setTableRecords(products);
       setFilteredRecords(products);
       setProductNames([...new Set(products.map((item) => item.PRODUCT_NAME))]);
-      setCategoryNames([...new Set(products.map((item) => item.CATEGORY_NAME))]);
+      setDepartmentNames([...new Set(products.map((item) => item.DEPARTMENT_NAME))]);
 
       setDisable(false);
     } catch (err) {
@@ -227,14 +227,14 @@ const ProductDashboard = () => {
       setSearchInput(value);
       setShowProductSuggestions(value !== "");
     } else {
-      setCategorySearchInput(value);
-      setShowCategorySuggestions(value !== "");
+      setDepartmentSearchInput(value);
+      setShowDepartmentSuggestions(value !== "");
     }
 
     const filtered = tableRecords.filter((item) => {
       const matchProduct = !searchInput || item.PRODUCT_NAME.toLowerCase().includes(isProduct ? value.toLowerCase() : searchInput.toLowerCase());
-      const matchCategory = !categorySearchInput || item.CATEGORY_NAME.toLowerCase().includes(isProduct ? categorySearchInput.toLowerCase() : value.toLowerCase());
-      return matchProduct && matchCategory;
+      const matchDepartment = !departmentSearchInput || item.DEPARTMENT_NAME.toLowerCase().includes(isProduct ? departmentSearchInput.toLowerCase() : value.toLowerCase());
+      return matchProduct && matchDepartment;
     });
 
     setFilteredRecords(filtered);
@@ -245,14 +245,14 @@ const ProductDashboard = () => {
       setSearchInput(name);
       setShowProductSuggestions(false);
     } else {
-      setCategorySearchInput(name);
-      setShowCategorySuggestions(false);
+      setDepartmentSearchInput(name);
+      setShowDepartmentSuggestions(false);
     }
 
     const filtered = tableRecords.filter(
       (item) =>
         (!searchInput || item.PRODUCT_NAME.toLowerCase() === (isProduct ? name.toLowerCase() : searchInput.toLowerCase())) &&
-        (!categorySearchInput || item.CATEGORY_NAME.toLowerCase() === (isProduct ? categorySearchInput.toLowerCase() : name.toLowerCase()))
+        (!departmentSearchInput || item.DEPARTMENT_NAME.toLowerCase() === (isProduct ? departmentSearchInput.toLowerCase() : name.toLowerCase()))
     );
 
     setFilteredRecords(filtered);
@@ -291,7 +291,7 @@ const ProductDashboard = () => {
       <Navbar />
       <div className="container mx-auto p-6 md:p-16">
         <div className="mt-20 md:mt-14">
-          <Heading text="Category Stock Dashboard" />
+          <Heading text="Department Stock Dashboard" />
         </div>
         <div className="mt-4">
           {alert && (
@@ -308,7 +308,7 @@ const ProductDashboard = () => {
             {isChecked ? (
               <div className="mt-8">
                 <div className="text-center text-xl sm:text-2xl font-bold mb-4">
-                  Current Category Stock
+                  Current Department Stock
                 </div>
                 <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
                   <div className="flex items-center">
@@ -388,7 +388,7 @@ const ProductDashboard = () => {
               style={{ backgroundColor: "#d8d8d8" }}
             >
               <div className="flex justify-center text-xl sm:text-2xl font-bold text-black">
-                Category Stock Summary
+                Department Stock Summary
               </div>
               <div className="flex justify-center font-bold mt-4">
                 <p>{displayDate}</p>
@@ -413,10 +413,10 @@ const ProductDashboard = () => {
                   )}
                 </div>
                 <div className="relative w-full sm:w-1/2">
-                  <input type="text" placeholder="Search Category" value={categorySearchInput} onChange={(e) => handleInputChange(e, false)} className="border px-3 py-2 w-full rounded-md" />
-                  {showCategorySuggestions && (
+                  <input type="text" placeholder="Search Department" value={departmentSearchInput} onChange={(e) => handleInputChange(e, false)} className="border px-3 py-2 w-full rounded-md" />
+                  {showDepartmentSuggestions && (
                     <ul className="absolute bg-white border w-full max-h-40 overflow-y-auto z-10">
-                      {categoryNames.filter((name) => name.toLowerCase().includes(categorySearchInput.toLowerCase())).map((name, idx) => (
+                      {departmentNames.filter((name) => name.toLowerCase().includes(departmentSearchInput.toLowerCase())).map((name, idx) => (
                         <li key={idx} className="px-3 py-2 hover:bg-gray-200 cursor-pointer" onClick={() => handleSelectName(name, false)}>
                           {name}
                         </li>

@@ -50,6 +50,11 @@ const Reset = () => {
   const [cSaCategory, setCSaCategory] = useState(false);
   const [cSaSCategory, setCSaSCategory] = useState(false);
   const [cSaVendor, setCSaVendor] = useState(false);
+  const [sProduct, setSProduct] = useState(false);
+  const [sDepartment, setSDepartment] = useState(false);
+  const [sCategory, setSCategory] = useState(false);
+  const [sSCategory, setSSCategory] = useState(false);
+  const [sVendor, setSVendor] = useState(false);
 
   const token = localStorage.getItem("authToken");
   const navigate = useNavigate();
@@ -149,7 +154,7 @@ useEffect(() => {
       isValid = false;
       setDisable(false);
     }
-    console.log('data',ip,port,companyName,startDate,endDate,customerID)
+   
     if(!ip || !port || !companyName || !startDate || !endDate ) {
       setAlert({ message: "All fields are required.", type: "error" });
       setTimeout(() => setAlert(null), 3000);
@@ -178,6 +183,15 @@ useEffect(() => {
             d_vendor: vendor,
             d_invoice: invoice,
             d_productView: productView,
+          },
+        ],
+        stock_wise: [
+          {
+            s_product: sProduct,
+            s_department: sDepartment,
+            s_category: sCategory,
+            s_scategory: sSCategory,
+            s_vendor: sVendor,
           },
         ],
         stock: [
@@ -369,6 +383,11 @@ setNewCustomerID("");
             setCSaCategory(false);
             setCSaSCategory(false);
             setCSaVendor(false);
+            setSProduct(false);
+            setSDepartment(false);
+            setSCategory(false);
+            setSSCategory(false);
+            setSVendor(false);
             setCompanyName("");
             setStartDate("");
             setEndDate("");
@@ -405,6 +424,11 @@ setNewCustomerID("");
             setCSaCategory(false);
             setCSaSCategory(false);
             setCSaVendor(false);
+            setSProduct(false);
+            setSDepartment(false);
+            setSCategory(false);
+            setSSCategory(false);
+            setSVendor(false);
             setCompanyName("");
             setStartDate("");
             setEndDate("");
@@ -754,6 +778,60 @@ setNewCustomerID("");
                   {/* Card 4 */}
                   <div className="bg-white p-2 sm:p-4 rounded-md shadow-md w-full md:w-[calc(25%-0.5rem)] min-w-[250px] mb-2 sm:mb-4">
                     <h2 className="text-sm sm:text-lg font-semibold text-gray-800 mb-2 sm:mb-4">
+                      Stock Wise Report
+                    </h2>
+                    <div className="flex flex-col gap-2 sm:gap-4">
+                      <label className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          checked={sProduct}
+                          onChange={(e) => setSProduct(e.target.checked)}
+                          className="w-4 h-4 sm:w-5 sm:h-5"
+                        />
+                        <span className="text-gray-700 text-sm">Product</span>
+                      </label>
+                      <label className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          checked={sDepartment}
+                          onChange={(e) => setSDepartment(e.target.checked)}
+                          className="w-4 h-4 sm:w-5 sm:h-5"
+                        />
+                        <span className="text-gray-700 text-sm">Department</span>
+                      </label>
+                      <label className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          checked={sCategory}
+                          onChange={(e) => setSCategory(e.target.checked)}
+                          className="w-4 h-4 sm:w-5 sm:h-5"
+                        />
+                        <span className="text-gray-700 text-sm">Category</span>
+                      </label>
+                      <label className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          checked={sSCategory}
+                          onChange={(e) => setSSCategory(e.target.checked)}
+                          className="w-4 h-4 sm:w-5 sm:h-5"
+                        />
+                        <span className="text-gray-700 text-sm">Sub Category</span>
+                      </label>
+                      <label className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          checked={sVendor}
+                          onChange={(e) => setSVendor(e.target.checked)}
+                          className="w-4 h-4 sm:w-5 sm:h-5"
+                        />
+                        <span className="text-gray-700 text-sm">Vendor</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Card 5 */}
+                  <div className="bg-white p-2 sm:p-4 rounded-md shadow-md w-full md:w-[calc(25%-0.5rem)] min-w-[250px] mb-2 sm:mb-4">
+                    <h2 className="text-sm sm:text-lg font-semibold text-gray-800 mb-2 sm:mb-4">
                       Color Size Stock
                     </h2>
                     <div className="flex flex-col gap-2 sm:gap-4">
@@ -811,7 +889,7 @@ setNewCustomerID("");
                     </div>
                   </div>
 
-                  {/* Card 5 */}
+                  {/* Card 6 */}
                   <div className="bg-white p-2 sm:p-4 rounded-md shadow-md w-full md:w-[calc(25%-0.5rem)] min-w-[250px] mb-2 sm:mb-4">
                     <h2 className="text-sm sm:text-lg font-semibold text-gray-800 mb-2 sm:mb-4">
                       Color Size Sales
@@ -871,7 +949,7 @@ setNewCustomerID("");
                     </div>
                   </div>
 
-                  {/* Card 6 */}
+                  {/* Card 7 */}
                   <div className="bg-white p-2 sm:p-4 rounded-md shadow-md w-full md:w-[calc(25%-0.5rem)] min-w-[250px] mb-2 sm:mb-4">
                     <h2 className="text-sm sm:text-lg font-semibold text-gray-800 mb-2 sm:mb-4">
                       Administration

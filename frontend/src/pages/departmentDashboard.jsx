@@ -149,6 +149,7 @@ setDisable(false);
           },
         });
 
+
         if (response.data.message==='Processed parameters for company codes'){
  const amountBarChartData = response.data.amountBarChart;
         const quantityBarChartData = response.data.quantityBarChart;
@@ -307,7 +308,6 @@ setDisable(false);
   };
 
   const handleSubmit = async () => {
-
     if (newToDate === null && newFromDate === null) {
       setAlert({
         message: "Please select the from date and to date",
@@ -321,8 +321,12 @@ setDisable(false);
       setAlert({ message: "Please select the to date", type: "error" });
       setTimeout(() => setAlert(null), 3000);
     }
+    else if (selectedOptions.length === 0) {
+      setAlert({ message: "Please select a company", type: "error" });
+      setTimeout(() => setAlert(null), 3000);
+    }
 
-    if (newFromDate !== null && newToDate !== null) {
+    if (newFromDate !== null && newToDate !== null && selectedOptions.length > 0) {
       setSubmitted(true);
       fetchData();
     }

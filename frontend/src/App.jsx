@@ -20,6 +20,11 @@ import ColorSizeStockDepartment from "./pages/colorSizeStockDepartment"
 import ColorSizeStockCategory from "./pages/colorSizeStockCategory"
 import ColorSizeStockSubCategory from "./pages/colorSizeStockSubCategory"
 import ColorSizeStockVendor from "./pages/colorSizeStockVendor"
+import StockWiseProduct from "./pages/stockWiseReportProduct"
+import StockWiseDepartment from "./pages/stockWiseReportDepartment"
+import StockWiseCategory from "./pages/stockWiseReportCategory"
+import StockWiseSubCategory from "./pages/stockWiseReportSubCategory"
+import StockWiseVendor from "./pages/stockWiseReportVendor"
 import Report from "./pages/report";
 import Scan from "./pages/scan";
 import Reset from "./pages/reset";
@@ -62,6 +67,11 @@ function App() {
         <Route path="/color-size-stock-category" element={<ProtectedRoute> <ColorSizeStockCategory /> </ProtectedRoute>}/>
         <Route path="/color-size-stock-subcategory" element={<ProtectedRoute> <ColorSizeStockSubCategory /> </ProtectedRoute>}/>
         <Route path="/color-size-stock-vendor" element={<ProtectedRoute> <ColorSizeStockVendor /> </ProtectedRoute>}/>
+        <Route path="/stock-wise-product" element={<ProtectedRoute> <StockWiseProduct /> </ProtectedRoute>}/>
+        <Route path="/stock-wise-department" element={<ProtectedRoute> <StockWiseDepartment /> </ProtectedRoute>}/>
+        <Route path="/stock-wise-category" element={<ProtectedRoute> <StockWiseCategory /> </ProtectedRoute>}/>
+        <Route path="/stock-wise-sub-category" element={<ProtectedRoute> <StockWiseSubCategory /> </ProtectedRoute>}/>
+        <Route path="/stock-wise-vendor" element={<ProtectedRoute> <StockWiseVendor /> </ProtectedRoute>}/>
       </Routes>
     </Router>
     </AuthProvider>

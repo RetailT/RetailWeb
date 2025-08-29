@@ -10,21 +10,15 @@ import { AuthContext } from "../AuthContext";
 import CircleBounceLoader from "../components/Loader";
 import axios from "axios";
 import NestedDynamicTable from "../components/DynamicTable";
-import BarChart from "../components/BarChart";
 
 const CategoryDashboard = () => {
   const { authToken } = useContext(AuthContext);
   const [userData, setUserData] = useState(null);
-  const [amountBarChartRecords, setAmountBarChartRecords] = useState([]);
-  const [quantityBarChartRecords, setQuantityBarChartRecords] = useState([]);
-  const [amountBarChartLabels, setAmountBarChartLabels] = useState([]);
-  const [quantityBarChartLabels, setQuantityBarChartLabels] = useState([]);
   const [newTableHeaders, setNewTableHeaders] = useState([]);
   const [newTableData, setNewTableData] = useState([]);
   const [disable, setDisable] = useState(true);
   const [departmentName, setDepartmentName] = useState("");
   const [error, setError] = useState(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [selectedDates, setSelectedDates] = useState({});
   const [selectedOptions, setSelectedOptions] = useState([]);
   const [firstOption, setFirstOption] = useState(null);
@@ -224,6 +218,8 @@ const tableData = response.data.categoryTableRecords;
         setDisable(false);
         }
         else{
+          setTableRecords([]);
+          setTableHeadings([]);
           setDisable(false);
         setAlert({ message: response.data.message, type: "error" });
       setTimeout(() => setAlert(null), 3000);
@@ -357,8 +353,12 @@ setDepartmentName(row.CATEGORY_NAME);
       setAlert({ message: "Please select the to date", type: "error" });
       setTimeout(() => setAlert(null), 3000);
     }
+    else if (selectedOptions.length === 0) {
+      setAlert({ message: "Please select a company", type: "error" });
+      setTimeout(() => setAlert(null), 3000);
+    }
 
-    if (newFromDate !== null && newToDate !== null) {
+    if (newFromDate !== null && newToDate !== null && selectedOptions.length > 0) {
       setSubmitted(true);
       fetchData();
     }

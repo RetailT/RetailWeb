@@ -15,16 +15,15 @@ const ProductDashboard = () => {
   const { authToken } = useContext(AuthContext);
   const [userData, setUserData] = useState(null);
   const [productName, setProductName] = useState("");
-  const [productTableHeaders, setProductTableHeaders] = useState([]);
-  const [productTableData, setProductTableData] = useState([]);
   const [disable, setDisable] = useState(true);
   const [error, setError] = useState(null);
-  const [selectedDates, setSelectedDates] = useState({});
+  const [selectedDate, setSelectedDate] = useState({});
   const [selectedOptions, setSelectedOptions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [firstOption, setFirstOption] = useState(null);
   const [submitted, setSubmitted] = useState(false);
   const [isChecked, setIsChecked] = useState(true);
+  const [isValuationChecked, setIsValuationChecked] = useState(false);
   const [productNames, setProductNames] = useState([]);
   const [alert, setAlert] = useState(null);
   const [tableRecords, setTableRecords] = useState([]);
@@ -44,33 +43,11 @@ const ProductDashboard = () => {
     return `${year}-${month}-${day}`;
   };
 
-  const formattedDate = formatDate(now);
+  const date = selectedDate.date
+    ? formatDate(selectedDate.date)
+    : formatDate(now);
 
-  let newFromDate;
-  let newToDate;
-  const displayFromDate = selectedDates.fromDate
-    ? formatDate(selectedDates.fromDate)
-    : null;
-  const displayToDate = selectedDates.toDate
-    ? formatDate(selectedDates.toDate)
-    : null;
-
-  if (displayFromDate && displayToDate && displayFromDate > displayToDate) {
-    newFromDate = displayToDate;
-    newToDate = displayFromDate;
-  } else {
-    newFromDate = displayFromDate;
-    newToDate = displayToDate;
-  }
-
-  const displayDate =
-    submitted && selectedDates.fromDate && selectedDates.toDate
-      ? `Date: ${newFromDate} - ${newToDate}`
-      : submitted && selectedDates.fromDate
-      ? `Date: ${formatDate(selectedDates.fromDate)}`
-      : submitted && selectedDates.toDate
-      ? `Date: ${formatDate(selectedDates.toDate)}`
-      : `Date: ${formattedDate}`;
+  const displayDate = `Date: ${formatDate(date)}`;
 
   const fetchDashboardData = async () => {
     try {
@@ -110,20 +87,18 @@ const ProductDashboard = () => {
   };
 
   const fetchData = async () => {
-    setProductTableData([]);
-    setProductTableHeaders([]);
     setProductName("");
     if (firstOption) {
       setDisable(true);
       try {
         const response = await axios.get(
-          `${process.env.REACT_APP_BACKEND_URL}color-size-sales-product-dashboard`,
+          `${process.env.REACT_APP_BACKEND_URL}stock-wise-product`,
           {
             headers: { Authorization: `Bearer ${token}` },
             params: {
-              currentDate: formattedDate,
-              fromDate: newFromDate,
-              toDate: newToDate,
+              currentDate: formatDate(now),
+              date: date,
+              state: isValuationChecked,
               selectedOptions: selectedOptions
                 .map((option) => option.code)
                 .join(","),
@@ -142,13 +117,25 @@ const ProductDashboard = () => {
             const companyName = matchingOption
               ? matchingOption.name
               : "UNKNOWN";
-            return {
+
+            const baseData = {
               PRODUCT_NAME: item.PRODUCT_NAME,
               PRODUCT_CODE: item.PRODUCT_CODE,
               COMPANY_NAME: companyName,
+              [`${companyName}_COSTPRICE`]: item.COSTPRICE,
+              [`${companyName}_UNITPRICE`]: item.SCALEPRICE,
               [`${companyName}_QUANTITY`]: item.QUANTITY,
-              [`${companyName}_AMOUNT`]: item.AMOUNT,
             };
+
+            if (isValuationChecked) {
+              return {
+                ...baseData,
+                [`${companyName}_COSTVALUE`]: item.COST_VALUE,
+                [`${companyName}_SALESVALUE`]: item.SALES_VALUE,
+              };
+            } else {
+              return baseData;
+            }
           });
 
           const namesArray = firstOption.map((option) => option.name);
@@ -159,7 +146,15 @@ const ProductDashboard = () => {
             { label: "PRODUCT", subHeadings: ["CODE", "NAME"] },
             ...filteredNames.map((name) => ({
               label: name.replace(/\s+/g, "_"),
-              subHeadings: ["AMOUNT", "QUANTITY"],
+              subHeadings: isValuationChecked
+                ? [
+                    "COSTPRICE",
+                    "UNITPRICE",
+                    "QUANTITY",
+                    "COSTVALUE",
+                    "SALESVALUE",
+                  ]
+                : ["COSTPRICE", "UNITPRICE", "QUANTITY"],
             })),
           ];
 
@@ -178,6 +173,20 @@ const ProductDashboard = () => {
               }
               if (!newRow.hasOwnProperty(`${formattedName}_QUANTITY`)) {
                 newRow[`${formattedName}_QUANTITY`] = "";
+              }
+              if (!newRow.hasOwnProperty(`${formattedName}_COSTPRICE`)) {
+                newRow[`${formattedName}_COSTPRICE`] = "";
+              }
+              if (!newRow.hasOwnProperty(`${formattedName}_UNITPRICE`)) {
+                newRow[`${formattedName}_UNITPRICE`] = "";
+              }
+              if (isValuationChecked) {
+                if (!newRow.hasOwnProperty(`${formattedName}_COSTVALUE`)) {
+                  newRow[`${formattedName}_COSTVALUE`] = "";
+                }
+                if (!newRow.hasOwnProperty(`${formattedName}_SALESVALUE`)) {
+                  newRow[`${formattedName}_SALESVALUE`] = "";
+                }
               }
             });
             return newRow;
@@ -208,7 +217,7 @@ const ProductDashboard = () => {
           setProductNames(aggregatedResults.map((item) => item.PRODUCT_NAME));
           setDisable(false);
         } else {
-          setTableRecords([]);
+          setFilteredRecords([]);
           setTableHeadings([]);
           setDisable(false);
           setAlert({ message: response.data.message, type: "error" });
@@ -216,77 +225,6 @@ const ProductDashboard = () => {
         }
       } catch (err) {
         console.error("Error sending parameters:", err);
-        setDisable(false);
-        setAlert({
-          message: err.response?.data?.message || "Error Occured",
-          type: "error",
-        });
-        setTimeout(() => setAlert(null), 3000);
-      }
-    }
-  };
-
-  const fetchProductData = async (row) => {
-    setProductTableData([]);
-    setProductTableHeaders([]);
-    setProductName("");
-    if (firstOption) {
-      setDisable(true);
-      try {
-        const response = await axios.get(
-          `${process.env.REACT_APP_BACKEND_URL}color-size-sales-product-data`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-            params: {
-              code: row.PRODUCT_CODE,
-              selectedOptions: selectedOptions
-                .map((option) => option.code)
-                .join(","),
-            },
-          }
-        );
-
-        if (
-          response.data.message === "Processed parameters for company codes"
-        ) {
-          setProductName(row.PRODUCT_NAME);
-          const tableData = response.data.records;
-          const customProductHeaders = [
-            "PRODUCT_CODE",
-            "PRODUCT_NAME",
-            "SERIALNO",
-            "COSTPRICE",
-            "UNITPRICE",
-            "DISCOUNT",
-            "AMOUNT",
-          ];
-          const customProductHeaderMapping = {
-            PRODUCT_CODE: "Product Code",
-            PRODUCT_NAME: "Product Name",
-            SERIALNO: "Serial No",
-            COSTPRICE: "Cost Price",
-            UNITPRICE: "Unit Price",
-            DISCOUNT: "Discount",
-            AMOUNT: "Amount",
-          };
-          const customHeaders = customProductHeaders.map(
-            (key) => customProductHeaderMapping[key] || key
-          );
-          setProductTableHeaders(customHeaders);
-          const formattedTableData = tableData.map((item) =>
-            customProductHeaders.map((key) => item[key])
-          );
-          setProductTableData(formattedTableData);
-          setDisable(false);
-        } else {
-          setDisable(false);
-          setAlert({
-            message: response.data.message || "Error Occured",
-            type: "error",
-          });
-          setTimeout(() => setAlert(null), 3000);
-        }
-      } catch (err) {
         setDisable(false);
         setAlert({
           message: err.response?.data?.message || "Error Occured",
@@ -314,35 +252,32 @@ const ProductDashboard = () => {
       }, 180000);
       return () => clearInterval(intervalId);
     }
-  }, [firstOption, isChecked]);
+    if (isValuationChecked !== undefined) {
+      handleSubmit();
+    }
+  }, [firstOption, isChecked, isValuationChecked]);
 
   if (!authToken) {
     return <Navigate to="/login" replace />;
   }
 
-  const handleDateChange = (dates) => setSelectedDates(dates);
+  const handleDateChange = (date) => setSelectedDate(date);
   const handleDropdownChange = (options) => setSelectedOptions(options);
   const handleCheckboxChange = () => setIsChecked((prev) => !prev);
+  const handleValuationCheckboxChange = () =>
+    setIsValuationChecked((prev) => !prev);
 
   const handleSubmit = async () => {
-    if (!newFromDate && !newToDate) {
-      setAlert({
-        message: "Please select the from date and to date",
-        type: "error",
-      });
+    console.log(date);
+    if (!date) {
+      setAlert({ message: "Please select the date", type: "error" });
       setTimeout(() => setAlert(null), 3000);
-    } else if (!newFromDate) {
-      setAlert({ message: "Please select the from date", type: "error" });
-      setTimeout(() => setAlert(null), 3000);
-    } else if (!newToDate) {
-      setAlert({ message: "Please select the to date", type: "error" });
-      setTimeout(() => setAlert(null), 3000);
-    }
+    } 
     else if (selectedOptions.length === 0) {
       setAlert({ message: "Please select a company", type: "error" });
       setTimeout(() => setAlert(null), 3000);
     }
-    if (newFromDate && newToDate && selectedOptions.length > 0) {
+    else {
       setSubmitted(true);
       fetchData();
     }
@@ -353,7 +288,6 @@ const ProductDashboard = () => {
   const handleInputChange = (e) => {
     const value = e.target.value;
     setSearchInput(value);
-    setProductTableData([]);
     setShowSuggestions(value !== ""); // show only if typing
     if (value === "") {
       setFilteredRecords(tableRecords);
@@ -380,7 +314,7 @@ const ProductDashboard = () => {
       <Navbar />
       <div className="container mx-auto p-6 md:p-16">
         <div className="mt-20 md:mt-14">
-          <Heading text="Product Sales Dashboard" />
+          <Heading text="Product Stock Dashboard" />
         </div>
         <div className="mt-4">
           {alert && (
@@ -397,7 +331,7 @@ const ProductDashboard = () => {
             {isChecked ? (
               <div className="mt-8">
                 <div className="text-center text-xl sm:text-2xl font-bold mb-4">
-                  Current Product Sales
+                  Current Product Stock
                 </div>
                 <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
                   <div className="flex items-center">
@@ -412,7 +346,7 @@ const ProductDashboard = () => {
                       htmlFor="checkbox"
                       className="ml-2 text-md font-semibold mt-4 md:mt-0"
                     >
-                      Current Sales
+                      Current Stock
                     </label>
                   </div>
                   <button
@@ -431,8 +365,9 @@ const ProductDashboard = () => {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
                     <DatePicker
-                      label="Select Date Range:"
+                      label="Select Date:"
                       onDateChange={handleDateChange}
+                      range="true"
                     />
                     <label className="block text-sm font-medium text-gray-700 mb-[-10px] md:mb-0 ml-0 md:ml-10">
                       Select Company:
@@ -476,7 +411,7 @@ const ProductDashboard = () => {
               style={{ backgroundColor: "#d8d8d8" }}
             >
               <div className="flex justify-center text-xl sm:text-2xl font-bold text-black">
-                Product Sales Summary
+                Product Stock Summary
               </div>
               <div className="flex justify-center font-bold mt-4">
                 <p>{displayDate}</p>
@@ -518,34 +453,29 @@ const ProductDashboard = () => {
                     )}
                   </div>
 
+                  <div className="flex items-center mt-5 mb-10">
+                    <input
+                      type="checkbox"
+                      checked={isValuationChecked}
+                      onChange={handleValuationCheckboxChange}
+                      id="checkbox"
+                      className="h-3 w-3 text-blue-600 focus:ring-blue-500 mt-4 md:mt-0"
+                    />
+                    <label
+                      htmlFor="checkbox"
+                      className="ml-2 text-md mt-4 md:mt-0"
+                    >
+                      With Stock Valuation
+                    </label>
+                  </div>
+
                   {/* ✅ Table Component */}
                   <NestedDynamicTable
                     data={filteredRecords}
                     mainHeadings={tableHeadings}
-                    title="Product Sales Data"
-                    onRowSelect={(row) => fetchProductData(row)}
+                    title="Product Stock Data"
                   />
 
-                  {/* ✅ Product Data Details Table */}
-                  <div>
-                    {Array.isArray(productTableData) &&
-                      productTableData.length > 0 && (
-                        <div className="mt-5 overflow-x-auto">
-                          <p className="text-center text-[#bc4a17] text-lg sm:text-xl font-bold mt-5">
-                            {productName ? `${productName}` : ""}
-                          </p>
-                          <div className="w-max mx-auto">
-                            <Table
-                              headers={productTableHeaders}
-                              data={productTableData}
-                              formatColumns={[3, 4, 5, 6]}
-                              editableColumns={[]}
-                              bin={true}
-                            />
-                          </div>
-                        </div>
-                      )}
-                  </div>
                 </div>
               </div>
             </div>

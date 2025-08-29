@@ -31,8 +31,15 @@ const ProductDashboard = () => {
   const [filteredRecords, setFilteredRecords] = useState([]);
   const [searchInput, setSearchInput] = useState("");
 
+  const [rowTableHeaders, setRowTableHeaders] = useState([]);
+  const [rowTableData, setRowTableData] = useState([]);
+  const [rowName, setRowName] = useState("");
+  const [code, setCode] = useState("");
+  const [isRowSelect, setIsRowSelect] = useState(false);
+
   const token = localStorage.getItem("authToken");
   const now = new Date();
+  let rowDataStatus = false;
 
   const formatDate = (date) => {
     const localDate = new Date(date);
@@ -87,11 +94,10 @@ const ProductDashboard = () => {
   };
 
   const fetchData = async () => {
-    setProductName("");
     if (firstOption) {
       setDisable(true);
+
       try {
-        console.log("new date", selectedDate);
         const response = await axios.get(
           `${process.env.REACT_APP_BACKEND_URL}color-size-stock-product-dashboard`,
           {
@@ -99,6 +105,8 @@ const ProductDashboard = () => {
             params: {
               currentDate: formatDate(now),
               date: date,
+              rowSelect: isRowSelect,
+              productCode: code,
               state: isValuationChecked,
               selectedOptions: selectedOptions
                 .map((option) => option.code)
@@ -110,115 +118,260 @@ const ProductDashboard = () => {
         if (
           response.data.message === "Processed parameters for company codes"
         ) {
+          const rowData = response.data.rowRecords;
+          rowDataStatus = response.data.rowDataStatus;
           const tableData = response.data.tableRecords;
-          const updatedTableData = tableData.map((item) => {
-            const matchingOption = firstOption.find(
-              (option) => option.code === item.COMPANY_CODE
-            );
-            const companyName = matchingOption
-              ? matchingOption.name
-              : "UNKNOWN";
 
-            const baseData = {
-              PRODUCT_NAME: item.PRODUCT_NAME,
-              PRODUCT_CODE: item.PRODUCT_CODE,
-              COMPANY_NAME: companyName,
-              [`${companyName}_COSTPRICE`]: item.COSTPRICE,
-              [`${companyName}_UNITPRICE`]: item.SCALEPRICE,
-              [`${companyName}_QUANTITY`]: item.QUANTITY,
-            };
+if (rowDataStatus === true || String(rowDataStatus).toLowerCase() === "true") {
+  // Clear previous table data
+  setRowTableData([]);
+  setRowTableHeaders([]);
 
-            if (isValuationChecked) {
-              return {
-                ...baseData,
-                [`${companyName}_COSTVALUE`]: item.COST_VALUE,
-                [`${companyName}_SALESVALUE`]: item.SALES_VALUE,
+  // Transform rowData to match the sample's structure
+  const updatedTableData = rowData.map((item) => {
+    const matchingOption = firstOption.find(
+      (option) => option.code === item.COMPANY_CODE
+    );
+    const companyName = matchingOption ? matchingOption.name : "UNKNOWN";
+    const baseData = {
+      SERIALNO: item.SERIALNO,
+      COMPANY_NAME: companyName,
+      [`${companyName}_COSTPRICE`]: item.COSTPRICE,
+      [`${companyName}_UNITPRICE`]: item.SCALEPRICE,
+      [`${companyName}_QUANTITY`]: item.QUANTITY,
+    };
+    if (isValuationChecked) {
+      return {
+        ...baseData,
+        [`${companyName}_COSTVALUE`]: item.COST_VALUE,
+        [`${companyName}_SALESVALUE`]: item.SALES_VALUE,
+      };
+    }
+    return baseData;
+  });
+
+  // Create array of company names and filter those present in data
+  const namesArray = firstOption.map((option) => option.name);
+  const filteredNames = namesArray.filter((name) =>
+    updatedTableData.some((record) => record.COMPANY_NAME === name)
+  );
+
+  // Define table headings to match sample structure
+  const mainHeadings = [
+    { label: "SERIAL", subHeadings: ["NUMBER", "COMPANY_NAME"] },
+    ...filteredNames.map((name) => ({
+      label: name.replace(/\s+/g, "_"),
+      subHeadings: isValuationChecked
+        ? ["COSTPRICE", "UNITPRICE", "QUANTITY", "COSTVALUE", "SALESVALUE"]
+        : ["COSTPRICE", "UNITPRICE", "QUANTITY"],
+    })),
+  ];
+
+  // Flatten headings for table component
+  const adjustedHeadings = mainHeadings.map((heading) => {
+    if (typeof heading === "object") {
+      return [heading.label, ...heading.subHeadings];
+    }
+    return heading;
+  });
+  setRowTableHeaders(adjustedHeadings);
+
+  // Normalize keys and ensure all required columns exist
+  const transformedData = updatedTableData.map((row) => {
+    const newRow = {};
+    for (let key in row) {
+      const normalizedKey = key.replace(/\s+/g, "_");
+      newRow[normalizedKey] = row[key];
+    }
+    filteredNames.forEach((name) => {
+      const formattedName = name.replace(/\s+/g, "_");
+      if (!newRow.hasOwnProperty(`${formattedName}_AMOUNT`)) {
+        newRow[`${formattedName}_AMOUNT`] = "";
+      }
+      if (!newRow.hasOwnProperty(`${formattedName}_QUANTITY`)) {
+        newRow[`${formattedName}_QUANTITY`] = "";
+      }
+      if (!newRow.hasOwnProperty(`${formattedName}_COSTPRICE`)) {
+        newRow[`${formattedName}_COSTPRICE`] = "";
+      }
+      if (!newRow.hasOwnProperty(`${formattedName}_UNITPRICE`)) {
+        newRow[`${formattedName}_UNITPRICE`] = "";
+      }
+      if (isValuationChecked) {
+        if (!newRow.hasOwnProperty(`${formattedName}_COSTVALUE`)) {
+          newRow[`${formattedName}_COSTVALUE`] = "";
+        }
+        if (!newRow.hasOwnProperty(`${formattedName}_SALESVALUE`)) {
+          newRow[`${formattedName}_SALESVALUE`] = "";
+        }
+      }
+    });
+    return newRow;
+  });
+
+  // Aggregate data by SERIALNO, summing numeric values like the sample
+  function aggregateData(data) {
+    const aggregatedData = {};
+    data.forEach((record) => {
+      const { SERIALNO, COMPANY_NAME, ...rest } = record;
+      if (!aggregatedData[SERIALNO]) {
+        aggregatedData[SERIALNO] = { SERIALNO, COMPANY_NAME };
+      }
+      Object.keys(rest).forEach((key) => {
+        const value = rest[key];
+        if (value !== "") {
+          if (!aggregatedData[SERIALNO][key]) {
+            aggregatedData[SERIALNO][key] = parseFloat(value) || 0;
+          } else if (!isNaN(value)) {
+            aggregatedData[SERIALNO][key] += parseFloat(value);
+          }
+        }
+      });
+    });
+    return Object.values(aggregatedData);
+  }
+
+  const aggregatedResults = aggregateData(transformedData);
+
+  // Convert aggregated data to array format for table component
+  const tableDataAsArrays = aggregatedResults.map((obj) => {
+    const row = [];
+    adjustedHeadings.forEach((heading) => {
+      if (Array.isArray(heading)) {
+        heading.forEach((subHeading) => {
+          const key = subHeading === "NUMBER" ? "SERIALNO" : subHeading;
+          row.push(obj[key] || "");
+        });
+      }
+    });
+    return row;
+  });
+
+  // Set table data and other states
+  setRowTableData(tableDataAsArrays);
+  setDisable(false);
+
+  console.log("rowTableData:", rowTableData);
+console.log("rowTableHeaders:", rowTableHeaders);
+console.log('rowDataStatus:', rowDataStatus);
+}
+
+ else {
+            setRowTableData([]);
+            setRowTableHeaders([]);
+            const updatedTableData = tableData.map((item) => {
+              const matchingOption = firstOption.find(
+                (option) => option.code === item.COMPANY_CODE
+              );
+              const companyName = matchingOption
+                ? matchingOption.name
+                : "UNKNOWN";
+
+              const baseData = {
+                PRODUCT_NAME: item.PRODUCT_NAME,
+                PRODUCT_CODE: item.PRODUCT_CODE,
+                COMPANY_NAME: companyName,
+                [`${companyName}_COSTPRICE`]: item.COSTPRICE,
+                [`${companyName}_UNITPRICE`]: item.SCALEPRICE,
+                [`${companyName}_QUANTITY`]: item.QUANTITY,
               };
-            } else {
-              return baseData;
-            }
-          });
 
-          const namesArray = firstOption.map((option) => option.name);
-          const filteredNames = namesArray.filter((name) =>
-            updatedTableData.some((record) => record.COMPANY_NAME === name)
-          );
-          const mainHeadings = [
-            { label: "PRODUCT", subHeadings: ["CODE", "NAME"] },
-            ...filteredNames.map((name) => ({
-              label: name.replace(/\s+/g, "_"),
-              subHeadings: isValuationChecked
-                ? [
-                    "COSTPRICE",
-                    "UNITPRICE",
-                    "QUANTITY",
-                    "COSTVALUE",
-                    "SALESVALUE",
-                  ]
-                : ["COSTPRICE", "UNITPRICE", "QUANTITY"],
-            })),
-          ];
-
-          setTableHeadings(mainHeadings);
-
-          const transformedData = updatedTableData.map((row) => {
-            const newRow = {};
-            for (let key in row) {
-              const normalizedKey = key.replace(/\s+/g, "_");
-              newRow[normalizedKey] = row[key];
-            }
-            filteredNames.forEach((name) => {
-              const formattedName = name.replace(/\s+/g, "_");
-              if (!newRow.hasOwnProperty(`${formattedName}_AMOUNT`)) {
-                newRow[`${formattedName}_AMOUNT`] = "";
-              }
-              if (!newRow.hasOwnProperty(`${formattedName}_QUANTITY`)) {
-                newRow[`${formattedName}_QUANTITY`] = "";
-              }
-              if (!newRow.hasOwnProperty(`${formattedName}_COSTPRICE`)) {
-                newRow[`${formattedName}_COSTPRICE`] = "";
-              }
-              if (!newRow.hasOwnProperty(`${formattedName}_UNITPRICE`)) {
-                newRow[`${formattedName}_UNITPRICE`] = "";
-              }
               if (isValuationChecked) {
-                if (!newRow.hasOwnProperty(`${formattedName}_COSTVALUE`)) {
-                  newRow[`${formattedName}_COSTVALUE`] = "";
-                }
-                if (!newRow.hasOwnProperty(`${formattedName}_SALESVALUE`)) {
-                  newRow[`${formattedName}_SALESVALUE`] = "";
-                }
+                return {
+                  ...baseData,
+                  [`${companyName}_COSTVALUE`]: item.COST_VALUE,
+                  [`${companyName}_SALESVALUE`]: item.SALES_VALUE,
+                };
+              } else {
+                return baseData;
               }
             });
-            return newRow;
-          });
 
-          function aggregateData(data) {
-            const aggregatedData = {};
-            data.forEach((record) => {
-              const { PRODUCT_NAME, PRODUCT_CODE, ...rest } = record;
-              if (!aggregatedData[PRODUCT_NAME]) {
-                aggregatedData[PRODUCT_NAME] = { PRODUCT_NAME, PRODUCT_CODE };
+            const namesArray = firstOption.map((option) => option.name);
+            const filteredNames = namesArray.filter((name) =>
+              updatedTableData.some((record) => record.COMPANY_NAME === name)
+            );
+            const mainHeadings = [
+              { label: "PRODUCT", subHeadings: ["CODE", "NAME"] },
+              ...filteredNames.map((name) => ({
+                label: name.replace(/\s+/g, "_"),
+                subHeadings: isValuationChecked
+                  ? [
+                      "COSTPRICE",
+                      "UNITPRICE",
+                      "QUANTITY",
+                      "COSTVALUE",
+                      "SALESVALUE",
+                    ]
+                  : ["COSTPRICE", "UNITPRICE", "QUANTITY"],
+              })),
+            ];
+
+            setTableHeadings(mainHeadings);
+
+            const transformedData = updatedTableData.map((row) => {
+              const newRow = {};
+              for (let key in row) {
+                const normalizedKey = key.replace(/\s+/g, "_");
+                newRow[normalizedKey] = row[key];
               }
-              Object.keys(rest).forEach((key) => {
-                const value = rest[key];
-                if (!aggregatedData[PRODUCT_NAME][key] && value !== "") {
-                  aggregatedData[PRODUCT_NAME][key] = parseFloat(value);
-                } else if (value !== "") {
-                  aggregatedData[PRODUCT_NAME][key] += parseFloat(value);
+              filteredNames.forEach((name) => {
+                const formattedName = name.replace(/\s+/g, "_");
+                if (!newRow.hasOwnProperty(`${formattedName}_AMOUNT`)) {
+                  newRow[`${formattedName}_AMOUNT`] = "";
+                }
+                if (!newRow.hasOwnProperty(`${formattedName}_QUANTITY`)) {
+                  newRow[`${formattedName}_QUANTITY`] = "";
+                }
+                if (!newRow.hasOwnProperty(`${formattedName}_COSTPRICE`)) {
+                  newRow[`${formattedName}_COSTPRICE`] = "";
+                }
+                if (!newRow.hasOwnProperty(`${formattedName}_UNITPRICE`)) {
+                  newRow[`${formattedName}_UNITPRICE`] = "";
+                }
+                if (isValuationChecked) {
+                  if (!newRow.hasOwnProperty(`${formattedName}_COSTVALUE`)) {
+                    newRow[`${formattedName}_COSTVALUE`] = "";
+                  }
+                  if (!newRow.hasOwnProperty(`${formattedName}_SALESVALUE`)) {
+                    newRow[`${formattedName}_SALESVALUE`] = "";
+                  }
                 }
               });
+              return newRow;
             });
-            return Object.values(aggregatedData);
-          }
 
-          const aggregatedResults = aggregateData(transformedData);
-          setTableRecords(aggregatedResults);
-          setFilteredRecords(aggregatedResults);
-          setProductNames(aggregatedResults.map((item) => item.PRODUCT_NAME));
-          setDisable(false);
+            function aggregateData(data) {
+              const aggregatedData = {};
+              data.forEach((record) => {
+                const { PRODUCT_NAME, PRODUCT_CODE, ...rest } = record;
+                if (!aggregatedData[PRODUCT_NAME]) {
+                  aggregatedData[PRODUCT_NAME] = { PRODUCT_NAME, PRODUCT_CODE };
+                }
+                Object.keys(rest).forEach((key) => {
+                  const value = rest[key];
+                  if (!aggregatedData[PRODUCT_NAME][key] && value !== "") {
+                    aggregatedData[PRODUCT_NAME][key] = parseFloat(value);
+                  } else if (value !== "") {
+                    aggregatedData[PRODUCT_NAME][key] += parseFloat(value);
+                  }
+                });
+              });
+              return Object.values(aggregatedData);
+            }
+
+            const aggregatedResults = aggregateData(transformedData);
+            setTableRecords(aggregatedResults);
+            setFilteredRecords(aggregatedResults);
+            setProductNames(aggregatedResults.map((item) => item.PRODUCT_NAME));
+            setDisable(false);
+          }
         } else {
           setDisable(false);
+          setFilteredRecords([]);
+          setTableHeadings([]);
+          setRowTableData([]);
+          setRowTableHeaders([]);
           setAlert({ message: response.data.message, type: "error" });
           setTimeout(() => setAlert(null), 3000);
         }
@@ -254,7 +407,7 @@ const ProductDashboard = () => {
     if (isValuationChecked !== undefined) {
       handleSubmit();
     }
-  }, [firstOption, isChecked, isValuationChecked]);
+  }, [firstOption, isChecked, isValuationChecked, isRowSelect, rowName, rowDataStatus]);
 
   if (!authToken) {
     return <Navigate to="/login" replace />;
@@ -271,10 +424,23 @@ const ProductDashboard = () => {
     if (!date) {
       setAlert({ message: "Please select the date", type: "error" });
       setTimeout(() => setAlert(null), 3000);
-    } else {
+    } 
+    else if (selectedOptions.length === 0) {
+      setAlert({ message: "Please select a company", type: "error" });
+      setTimeout(() => setAlert(null), 3000);
+    }
+    else {
       setSubmitted(true);
+      setIsRowSelect(false);
       fetchData();
     }
+  };
+
+  const fetchRowData = async (row) => {
+    setIsRowSelect(true);
+    setRowName(row.PRODUCT_NAME);
+    setCode(row.PRODUCT_CODE);
+    fetchData();
   };
 
   const handleRefresh = async () => window.location.reload();
@@ -468,8 +634,27 @@ const ProductDashboard = () => {
                     data={filteredRecords}
                     mainHeadings={tableHeadings}
                     title="Product Stock Data"
+                    onRowSelect={(row) => fetchRowData(row)}
                   />
 
+                 {((rowDataStatus === true || String(rowDataStatus).toLowerCase() === "true") && 
+  Array.isArray(rowTableData[0]) && rowTableData[0].length > 0 && 
+  Array.isArray(rowTableHeaders[0]) && rowTableHeaders[0].length > 0) ? (
+  <div className="mt-5 overflow-x-auto">
+    <p className="text-center text-[#bc4a17] text-lg sm:text-xl font-bold mt-5">
+      {rowName ? `${rowName}` : "Serial Number Stock Data"}
+    </p>
+    <div className="w-max mx-auto">
+      <NestedDynamicTable
+        data={rowTableData}
+        mainHeadings={rowTableHeaders}
+        title="Serial Number Stock Data"
+      />
+    </div>
+  </div>
+) : (
+  <p className="text-center text-gray-500 mt-5">No data available to display</p>
+)}
                 </div>
               </div>
             </div>

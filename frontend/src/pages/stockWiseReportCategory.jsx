@@ -104,7 +104,7 @@ const ProductDashboard = () => {
 
     try {
       const response = await axios.get(
-        `${process.env.REACT_APP_BACKEND_URL}color-size-stock-category-dashboard`,
+        `${process.env.REACT_APP_BACKEND_URL}stock-wise-category`,
         {
           headers: { Authorization: `Bearer ${token}` },
           params: {

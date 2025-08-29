@@ -1,8 +1,8 @@
 import React, { useState } from "react";
-import { FaBars, FaTimes, FaChevronDown } from "react-icons/fa";
+import {FaChevronDown } from "react-icons/fa";
 import { MdManageAccounts, MdSpaceDashboard } from "react-icons/md";
 import { MdCalculate } from "react-icons/md";
-import { BiSolidReport } from "react-icons/bi";
+import { FaCartFlatbed } from "react-icons/fa6";
 import { IoMdColorPalette } from "react-icons/io";
 import { NavLink } from "react-router-dom";
 import { jwtDecode } from "jwt-decode";
@@ -11,6 +11,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
   // const [isOpen, setIsOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false); // Admin dropdown toggle
   const [dashboardOpen, setDashboardOpen] = useState(false);
+  const [stockWiseReportOpen, setStockWiseReportOpen] = useState(false);
   const [colorWiseOpen, setColorWiseOpen] = useState(false);
   const [transactionOpen, setTransactionOpen] = useState(false);
   const [colorWiseSalesOpen, setColorWiseSalesOpen] = useState(false);
@@ -39,6 +40,11 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
   let c_sa_category = "";
   let c_sa_scategory = "";
   let c_sa_vendor = "";
+  let s_product = "";
+  let s_department = "";
+  let s_category = "";
+  let s_scategory = "";
+  let s_vendor = "";
 
   if (token) {
     const decodedToken = jwtDecode(token);
@@ -64,38 +70,41 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
     c_sa_category = decodedToken.c_sa_category;
     c_sa_scategory = decodedToken.c_sa_scategory;
     c_sa_vendor = decodedToken.c_sa_vendor;
+    s_product = decodedToken.s_product;
+    s_department = decodedToken.s_department;
+    s_category = decodedToken.s_category;
+    s_scategory = decodedToken.s_scategory;
+    s_vendor = decodedToken.s_vendor;
   } else {
     console.error("No token found in localStorage");
   }
 
   const toggleAdmin = () => {
-    // setIsOpen(true); // Expand sidebar when Admin is clicked
-    setAdminOpen(!adminOpen); // Toggle Admin dropdown
+    setAdminOpen(!adminOpen); 
   };
 
   const toggleDashboard = () => {
-    // setIsOpen(true); // Expand sidebar when HR is clicked
-    setDashboardOpen(!dashboardOpen); // Toggle dashboard dropdown
+    setDashboardOpen(!dashboardOpen); 
+  };
+
+  const toggleStockWiseReport = () => {
+    setStockWiseReportOpen(!stockWiseReportOpen); 
   };
 
   const toggleColorWise = () => {
-    // setIsOpen(true); // Expand sidebar when HR is clicked
-    setColorWiseOpen(!colorWiseOpen); // Toggle dashboard dropdown
+    setColorWiseOpen(!colorWiseOpen); 
   };
 
   const toggleColorWiseSales = () => {
-    // setIsOpen(true); // Expand sidebar when HR is clicked
-    setColorWiseSalesOpen(!colorWiseSalesOpen); // Toggle dashboard dropdown
+    setColorWiseSalesOpen(!colorWiseSalesOpen); 
   };
 
   const toggleColorWiseStock = () => {
-    // setIsOpen(true); // Expand sidebar when HR is clicked
-    setColorWiseStockOpen(!colorWiseStockOpen); // Toggle dashboard dropdown
+    setColorWiseStockOpen(!colorWiseStockOpen);
   };
 
   const toggleReport = () => {
-    // setIsOpen(true); // Expand sidebar when HR is clicked
-    setTransactionOpen(!transactionOpen); // Toggle dashboard dropdown
+    setTransactionOpen(!transactionOpen);
   };
 
   return (
@@ -195,6 +204,78 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
                   </NavLink>
                 </li>
               )}
+          </ul>
+
+          {/* stock wise report */}
+          {((s_product && s_product.toLowerCase() === "t") ||
+            (s_department && s_department.toLowerCase() === "t") ||
+            (s_category && s_category.toLowerCase() === "t") ||
+            (s_scategory && s_scategory.toLowerCase() === "t") ||
+            (s_vendor && s_vendor.toLowerCase() === "t")) && (
+            <li
+              className="flex items-center p-2 hover:bg-[#000000] cursor-pointer"
+              onClick={toggleStockWiseReport}
+              aria-haspopup="true"
+              aria-expanded={stockWiseReportOpen}
+            >
+              <FaCartFlatbed size={20} className="mr-2 ml-2 mb-4 mt-3" />
+              <span className={`${isOpen ? "block" : "hidden"} ml-4`}>
+                Stock Wise Report
+              </span>
+              {isOpen && (
+                <FaChevronDown
+                  size={14}
+                  className={`ml-auto transition-transform mr-5 ${
+                    stockWiseReportOpen ? "rotate-180" : ""
+                  }`}
+                  aria-hidden="true"
+                />
+              )}
+            </li>
+          )}
+
+          {/* submenu of stock wise report */}
+          <ul className="ml-8 pl-8">
+            {s_product?.toLowerCase() === "t" && stockWiseReportOpen && isOpen && (
+              <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
+                <NavLink to="/stock-wise-product" className="w-full">
+                  Product Wise
+                </NavLink>
+              </li>
+            )}
+
+            {s_department?.toLowerCase() === "t" && stockWiseReportOpen && isOpen && (
+              <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
+                <NavLink to="/stock-wise-department" className="w-full">
+                  Department
+                </NavLink>
+              </li>
+            )}
+
+            {s_category?.toLowerCase() === "t" && stockWiseReportOpen && isOpen && (
+              <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
+                <NavLink to="/stock-wise-category" className="w-full">
+                  Category
+                </NavLink>
+              </li>
+            )}
+
+            {s_scategory?.toLowerCase() === "t" && stockWiseReportOpen && isOpen && (
+              <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
+                <NavLink to="/stock-wise-sub-category" className="w-full">
+                  Sub Category
+                </NavLink>
+              </li>
+            )}
+
+            {s_vendor?.toLowerCase() === "t" && stockWiseReportOpen && isOpen && (
+              <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
+                <NavLink to="/stock-wise-vendor" className="w-full">
+                  Vendor
+                </NavLink>
+              </li>
+            )}
+
           </ul>
 
           {/* Color Wise Section */}

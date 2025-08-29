@@ -315,8 +315,12 @@ const VendorDashboard = () => {
       setAlert({ message: "Please select the to date", type: "error" });
       setTimeout(() => setAlert(null), 3000);
     }
+    else if (selectedOptions.length === 0) {
+      setAlert({ message: "Please select a company", type: "error" });
+      setTimeout(() => setAlert(null), 3000);
+    }
 
-    if (newFromDate !== null && newToDate !== null) {
+    if (newFromDate !== null && newToDate !== null && selectedOptions.length > 0) {
       setSubmitted(true);
       fetchData();
     }

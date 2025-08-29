@@ -155,6 +155,12 @@ setDisable(false);
   };
 
   const fetchData = async () => {
+    setData([]);
+          setSalesData([]);
+          setLabels([]);
+          setTableData([]);
+          setTableLabels([]);
+          
     if (firstOption) {
       setDisable(true);
       const token = localStorage.getItem("authToken");
@@ -168,12 +174,21 @@ setDisable(false);
             currentDate: formattedDate,
             fromDate: newFromDate,
             toDate: newToDate,
-            selectedOptions: selectedOptions.map((option) => option.code),
+            options: selectedOptions.map((option) => option.code),
           },
           paramsSerializer: (params) => qs.stringify(params, { arrayFormat: "repeat" }),
         });
         setDisable(false);
+
         if (response.data.cashierPointRecord.length === 0 && response.data.record.length === 0 && response.data.result.length === 0) {
+          setData([]);
+          setSalesData([]);
+          setLabels([]);
+          setTableData([]);
+          setTableLabels([]);
+          setCashierData(null);
+          setCashierTableData(null);
+          setCashierTableLabels(null);
           setAlert({
             message: "No data available",
             type: "error",

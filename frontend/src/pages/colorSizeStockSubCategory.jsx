@@ -117,6 +117,8 @@ const ProductDashboard = () => {
       );
 
       if (response.data.message !== "Processed parameters for company codes") {
+        setFilteredRecords([]);
+          setTableHeadings([]);
         setDisable(false);
         setAlert({ message: response.data.message, type: "error" });
         setTimeout(() => setAlert(null), 3000);
@@ -265,7 +267,12 @@ const ProductDashboard = () => {
     if (!date) {
       setAlert({ message: "Please select the date", type: "error" });
       setTimeout(() => setAlert(null), 3000);
-    } else {
+    } 
+    else if (selectedOptions.length === 0) {
+      setAlert({ message: "Please select a company", type: "error" });
+      setTimeout(() => setAlert(null), 3000);
+    }
+    else {
       setSubmitted(true);
       fetchData();
     }
