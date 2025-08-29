@@ -47,6 +47,12 @@ app.get('/color-size-stock-category-dashboard', authenticateToken, authControlle
 app.get('/color-size-stock-sub-category-dashboard', authenticateToken, authController.colorSizeStockSubCategoryDashboard);
 app.get('/color-size-stock-vendor-dashboard', authenticateToken, authController.colorSizeStockVendorDashboard);
 
+app.get('/stock-wise-product', authenticateToken, authController.stockProductDashboard);
+app.get('/stock-wise-department', authenticateToken, authController.stockDepartmentDashboard);
+app.get('/stock-wise-category', authenticateToken, authController.stockCategoryDashboard);
+app.get('/stock-wise-sub-category', authenticateToken, authController.stockSubCategoryDashboard);
+app.get('/stock-wise-vendor', authenticateToken, authController.stockVendorDashboard);
+
 app.get('/scan', authenticateToken, authController.scan);
 app.get('/stock-update', authenticateToken, authController.stockUpdate);
 app.get('/grnprn-table-data', authenticateToken, authController.grnprnTableData);
