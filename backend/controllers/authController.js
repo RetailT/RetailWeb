@@ -1927,7 +1927,7 @@ exports.reportData = async (req, res) => {
     }
 
     const { state, rowClicked, fromDate, toDate, currentDate, invoiceNo } = req.query;
-console.log('data',selectedOptions,state,rowClicked,fromDate,toDate,currentDate,invoiceNo)
+
 let reportQuery;
 
 if (rowClicked===false || String(rowClicked).toLowerCase() === "false") {
@@ -2065,115 +2065,115 @@ else if ((state===true || String(state).toLowerCase() === "true") && currentDate
   }
 };
 
-//current report
-exports.currentReportData = async (req, res) => {
-  try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      return res
-        .status(403)
-        .json({ message: "No authorization token provided" });
-    }
+// //current report
+// exports.currentReportData = async (req, res) => {
+//   try {
+//     const authHeader = req.headers.authorization;
+//     if (!authHeader) {
+//       return res
+//         .status(403)
+//         .json({ message: "No authorization token provided" });
+//     }
 
-    const token = authHeader.split(" ")[1];
-    if (!token) {
-      return res.status(403).json({ message: "Token is missing" });
-    }
+//     const token = authHeader.split(" ")[1];
+//     if (!token) {
+//       return res.status(403).json({ message: "Token is missing" });
+//     }
 
-    const decoded = await verifyToken(token, process.env.JWT_SECRET);
-    const username = decoded.username;
+//     const decoded = await verifyToken(token, process.env.JWT_SECRET);
+//     const username = decoded.username;
 
-    // Handle companyCodes parsing (from ?companyCodes=01&companyCodes=02 or ?companyCodes[]=01&companyCodes[]=02)
-    let companyCodes = req.query.companyCodes || req.query["companyCodes[]"];
-    if (typeof companyCodes === "string") {
-      companyCodes = [companyCodes];
-    }
+//     // Handle companyCodes parsing (from ?companyCodes=01&companyCodes=02 or ?companyCodes[]=01&companyCodes[]=02)
+//     let companyCodes = req.query.companyCodes || req.query["companyCodes[]"];
+//     if (typeof companyCodes === "string") {
+//       companyCodes = [companyCodes];
+//     }
 
-    const { currentDate, invoiceNo } = req.query;
+//     const { currentDate, invoiceNo } = req.query;
 
-    if (
-      !Array.isArray(companyCodes) ||
-      companyCodes.length === 0 ||
-      !currentDate
-    ) {
-      return res.status(400).json({ message: "Missing or invalid parameters" });
-    }
+//     if (
+//       !Array.isArray(companyCodes) ||
+//       companyCodes.length === 0 ||
+//       !currentDate
+//     ) {
+//       return res.status(400).json({ message: "Missing or invalid parameters" });
+//     }
 
-    const date = formatDate(currentDate);
-    const reportType = "INVOICEWISE";
+//     const date = formatDate(currentDate);
+//     const reportType = "INVOICEWISE";
 
-    // Step 1: Clean previous report data
-    await mssql.query`
-      USE RT_WEB;
-      DELETE FROM tb_SALESVIEW WHERE REPUSER = ${username};
-    `;
+//     // Step 1: Clean previous report data
+//     await mssql.query`
+//       USE RT_WEB;
+//       DELETE FROM tb_SALESVIEW WHERE REPUSER = ${username};
+//     `;
 
-    // Step 2: Execute SP for each company
-    for (const companyCode of companyCodes) {
-      await mssql.query`
-        EXEC RT_WEB.dbo.Sp_SalesCurView 
-        @COMPANY_CODE = ${companyCode}, 
-        @DATE = ${date}, 
-        @REPUSER = ${username}, 
-        @REPORT_TYPE = ${reportType};
-      `;
-    }
+//     // Step 2: Execute SP for each company
+//     for (const companyCode of companyCodes) {
+//       await mssql.query`
+//         EXEC RT_WEB.dbo.Sp_SalesCurView 
+//         @COMPANY_CODE = ${companyCode}, 
+//         @DATE = ${date}, 
+//         @REPUSER = ${username}, 
+//         @REPORT_TYPE = ${reportType};
+//       `;
+//     }
 
-    // Step 3: Fetch summarized report data
-    const reportQuery = await mssql.query`
-      USE RT_WEB;
-      SELECT 
-        INVOICENO, COMPANY_CODE, UNITNO, REPNO, 'CASH' AS PRODUCT_NAME, 
-        ISNULL(SUM(CASE PRODUCT_NAME 
-          WHEN 'CASH' THEN AMOUNT 
-          WHEN 'BALANCE' THEN -AMOUNT 
-          ELSE 0 END), 0) AS AMOUNT, 
-        SALESDATE
-      FROM tb_SALESVIEW 
-      WHERE (ID = 'PT' OR ID = 'BL') 
-        AND PRODUCT_NAME IN ('CASH', 'BALANCE') 
-        AND REPUSER = ${username}
-      GROUP BY COMPANY_CODE, SALESDATE, UNITNO, REPNO, INVOICENO
+//     // Step 3: Fetch summarized report data
+//     const reportQuery = await mssql.query`
+//       USE RT_WEB;
+//       SELECT 
+//         INVOICENO, COMPANY_CODE, UNITNO, REPNO, 'CASH' AS PRODUCT_NAME, 
+//         ISNULL(SUM(CASE PRODUCT_NAME 
+//           WHEN 'CASH' THEN AMOUNT 
+//           WHEN 'BALANCE' THEN -AMOUNT 
+//           ELSE 0 END), 0) AS AMOUNT, 
+//         SALESDATE
+//       FROM tb_SALESVIEW 
+//       WHERE (ID = 'PT' OR ID = 'BL') 
+//         AND PRODUCT_NAME IN ('CASH', 'BALANCE') 
+//         AND REPUSER = ${username}
+//       GROUP BY COMPANY_CODE, SALESDATE, UNITNO, REPNO, INVOICENO
 
-      UNION ALL
+//       UNION ALL
 
-      SELECT 
-        INVOICENO, COMPANY_CODE, UNITNO, REPNO, PRODUCT_NAME, 
-        ISNULL(SUM(AMOUNT), 0) AS AMOUNT, SALESDATE
-      FROM tb_SALESVIEW 
-      WHERE ID = 'PT' 
-        AND PRODUCT_NAME NOT IN ('CASH', 'BALANCE') 
-        AND REPUSER = ${username}
-      GROUP BY COMPANY_CODE, SALESDATE, UNITNO, REPNO, INVOICENO, PRODUCT_NAME;
-    `;
+//       SELECT 
+//         INVOICENO, COMPANY_CODE, UNITNO, REPNO, PRODUCT_NAME, 
+//         ISNULL(SUM(AMOUNT), 0) AS AMOUNT, SALESDATE
+//       FROM tb_SALESVIEW 
+//       WHERE ID = 'PT' 
+//         AND PRODUCT_NAME NOT IN ('CASH', 'BALANCE') 
+//         AND REPUSER = ${username}
+//       GROUP BY COMPANY_CODE, SALESDATE, UNITNO, REPNO, INVOICENO, PRODUCT_NAME;
+//     `;
 
-    // Step 4: Fetch detailed invoice data if requested
-    let invoiceData = [];
-    if (invoiceNo) {
-      const result = await mssql.query`
-        USE RT_WEB;
-        SELECT INVOICENO, PRODUCT_CODE, PRODUCT_NAME, QTY, AMOUNT, COSTPRICE, UNITPRICE, DISCOUNT 
-        FROM tb_SALESVIEW 
-        WHERE INVOICENO = ${invoiceNo} 
-          AND ID IN ('SL', 'SLF', 'RF', 'RFF') 
-          AND REPUSER = ${username};
-      `;
-      invoiceData = result.recordset;
-    }
+//     // Step 4: Fetch detailed invoice data if requested
+//     let invoiceData = [];
+//     if (invoiceNo) {
+//       const result = await mssql.query`
+//         USE RT_WEB;
+//         SELECT INVOICENO, PRODUCT_CODE, PRODUCT_NAME, QTY, AMOUNT, COSTPRICE, UNITPRICE, DISCOUNT 
+//         FROM tb_SALESVIEW 
+//         WHERE INVOICENO = ${invoiceNo} 
+//           AND ID IN ('SL', 'SLF', 'RF', 'RFF') 
+//           AND REPUSER = ${username};
+//       `;
+//       invoiceData = result.recordset;
+//     }
 
-    console.log("Invoice Data:", invoiceData);
-    // Step 5: Respond
-    res.status(200).json({
-      message: "Invoice data found",
-      success: true,
-      reportData: reportQuery.recordset || [],
-      invoiceData,
-    });
-  } catch (error) {
-    console.error("Error retrieving current report data:", error);
-    res.status(500).json({ message: "Failed to retrieve current report data" });
-  }
-};
+//     console.log("Invoice Data:", invoiceData);
+//     // Step 5: Respond
+//     res.status(200).json({
+//       message: "Invoice data found",
+//       success: true,
+//       reportData: reportQuery.recordset || [],
+//       invoiceData,
+//     });
+//   } catch (error) {
+//     console.error("Error retrieving current report data:", error);
+//     res.status(500).json({ message: "Failed to retrieve current report data" });
+//   }
+// };
 
 //company dashboard
 exports.loadingDashboard = async (req, res) => {
@@ -6659,23 +6659,15 @@ exports.resetDatabaseConnection = async (req, res) => {
       serverRequest.input("startDate", mssql.Date,startDate ? new Date(startDate) : "");
       serverRequest.input("endDate",mssql.Date,endDate ? new Date(endDate) : "");
 
-      console.log(
-        "dates",
-        new Date(checkResult.recordset[0].START_DATE)
-          .toISOString()
-          .split("T")[0],
-        new Date(startDate).toISOString().split("T")[0],
-        new Date(checkResult.recordset[0].END_DATE).toISOString().split("T")[0],
-        new Date(endDate).toISOString().split("T")[0]
-      );
-
       if (checkResult.recordset.length === 0) {
+        console.log('1')
         serverResult = await serverRequest.query(`
         INSERT INTO tb_SERVER_DETAILS (CUSTOMERID, COMPANY_NAME, SERVERIP, START_DATE, END_DATE)
         VALUES (@newCustomerID, @companyName, @trimmedIP, @startDate, @endDate);
         `);
         console.log("tb_SERVER_DETAILS inserted", serverResult.rowsAffected);
       } else if (checkResult.recordset[0].COMPANY_NAME !== companyName) {
+        console.log('2')
         console.log("Company name mismatch in tb_SERVER_DETAILS");
         return res.status(400).json({
           message: "Customer ID already exist for a different company name",
@@ -6689,6 +6681,7 @@ exports.resetDatabaseConnection = async (req, res) => {
           .toISOString()
           .split("T")[0] !== new Date(endDate).toISOString().split("T")[0]
       ) {
+        console.log('3')
         serverResult = await serverRequest.query(`
         UPDATE tb_SERVER_DETAILS
           SET 
@@ -6819,13 +6812,20 @@ exports.resetDatabaseConnection = async (req, res) => {
     }
 
     // Check if updates were successful
+    console.log('userResult',userResult)
+    console.log('serverResult',serverResult)
     if (userResult.rowsAffected[0] === 0) {
-      throw new Error("Could not update the user table");
-    }
-    if (serverResult.rowsAffected[0] === 0) {
-      throw new Error(
+  console.log("No user found with username", trimmedName);
+  throw new Error(`User '${trimmedName}' not found in tb_USERS`);
+}
+
+    if (serverResult!==undefined) {
+      if(serverResult.rowsAffected[0] === 0 ){
+         throw new Error(
         "Could not update or insert into the server details table"
       );
+      }
+     
     }
     console.log("Table updates successful");
 
@@ -7060,7 +7060,7 @@ exports.resetDatabaseConnection = async (req, res) => {
       .status(200)
       .json({ message: "Database connection updated successfully" });
   } catch (err) {
-    console.log("Error occurred", err);
+    console.log("Error occurred1", err);
     if (transaction) {
       console.log("Rolling back transaction");
       await transaction.rollback();

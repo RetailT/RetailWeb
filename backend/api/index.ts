@@ -32,7 +32,7 @@ app.get('/sub-category-data', authenticateToken, authController.subCategoryDashb
 app.get('/vendor-data', authenticateToken, authController.vendorDashboard);
 
 app.get('/report-data', authenticateToken, authController.reportData);
-app.get('/current-report-data', authenticateToken, authController.currentReportData);
+// app.get('/current-report-data', authenticateToken, authController.currentReportData);
 
 app.get('/color-size-sales-product-dashboard', authenticateToken, authController.colorSizeSalesProductDashboard);
 app.get('/color-size-sales-product-data', authenticateToken, authController.colorSizeSalesProduct);
