@@ -9,6 +9,7 @@ const ScrollableTable = ({
   onDeleteRow,
   formatColumns = [],
   formatColumnsQuantity = [],
+  rightAlignedColumns = [],
   bin,
   onRowClick
 }) => {
@@ -32,7 +33,7 @@ const ScrollableTable = ({
 
   // Function to get the alignment class for a specific column
   const getColumnAlignment = (columnIndex) => {
-    return [5, 6, 7, 8].includes(columnIndex) ? "text-right" : "text-center";
+    return rightAlignedColumns.includes(columnIndex) ? "text-right" : "text-left";
   };
 
   return (

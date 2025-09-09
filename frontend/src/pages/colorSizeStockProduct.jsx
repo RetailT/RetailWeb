@@ -118,145 +118,96 @@ const ProductDashboard = () => {
         if (
           response.data.message === "Processed parameters for company codes"
         ) {
-          const rowData = response.data.rowRecords;
           rowDataStatus = response.data.rowDataStatus;
           const tableData = response.data.tableRecords;
 
-if (rowDataStatus === true || String(rowDataStatus).toLowerCase() === "true") {
-  // Clear previous table data
-  setRowTableData([]);
-  setRowTableHeaders([]);
+          if (
+            rowDataStatus === true ||
+            String(rowDataStatus).toLowerCase() === "true"
+          ) {
+            const rowData = response.data.rowRecords;
 
-  // Transform rowData to match the sample's structure
-  const updatedTableData = rowData.map((item) => {
-    const matchingOption = firstOption.find(
-      (option) => option.code === item.COMPANY_CODE
-    );
-    const companyName = matchingOption ? matchingOption.name : "UNKNOWN";
-    const baseData = {
-      SERIALNO: item.SERIALNO,
-      COMPANY_NAME: companyName,
-      [`${companyName}_COSTPRICE`]: item.COSTPRICE,
-      [`${companyName}_UNITPRICE`]: item.SCALEPRICE,
-      [`${companyName}_QUANTITY`]: item.QUANTITY,
-    };
-    if (isValuationChecked) {
-      return {
-        ...baseData,
-        [`${companyName}_COSTVALUE`]: item.COST_VALUE,
-        [`${companyName}_SALESVALUE`]: item.SALES_VALUE,
-      };
-    }
-    return baseData;
-  });
+            // Clear previous table data
+            setRowTableData([]);
+            setRowTableHeaders([]);
 
-  // Create array of company names and filter those present in data
-  const namesArray = firstOption.map((option) => option.name);
-  const filteredNames = namesArray.filter((name) =>
-    updatedTableData.some((record) => record.COMPANY_NAME === name)
-  );
+            if (!Array.isArray(rowData) || rowData.length === 0) {
+              setDisable(false);
+              setAlert({
+                message: "No data available to display",
+                type: "error",
+              });
+              setTimeout(() => setAlert(null), 3000);
+              return;
+            } else {
+              const updatedTableData = rowData
+                .map((item) => {
+                  // Validate item and required fields
+                  if (!item || !item.COMPANY_CODE) {
+                    console.warn("Invalid rowData item:", item);
+                    return null;
+                  }
 
-  // Define table headings to match sample structure
-  const mainHeadings = [
-    { label: "SERIAL", subHeadings: ["NUMBER", "COMPANY_NAME"] },
-    ...filteredNames.map((name) => ({
-      label: name.replace(/\s+/g, "_"),
-      subHeadings: isValuationChecked
-        ? ["COSTPRICE", "UNITPRICE", "QUANTITY", "COSTVALUE", "SALESVALUE"]
-        : ["COSTPRICE", "UNITPRICE", "QUANTITY"],
-    })),
-  ];
+                  const matchingOption = firstOption.find(
+                    (option) => option.code === item.COMPANY_CODE
+                  );
+                  const companyName = matchingOption
+                    ? matchingOption.name
+                    : "UNKNOWN";
 
-  // Flatten headings for table component
-  const adjustedHeadings = mainHeadings.map((heading) => {
-    if (typeof heading === "object") {
-      return [heading.label, ...heading.subHeadings];
-    }
-    return heading;
-  });
-  setRowTableHeaders(adjustedHeadings);
+                  // Create new object with all original fields plus COMPANY_NAME
+                  return {
+                    ...item,
+                    COMPANY_NAME: companyName,
+                  };
+                })
+                .filter((item) => item !== null) // Remove invalid items
+                .sort((a, b) => {
+                  // Sort by COMPANY_CODE in ascending order
+                  return a.COMPANY_CODE.localeCompare(b.COMPANY_CODE);
+                });
 
-  // Normalize keys and ensure all required columns exist
-  const transformedData = updatedTableData.map((row) => {
-    const newRow = {};
-    for (let key in row) {
-      const normalizedKey = key.replace(/\s+/g, "_");
-      newRow[normalizedKey] = row[key];
-    }
-    filteredNames.forEach((name) => {
-      const formattedName = name.replace(/\s+/g, "_");
-      if (!newRow.hasOwnProperty(`${formattedName}_AMOUNT`)) {
-        newRow[`${formattedName}_AMOUNT`] = "";
-      }
-      if (!newRow.hasOwnProperty(`${formattedName}_QUANTITY`)) {
-        newRow[`${formattedName}_QUANTITY`] = "";
-      }
-      if (!newRow.hasOwnProperty(`${formattedName}_COSTPRICE`)) {
-        newRow[`${formattedName}_COSTPRICE`] = "";
-      }
-      if (!newRow.hasOwnProperty(`${formattedName}_UNITPRICE`)) {
-        newRow[`${formattedName}_UNITPRICE`] = "";
-      }
-      if (isValuationChecked) {
-        if (!newRow.hasOwnProperty(`${formattedName}_COSTVALUE`)) {
-          newRow[`${formattedName}_COSTVALUE`] = "";
-        }
-        if (!newRow.hasOwnProperty(`${formattedName}_SALESVALUE`)) {
-          newRow[`${formattedName}_SALESVALUE`] = "";
-        }
-      }
-    });
-    return newRow;
-  });
+              const baseRowHeaders = [
+                "COMPANY_CODE",
+                "COMPANY_NAME",
+                "SERIALNO",
+                "COSTPRICE",
+                "SCALEPRICE",
+                "QUANTITY",
+              ];
 
-  // Aggregate data by SERIALNO, summing numeric values like the sample
-  function aggregateData(data) {
-    const aggregatedData = {};
-    data.forEach((record) => {
-      const { SERIALNO, COMPANY_NAME, ...rest } = record;
-      if (!aggregatedData[SERIALNO]) {
-        aggregatedData[SERIALNO] = { SERIALNO, COMPANY_NAME };
-      }
-      Object.keys(rest).forEach((key) => {
-        const value = rest[key];
-        if (value !== "") {
-          if (!aggregatedData[SERIALNO][key]) {
-            aggregatedData[SERIALNO][key] = parseFloat(value) || 0;
-          } else if (!isNaN(value)) {
-            aggregatedData[SERIALNO][key] += parseFloat(value);
-          }
-        }
-      });
-    });
-    return Object.values(aggregatedData);
-  }
+              const baseRowHeaderMapping = {
+                COMPANY_CODE: "Company Code",
+                COMPANY_NAME: "Company Name",
+                SERIALNO: "Serial Number",
+                COSTPRICE: "Cost Price",
+                SCALEPRICE: "Unit Price",
+                QUANTITY: "Quantity",
+              };
 
-  const aggregatedResults = aggregateData(transformedData);
+              const customRowHeaders = isValuationChecked
+                ? [...baseRowHeaders, "COST_VALUE", "SALES_VALUE"]
+                : baseRowHeaders;
 
-  // Convert aggregated data to array format for table component
-  const tableDataAsArrays = aggregatedResults.map((obj) => {
-    const row = [];
-    adjustedHeadings.forEach((heading) => {
-      if (Array.isArray(heading)) {
-        heading.forEach((subHeading) => {
-          const key = subHeading === "NUMBER" ? "SERIALNO" : subHeading;
-          row.push(obj[key] || "");
-        });
-      }
-    });
-    return row;
-  });
+              const customRowHeaderMapping = isValuationChecked
+                ? {
+                    ...baseRowHeaderMapping,
+                    COST_VALUE: "Cost Value",
+                    SALES_VALUE: "Sales Value",
+                  }
+                : baseRowHeaderMapping;
+              const customHeaders = customRowHeaders.map(
+                (key) => customRowHeaderMapping[key] || key
+              );
+              setRowTableHeaders(customHeaders);
+              const formattedTableData = updatedTableData.map((item) =>
+                customRowHeaders.map((key) => item[key])
+              );
+              setRowTableData(formattedTableData);
 
-  // Set table data and other states
-  setRowTableData(tableDataAsArrays);
-  setDisable(false);
-
-  console.log("rowTableData:", rowTableData);
-console.log("rowTableHeaders:", rowTableHeaders);
-console.log('rowDataStatus:', rowDataStatus);
-}
-
- else {
+              setDisable(false);
+            }
+          } else {
             setRowTableData([]);
             setRowTableHeaders([]);
             const updatedTableData = tableData.map((item) => {
@@ -397,7 +348,12 @@ console.log('rowDataStatus:', rowDataStatus);
   }, []);
 
   useEffect(() => {
-    fetchData();
+    if (firstOption && !isRowSelect) {
+    fetchData(); // only for main table
+    }
+    if( isRowSelect) {
+      fetchData(); // only for row table
+    }
     if (isChecked) {
       const intervalId = setInterval(() => {
         window.location.reload();
@@ -407,7 +363,7 @@ console.log('rowDataStatus:', rowDataStatus);
     if (isValuationChecked !== undefined) {
       handleSubmit();
     }
-  }, [firstOption, isChecked, isValuationChecked, isRowSelect, rowName, rowDataStatus]);
+  }, [firstOption, isChecked, isValuationChecked]);
 
   if (!authToken) {
     return <Navigate to="/login" replace />;
@@ -420,16 +376,13 @@ console.log('rowDataStatus:', rowDataStatus);
     setIsValuationChecked((prev) => !prev);
 
   const handleSubmit = async () => {
-    console.log(date);
     if (!date) {
       setAlert({ message: "Please select the date", type: "error" });
       setTimeout(() => setAlert(null), 3000);
-    } 
-    else if (selectedOptions.length === 0) {
+    } else if (selectedOptions.length === 0) {
       setAlert({ message: "Please select a company", type: "error" });
       setTimeout(() => setAlert(null), 3000);
-    }
-    else {
+    } else {
       setSubmitted(true);
       setIsRowSelect(false);
       fetchData();
@@ -636,25 +589,24 @@ console.log('rowDataStatus:', rowDataStatus);
                     title="Product Stock Data"
                     onRowSelect={(row) => fetchRowData(row)}
                   />
-
-                 {((rowDataStatus === true || String(rowDataStatus).toLowerCase() === "true") && 
-  Array.isArray(rowTableData[0]) && rowTableData[0].length > 0 && 
-  Array.isArray(rowTableHeaders[0]) && rowTableHeaders[0].length > 0) ? (
-  <div className="mt-5 overflow-x-auto">
-    <p className="text-center text-[#bc4a17] text-lg sm:text-xl font-bold mt-5">
-      {rowName ? `${rowName}` : "Serial Number Stock Data"}
-    </p>
-    <div className="w-max mx-auto">
-      <NestedDynamicTable
-        data={rowTableData}
-        mainHeadings={rowTableHeaders}
-        title="Serial Number Stock Data"
-      />
-    </div>
-  </div>
-) : (
-  <p className="text-center text-gray-500 mt-5">No data available to display</p>
-)}
+                  {Array.isArray(rowTableData) && rowTableData.length > 0 && isRowSelect && (
+                    <div className="mt-5 overflow-x-auto">
+                      <p className="text-center text-[#bc4a17] text-lg sm:text-xl font-bold mt-5">
+                        {rowName ? `${rowName}` : ""}
+                      </p>
+                      <div className="w-max mx-auto">
+                        <Table
+                          headers={rowTableHeaders}
+                          data={rowTableData}
+                          formatColumns={[3, 4, 6, 7]}
+                          rightAlignedColumns={[3, 4, 5, 6, 7]}
+                          formatColumnsQuantity={[5]}
+                          editableColumns={[]}
+                          bin={true}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

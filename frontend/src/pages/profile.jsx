@@ -17,11 +17,12 @@ const Profile = () => {
     if (token) {
       try {
         const decodedToken = jwtDecode(token);
-
+console.log('decodedToken.companyName',decodedToken.companyName)
         // Set user details
         setDetails({
           username: decodedToken.username || "Unknown",
           email: decodedToken.email || "Not Provided",
+          company_name: decodedToken.companyName || "Not Provided",
         });
       } catch (error) {
         console.error("Error decoding token:", error.message);
@@ -67,11 +68,15 @@ const Profile = () => {
           <h2 className="text-center text-2xl font-bold mb-6 text-gray-800">User Profile</h2>
           <div className="space-y-4 text-center text-gray-700">
             <p>
+              <strong>Company:</strong> {details.company_name}
+            </p>
+            <p>
               <strong>Username:</strong> {details.username}
             </p>
             <p>
               <strong>Email:</strong> {details.email}
             </p>
+            
           </div>
         </div>
       </div>

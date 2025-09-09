@@ -3,7 +3,6 @@ import Navbar from "../components/NavBar";
 import Heading from "../components/Heading";
 import DatePicker from "../components/DatePicker";
 import MultiSelectDropdown from "../components/MultiSelectDropdown";
-import Table from "../components/EditableTable";
 import Alert from "../components/Alert";
 import { Navigate } from "react-router-dom";
 import { AuthContext } from "../AuthContext";

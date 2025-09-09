@@ -519,6 +519,7 @@ const tableData = response.data.records;
                 headers={departmentTableHeaders}
                 data={departmentTableData}
                 formatColumns={[3, 4, 5, 6]}
+                rightAlignedColumns={[3, 4, 5, 6,7,8]}
                 editableColumns={[]}
                 bin={true}
               />

@@ -272,7 +272,7 @@ function App() {
         }, 100);
       }
 
-      if(response.data.colorwiseActive && response.data.colorWiseData.length === 0){
+      if((response.data.colorwiseActive === true || String(response.data.colorwiseActive).toLowerCase() === "true") && response.data.colorWiseData.length === 0){
         setState(false);
       }
       else{
@@ -648,6 +648,11 @@ function App() {
   };
 
   const handleProductSubmit = async (e) => {
+    if (!salesData.PRODUCT_CODE || salesData.PRODUCT_CODE==='' || salesData.PRODUCT_CODE === undefined) {
+      setAlert({ message: "No product selected", type: "error" });
+      setTimeout(() => setAlert(null), 3000);
+      return;
+    }
     setDisable(true);
     e.preventDefault();
     if (!quantity) {
@@ -1282,7 +1287,8 @@ function App() {
                           onSubmit={handleSubmit}
                           className="flex flex-col space-y-2 sm:space-y-4"
                         >
-                          {state && (
+                        
+                          {/* {state && ( */}
                             <div className="flex flex-col space-y-1 sm:space-y-2">
                             <div className="flex flex-col sm:flex-row sm:space-x-2">
                               <p className="text-gray-700 text-sm">
@@ -1346,7 +1352,7 @@ function App() {
                           </div>
 
                           
-                          )}
+                         {/* )}*/}
                           
 
                         </form>
@@ -1390,6 +1396,7 @@ function App() {
                       formatColumnsQuantity={
                         selectedType === "TOG" ? [6, 7] : [8, 9]
                       }
+                      rightAlignedColumns={selectedType === "TOG" ? [4, 5, 6, 7] : [6, 7, 8, 9]}
                       bin="f"
                       onRowClick={(rowData, rowIndex) =>
                         handleRowClick(rowData, rowIndex)

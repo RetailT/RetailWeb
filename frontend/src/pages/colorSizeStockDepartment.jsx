@@ -4,6 +4,7 @@ import Heading from "../components/Heading";
 import DatePicker from "../components/DatePicker";
 import MultiSelectDropdown from "../components/MultiSelectDropdown";
 import Alert from "../components/Alert";
+import Table from "../components/EditableTable";
 import { Navigate } from "react-router-dom";
 import { AuthContext } from "../AuthContext";
 import CircleBounceLoader from "../components/Loader";
@@ -31,8 +32,15 @@ const ProductDashboard = () => {
   const [isValuationChecked, setIsValuationChecked] = useState(false);
   const [firstOption, setFirstOption] = useState(null);
 
+  const [rowTableHeaders, setRowTableHeaders] = useState([]);
+  const [rowTableData, setRowTableData] = useState([]);
+  const [rowName, setRowName] = useState("");
+  const [code, setCode] = useState("");
+  const [isRowSelect, setIsRowSelect] = useState(false);
+
   const token = localStorage.getItem("authToken");
   const now = new Date();
+  let rowDataStatus = false;
 
   const formatDate = (date) => {
     const localDate = new Date(date);
@@ -43,15 +51,20 @@ const ProductDashboard = () => {
     return `${year}-${month}-${day}`;
   };
 
-  const date = selectedDate.date ? formatDate(selectedDate.date) : formatDate(now);
+  const date = selectedDate.date
+    ? formatDate(selectedDate.date)
+    : formatDate(now);
   const displayDate = `Date: ${formatDate(date)}`;
 
   // ---------------------- FETCH DASHBOARD DATA ----------------------
   const fetchDashboardData = async () => {
     try {
-      const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}companies`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await axios.get(
+        `${process.env.REACT_APP_BACKEND_URL}companies`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
 
       setUserData(response.data.userData);
 
@@ -64,12 +77,18 @@ const ProductDashboard = () => {
         setSelectedOptions(allOptions);
       } else {
         setDisable(false);
-        setAlert({ message: response.data.message || "Error Occurred", type: "error" });
+        setAlert({
+          message: response.data.message || "Error Occurred",
+          type: "error",
+        });
         setTimeout(() => setAlert(null), 3000);
       }
     } catch (err) {
       setDisable(false);
-      setAlert({ message: err.response?.data?.message || "Error Occurred", type: "error" });
+      setAlert({
+        message: err.response?.data?.message || "Error Occurred",
+        type: "error",
+      });
       setTimeout(() => setAlert(null), 3000);
     }
   };
@@ -79,11 +98,26 @@ const ProductDashboard = () => {
     const productMap = new Map();
 
     data.forEach((record) => {
-      const { PRODUCT_NAME, PRODUCT_CODE, DEPARTMENT_NAME, DEPARTMENT_CODE, COMPANY_CODE, COMPANY_NAME, ...rest } = record;
+      const {
+        PRODUCT_NAME,
+        PRODUCT_CODE,
+        DEPARTMENT_NAME,
+        DEPARTMENT_CODE,
+        COMPANY_CODE,
+        COMPANY_NAME,
+        ...rest
+      } = record;
       const key = `${PRODUCT_NAME}_${DEPARTMENT_NAME}`;
 
       if (!productMap.has(key)) {
-        productMap.set(key, { PRODUCT_NAME, PRODUCT_CODE, DEPARTMENT_NAME, DEPARTMENT_CODE, COMPANY_CODE, COMPANY_NAME });
+        productMap.set(key, {
+          PRODUCT_NAME,
+          PRODUCT_CODE,
+          DEPARTMENT_NAME,
+          DEPARTMENT_CODE,
+          COMPANY_CODE,
+          COMPANY_NAME,
+        });
       }
 
       const currentRecord = productMap.get(key);
@@ -97,6 +131,8 @@ const ProductDashboard = () => {
 
   // ---------------------- FETCH TABLE DATA ----------------------
   const fetchData = async () => {
+    setRowTableData([]);
+            setRowTableHeaders([]);
     setSearchInput("");
     setDepartmentSearchInput("");
     if (!firstOption) return;
@@ -110,95 +146,213 @@ const ProductDashboard = () => {
           params: {
             currentDate: formatDate(now),
             date: date,
+            rowSelect: isRowSelect,
+            departmentCode: code,
             state: isValuationChecked,
-            selectedOptions: selectedOptions.map((option) => option.code).join(","),
+            selectedOptions: selectedOptions
+              .map((option) => option.code)
+              .join(","),
           },
         }
       );
 
       if (response.data.message !== "Processed parameters for company codes") {
         setFilteredRecords([]);
-          setTableHeadings([]);
+        setTableHeadings([]);
         setDisable(false);
         setAlert({ message: response.data.message, type: "error" });
         setTimeout(() => setAlert(null), 3000);
         return;
       }
 
-      const tableData = response.data.tableRecords;
+      rowDataStatus = response.data.rowDataStatus;
+      if (
+        rowDataStatus === true ||
+        String(rowDataStatus).toLowerCase() === "true"
+      ) {
+        const rowData = response.data.rowRecords;
 
-      const updatedTableData = tableData.map((item) => {
-        const matchingOption = firstOption.find((option) => option.code === item.COMPANY_CODE);
-        const companyName = matchingOption ? matchingOption.name : "UNKNOWN";
+        // Clear previous table data
+        setRowTableData([]);
+        setRowTableHeaders([]);
 
-        const baseData = {
-          PRODUCT_NAME: item.PRODUCT_NAME,
-          PRODUCT_CODE: item.PRODUCT_CODE,
-          DEPARTMENT_NAME: item.DEPARTMENT_NAME,
-          DEPARTMENT_CODE: item.DEPARTMENT_CODE,
-          COMPANY_CODE: item.COMPANY_CODE,
-          COMPANY_NAME: companyName,
-          [`${companyName}_COSTPRICE`]: item.COSTPRICE,
-          [`${companyName}_UNITPRICE`]: item.SCALEPRICE,
-          [`${companyName}_QUANTITY`]: item.QUANTITY,
-        };
+        if (!Array.isArray(rowData) || rowData.length === 0) {
+          setDisable(false);
+          setAlert({
+            message: "No data available to display",
+            type: "error",
+          });
+          setTimeout(() => setAlert(null), 3000);
+          return;
+        } else {
+          const updatedTableData = rowData
+            .map((item) => {
+              // Validate item and required fields
+              if (!item || !item.COMPANY_CODE) {
+                console.warn("Invalid rowData item:", item);
+                return null;
+              }
 
-        if (isValuationChecked) {
-          return {
-            ...baseData,
-            [`${companyName}_COSTVALUE`]: item.COST_VALUE,
-            [`${companyName}_SALESVALUE`]: item.SALES_VALUE,
+              const matchingOption = firstOption.find(
+                (option) => option.code === item.COMPANY_CODE
+              );
+              const companyName = matchingOption
+                ? matchingOption.name
+                : "UNKNOWN";
+
+              // Create new object with all original fields plus COMPANY_NAME
+              return {
+                ...item,
+                COMPANY_NAME: companyName,
+              };
+            })
+            .filter((item) => item !== null) // Remove invalid items
+            .sort((a, b) => {
+              // Sort by COMPANY_CODE in ascending order
+              return a.COMPANY_CODE.localeCompare(b.COMPANY_CODE);
+            });
+
+          const baseRowHeaders = [
+            "COMPANY_CODE",
+            "COMPANY_NAME",
+            "SERIALNO",
+            "COSTPRICE",
+            "SCALEPRICE",
+            "QUANTITY",
+          ];
+
+          const baseRowHeaderMapping = {
+            COMPANY_CODE: "Company Code",
+            COMPANY_NAME: "Company Name",
+            SERIALNO: "Serial Number",
+            COSTPRICE: "Cost Price",
+            SCALEPRICE: "Unit Price",
+            QUANTITY: "Quantity",
           };
-        } else return baseData;
-      });
 
-      const namesArray = firstOption.map((option) => option.name);
-      const filteredNames = namesArray.filter((name) =>
-        updatedTableData.some((record) => record.COMPANY_NAME === name)
-      );
+          const customRowHeaders = isValuationChecked
+            ? [...baseRowHeaders, "COST_VALUE", "SALES_VALUE"]
+            : baseRowHeaders;
 
-      const mainHeadings = [
-        { label: "PRODUCT", subHeadings: ["CODE", "NAME"] },
-        { label: "DEPARTMENT", subHeadings: ["CODE", "NAME"] },
-        ...filteredNames.map((name) => ({
-          label: name.replace(/\s+/g, "_"),
-          subHeadings: isValuationChecked
-            ? ["COSTPRICE", "UNITPRICE", "QUANTITY", "COSTVALUE", "SALESVALUE"]
-            : ["COSTPRICE", "UNITPRICE", "QUANTITY"],
-        })),
-      ];
+          const customRowHeaderMapping = isValuationChecked
+            ? {
+                ...baseRowHeaderMapping,
+                COST_VALUE: "Cost Value",
+                SALES_VALUE: "Sales Value",
+              }
+            : baseRowHeaderMapping;
+          const customHeaders = customRowHeaders.map(
+            (key) => customRowHeaderMapping[key] || key
+          );
+          setRowTableHeaders(customHeaders);
+          const formattedTableData = updatedTableData.map((item) =>
+            customRowHeaders.map((key) => item[key])
+          );
+          setRowTableData(formattedTableData);
 
-      setTableHeadings(mainHeadings);
-
-      const transformedData = updatedTableData.map((row) => {
-        const newRow = {};
-        for (let key in row) {
-          const normalizedKey = key.replace(/\s+/g, "_");
-          newRow[normalizedKey] = row[key];
+          setDisable(false);
         }
-        filteredNames.forEach((name) => {
-          const formattedName = name.replace(/\s+/g, "_");
-          ["AMOUNT", "QUANTITY", "COSTPRICE", "UNITPRICE"].forEach((field) => {
-            if (!newRow.hasOwnProperty(`${formattedName}_${field}`)) newRow[`${formattedName}_${field}`] = "";
-          });
-          if (isValuationChecked) ["COSTVALUE", "SALESVALUE"].forEach((field) => {
-            if (!newRow.hasOwnProperty(`${formattedName}_${field}`)) newRow[`${formattedName}_${field}`] = "";
-          });
+      } else {
+        setRowTableData([]);
+        setRowTableHeaders([]);
+        const tableData = response.data.tableRecords;
+
+        const updatedTableData = tableData.map((item) => {
+          const matchingOption = firstOption.find(
+            (option) => option.code === item.COMPANY_CODE
+          );
+          const companyName = matchingOption ? matchingOption.name : "UNKNOWN";
+
+          const baseData = {
+            PRODUCT_NAME: item.PRODUCT_NAME,
+            PRODUCT_CODE: item.PRODUCT_CODE,
+            DEPARTMENT_NAME: item.DEPARTMENT_NAME,
+            DEPARTMENT_CODE: item.DEPARTMENT_CODE,
+            COMPANY_CODE: item.COMPANY_CODE,
+            COMPANY_NAME: companyName,
+            [`${companyName}_COSTPRICE`]: item.COSTPRICE,
+            [`${companyName}_UNITPRICE`]: item.SCALEPRICE,
+            [`${companyName}_QUANTITY`]: item.QUANTITY,
+          };
+
+          if (isValuationChecked) {
+            return {
+              ...baseData,
+              [`${companyName}_COSTVALUE`]: item.COST_VALUE,
+              [`${companyName}_SALESVALUE`]: item.SALES_VALUE,
+            };
+          } else return baseData;
         });
-        return newRow;
-      });
 
-      const { products } = aggregateData(transformedData);
+        const namesArray = firstOption.map((option) => option.name);
+        const filteredNames = namesArray.filter((name) =>
+          updatedTableData.some((record) => record.COMPANY_NAME === name)
+        );
 
-      setTableRecords(products);
-      setFilteredRecords(products);
-      setProductNames([...new Set(products.map((item) => item.PRODUCT_NAME))]);
-      setDepartmentNames([...new Set(products.map((item) => item.DEPARTMENT_NAME))]);
+        const mainHeadings = [
+          { label: "PRODUCT", subHeadings: ["CODE", "NAME"] },
+          { label: "DEPARTMENT", subHeadings: ["CODE", "NAME"] },
+          ...filteredNames.map((name) => ({
+            label: name.replace(/\s+/g, "_"),
+            subHeadings: isValuationChecked
+              ? [
+                  "COSTPRICE",
+                  "UNITPRICE",
+                  "QUANTITY",
+                  "COSTVALUE",
+                  "SALESVALUE",
+                ]
+              : ["COSTPRICE", "UNITPRICE", "QUANTITY"],
+          })),
+        ];
 
+        setTableHeadings(mainHeadings);
+
+        const transformedData = updatedTableData.map((row) => {
+          const newRow = {};
+          for (let key in row) {
+            const normalizedKey = key.replace(/\s+/g, "_");
+            newRow[normalizedKey] = row[key];
+          }
+          filteredNames.forEach((name) => {
+            const formattedName = name.replace(/\s+/g, "_");
+            ["AMOUNT", "QUANTITY", "COSTPRICE", "UNITPRICE"].forEach(
+              (field) => {
+                if (!newRow.hasOwnProperty(`${formattedName}_${field}`))
+                  newRow[`${formattedName}_${field}`] = "";
+              }
+            );
+            if (isValuationChecked)
+              ["COSTVALUE", "SALESVALUE"].forEach((field) => {
+                if (!newRow.hasOwnProperty(`${formattedName}_${field}`))
+                  newRow[`${formattedName}_${field}`] = "";
+              });
+          });
+          return newRow;
+        });
+
+        const { products } = aggregateData(transformedData);
+
+        setTableRecords(products);
+        setFilteredRecords(products);
+        setProductNames([
+          ...new Set(products.map((item) => item.PRODUCT_NAME)),
+        ]);
+        setDepartmentNames([
+          ...new Set(products.map((item) => item.DEPARTMENT_NAME)),
+        ]);
+      }
       setDisable(false);
     } catch (err) {
+      setFilteredRecords([]);
+      setTableHeadings([]);
+      setRowTableData([]);
+      setRowTableHeaders([]);
       setDisable(false);
-      setAlert({ message: err.response?.data?.message || "Error Occurred", type: "error" });
+      setAlert({
+        message: err.response?.data?.message || "Error Occurred",
+        type: "error",
+      });
       setTimeout(() => setAlert(null), 3000);
     }
   };
@@ -210,11 +364,18 @@ const ProductDashboard = () => {
   }, []);
 
   useEffect(() => {
-    fetchData();
+    
+    if (firstOption && !isRowSelect) {
+    fetchData(); // only for main table
+    }
+    if( isRowSelect) {
+      fetchData(); // only for row table
+    }
     if (isChecked) {
       const intervalId = setInterval(() => window.location.reload(), 180000);
       return () => clearInterval(intervalId);
     }
+    
     if (isValuationChecked !== undefined) handleSubmit();
   }, [firstOption, isChecked, isValuationChecked]);
 
@@ -232,8 +393,16 @@ const ProductDashboard = () => {
     }
 
     const filtered = tableRecords.filter((item) => {
-      const matchProduct = !searchInput || item.PRODUCT_NAME.toLowerCase().includes(isProduct ? value.toLowerCase() : searchInput.toLowerCase());
-      const matchDepartment = !departmentSearchInput || item.DEPARTMENT_NAME.toLowerCase().includes(isProduct ? departmentSearchInput.toLowerCase() : value.toLowerCase());
+      const matchProduct =
+        !searchInput ||
+        item.PRODUCT_NAME.toLowerCase().includes(
+          isProduct ? value.toLowerCase() : searchInput.toLowerCase()
+        );
+      const matchDepartment =
+        !departmentSearchInput ||
+        item.DEPARTMENT_NAME.toLowerCase().includes(
+          isProduct ? departmentSearchInput.toLowerCase() : value.toLowerCase()
+        );
       return matchProduct && matchDepartment;
     });
 
@@ -251,29 +420,43 @@ const ProductDashboard = () => {
 
     const filtered = tableRecords.filter(
       (item) =>
-        (!searchInput || item.PRODUCT_NAME.toLowerCase() === (isProduct ? name.toLowerCase() : searchInput.toLowerCase())) &&
-        (!departmentSearchInput || item.DEPARTMENT_NAME.toLowerCase() === (isProduct ? departmentSearchInput.toLowerCase() : name.toLowerCase()))
+        (!searchInput ||
+          item.PRODUCT_NAME.toLowerCase() ===
+            (isProduct ? name.toLowerCase() : searchInput.toLowerCase())) &&
+        (!departmentSearchInput ||
+          item.DEPARTMENT_NAME.toLowerCase() ===
+            (isProduct
+              ? departmentSearchInput.toLowerCase()
+              : name.toLowerCase()))
     );
 
     setFilteredRecords(filtered);
   };
 
+  const fetchRowData = async (row) => {
+    setIsRowSelect(true);
+    setRowName(row.DEPARTMENT_NAME);
+    setCode(row.DEPARTMENT_CODE);
+    await fetchData();
+  };
   const handleDateChange = (date) => setSelectedDate(date);
   const handleDropdownChange = (options) => setSelectedOptions(options);
   const handleCheckboxChange = () => setIsChecked((prev) => !prev);
-  const handleValuationCheckboxChange = () => setIsValuationChecked((prev) => !prev);
+  const handleValuationCheckboxChange = () =>
+    setIsValuationChecked((prev) => !prev);
 
   const handleSubmit = async () => {
     if (!date) {
       setAlert({ message: "Please select the date", type: "error" });
       setTimeout(() => setAlert(null), 3000);
-    } 
-    else if (selectedOptions.length === 0) {
+    } else if (selectedOptions.length === 0) {
       setAlert({ message: "Please select a company", type: "error" });
       setTimeout(() => setAlert(null), 3000);
-    }
-    else {
+    } else {
       setSubmitted(true);
+      setIsRowSelect(false);
+      setRowName("");
+      setCode("");
       fetchData();
     }
   };
@@ -281,7 +464,10 @@ const ProductDashboard = () => {
   const handleRefresh = async () => window.location.reload();
 
   const companyOptions = userData
-    ? userData.map((item) => ({ code: item.COMPANY_CODE.trim(), name: item.COMPANY_NAME.trim() }))
+    ? userData.map((item) => ({
+        code: item.COMPANY_CODE.trim(),
+        name: item.COMPANY_NAME.trim(),
+      }))
     : [];
 
   // ---------------------- JSX ----------------------
@@ -396,45 +582,106 @@ const ProductDashboard = () => {
             </div>
           )}
 
-           {(submitted || isChecked) && (
-          <div className="flex flex-col w-full space-y-5 mt-10">
-            <div className="overflow-x-auto bg-white p-4 rounded-md shadow-md min-w-[300px]">
-              <div className="flex flex-col sm:flex-row justify-between gap-4 mb-10">
-                <div className="relative w-full sm:w-1/2">
-                  <input type="text" placeholder="Search Product" value={searchInput} onChange={(e) => handleInputChange(e, true)} className="border px-3 py-2 w-full rounded-md" />
-                  {showProductSuggestions && (
-                    <ul className="absolute bg-white border w-full max-h-40 overflow-y-auto z-10">
-                      {productNames.filter((name) => name.toLowerCase().includes(searchInput.toLowerCase())).map((name, idx) => (
-                        <li key={idx} className="px-3 py-2 hover:bg-gray-200 cursor-pointer" onClick={() => handleSelectName(name, true)}>
-                          {name}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+          {(submitted || isChecked) && (
+            <div className="flex flex-col w-full space-y-5 mt-10">
+              <div className="overflow-x-auto bg-white p-4 rounded-md shadow-md min-w-[300px]">
+                <div className="flex flex-col sm:flex-row justify-between gap-4 mb-10">
+                  <div className="relative w-full sm:w-1/2">
+                    <input
+                      type="text"
+                      placeholder="Search Product"
+                      value={searchInput}
+                      onChange={(e) => handleInputChange(e, true)}
+                      className="border px-3 py-2 w-full rounded-md"
+                    />
+                    {showProductSuggestions && (
+                      <ul className="absolute bg-white border w-full max-h-40 overflow-y-auto z-10">
+                        {productNames
+                          .filter((name) =>
+                            name
+                              .toLowerCase()
+                              .includes(searchInput.toLowerCase())
+                          )
+                          .map((name, idx) => (
+                            <li
+                              key={idx}
+                              className="px-3 py-2 hover:bg-gray-200 cursor-pointer"
+                              onClick={() => handleSelectName(name, true)}
+                            >
+                              {name}
+                            </li>
+                          ))}
+                      </ul>
+                    )}
+                  </div>
+                  <div className="relative w-full sm:w-1/2">
+                    <input
+                      type="text"
+                      placeholder="Search Department"
+                      value={departmentSearchInput}
+                      onChange={(e) => handleInputChange(e, false)}
+                      className="border px-3 py-2 w-full rounded-md"
+                    />
+                    {showDepartmentSuggestions && (
+                      <ul className="absolute bg-white border w-full max-h-40 overflow-y-auto z-10">
+                        {departmentNames
+                          .filter((name) =>
+                            name
+                              .toLowerCase()
+                              .includes(departmentSearchInput.toLowerCase())
+                          )
+                          .map((name, idx) => (
+                            <li
+                              key={idx}
+                              className="px-3 py-2 hover:bg-gray-200 cursor-pointer"
+                              onClick={() => handleSelectName(name, false)}
+                            >
+                              {name}
+                            </li>
+                          ))}
+                      </ul>
+                    )}
+                  </div>
                 </div>
-                <div className="relative w-full sm:w-1/2">
-                  <input type="text" placeholder="Search Department" value={departmentSearchInput} onChange={(e) => handleInputChange(e, false)} className="border px-3 py-2 w-full rounded-md" />
-                  {showDepartmentSuggestions && (
-                    <ul className="absolute bg-white border w-full max-h-40 overflow-y-auto z-10">
-                      {departmentNames.filter((name) => name.toLowerCase().includes(departmentSearchInput.toLowerCase())).map((name, idx) => (
-                        <li key={idx} className="px-3 py-2 hover:bg-gray-200 cursor-pointer" onClick={() => handleSelectName(name, false)}>
-                          {name}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+
+                <div className="flex items-center mt-5 mb-10">
+                  <input
+                    type="checkbox"
+                    checked={isValuationChecked}
+                    onChange={handleValuationCheckboxChange}
+                    className="h-3 w-3 text-blue-600 focus:ring-blue-500"
+                  />
+                  <label className="ml-2 text-md">With Stock Valuation</label>
                 </div>
-              </div>
 
-              <div className="flex items-center mt-5 mb-10">
-                <input type="checkbox" checked={isValuationChecked} onChange={handleValuationCheckboxChange} className="h-3 w-3 text-blue-600 focus:ring-blue-500" />
-                <label className="ml-2 text-md">With Stock Valuation</label>
-              </div>
+                <NestedDynamicTable
+                  data={filteredRecords}
+                  mainHeadings={tableHeadings}
+                  title="Product Stock Data"
+                  onRowSelect={(row) => fetchRowData(row)}
+                />
 
-              <NestedDynamicTable data={filteredRecords} mainHeadings={tableHeadings} title="Product Stock Data" />
+                {Array.isArray(rowTableData) && rowTableData.length > 0 && isRowSelect  && (
+                  <div className="mt-5 overflow-x-auto">
+                    <p className="text-center text-[#bc4a17] text-lg sm:text-xl font-bold mt-5">
+                      {rowName ? `${rowName}` : ""}
+                    </p>
+                    <div className="w-max mx-auto">
+                      <Table
+                        headers={rowTableHeaders}
+                        data={rowTableData}
+                        formatColumns={[3, 4, 6, 7]}
+                        formatColumnsQuantity={[5]}
+                        editableColumns={[]}
+                        rightAlignedColumns={[3, 4, 5, 6, 7]}
+                        bin={true}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )}
         </div>
       </div>
     </div>

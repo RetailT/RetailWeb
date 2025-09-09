@@ -647,6 +647,11 @@ function App() {
                       ? [8, 9]
                       : [6, 7]
                   }
+                 rightAlignedColumns={
+                    selectedType === "GRN" || selectedType === "PRN"
+                      ? [6,7,8, 9]
+                      : [4,5,6, 7]
+                  }
                 />
               </div>
             </div>

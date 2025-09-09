@@ -517,6 +517,7 @@ setDepartmentName(row.CATEGORY_NAME);
                 headers={newTableHeaders}
                 data={newTableData}
                 formatColumns={[3, 4, 5, 6]}
+                rightAlignedColumns={[3,4,5,6]}
                 editableColumns={[]}
                 bin={true}
               />

@@ -540,6 +540,7 @@ const ProductDashboard = () => {
                               data={productTableData}
                               formatColumns={[3, 4, 5, 6]}
                               editableColumns={[]}
+                              rightAlignedColumns={[3, 4, 5, 6,7,8]}
                               bin={true}
                             />
                           </div>

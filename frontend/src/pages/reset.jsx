@@ -80,6 +80,7 @@ const fetchConnectionData = useCallback(() => {
           "CUSTOMERID",
           "COMPANY_NAME",
           "SERVERIP",
+          "PORT",
           "START_DATE",
           "END_DATE",
         ];
@@ -88,6 +89,7 @@ const fetchConnectionData = useCallback(() => {
           CUSTOMERID: "Customer ID",
           COMPANY_NAME: "Company Name",
           SERVERIP: "Server IP",
+          PORT: "Port",
           START_DATE: "Start Date",
           END_DATE: "End Date",
         };
@@ -131,7 +133,6 @@ useEffect(() => {
   if (!authToken) {
     return <Navigate to="/login" replace />;
   }
-
 
   if (token) {
     const decodedToken = jwtDecode(token);
@@ -443,6 +444,41 @@ setNewCustomerID("");
     }
   };
 
+const autoFill = (customerID) => {
+  if (customerID !== "") {
+    const record = newTableData.find(row => row[0] === Number(customerID));
+    if (record) {
+      setLoading(true);
+      const [id, companyName, serverIP, port, startDate, endDate] = record;
+      setCompanyName(companyName || "");
+      setIp(serverIP || "");
+      setPort(port || "");
+      setStartDate(startDate || "");
+      setEndDate(endDate || "");
+      setLoading(false);
+    } 
+    else{
+      setLoading(true);
+      setCompanyName("");
+      setIp("");
+      setPort("");
+      setStartDate("");
+      setEndDate("");
+      setLoading(false);
+
+    }
+  }
+  else{
+      setLoading(true);
+      setCompanyName("");
+      setIp("");
+      setPort("");
+      setStartDate("");
+      setEndDate("");
+      setLoading(false);
+
+    }
+};
 
   return (
     <div>
@@ -552,7 +588,11 @@ setNewCustomerID("");
                           type="number"
                           id="customerID"
                           value={newCustomerID? newCustomerID : customerID}
-                          onChange={(e) => setNewCustomerID(e.target.value)}
+                          onChange={(e) => {
+                            setNewCustomerID(e.target.value);   // update state
+                            autoFill(e.target.value);    // call your function
+                          }}
+
                           className="mt-1 block w-full px-2 sm:px-4 py-1 sm:py-2 bg-gray-100 border border-gray-300 rounded-md text-gray-700 text-sm"
                           placeholder="Enter Customer ID"
                         />

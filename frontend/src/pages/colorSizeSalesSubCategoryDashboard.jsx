@@ -535,6 +535,7 @@ setDisable(false);
                 data={newTableData}
                 formatColumns={[3, 4, 5, 6]}
                 editableColumns={[]}
+                rightAlignedColumns={[3, 4, 5, 6,7,8]}
                 bin={true}
               />
             </div>

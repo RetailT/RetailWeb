@@ -169,7 +169,7 @@ const ScrollableTable = ({ headers, data, onRowClick, rightAlignedColumns = [] }
                 <td
                   key={cellIndex}
                   className={`px-6 py-3 whitespace-nowrap text-sm border border-gray-300 ${
-                    rightAlignedColumns.includes(cellIndex) ? "text-right" : "text-center"
+                    rightAlignedColumns.includes(cellIndex) ? "text-right" : "text-left"
                   }`}
                 >
                   {cell || ""}

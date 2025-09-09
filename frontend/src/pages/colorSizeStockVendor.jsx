@@ -5,6 +5,7 @@ import DatePicker from "../components/DatePicker";
 import MultiSelectDropdown from "../components/MultiSelectDropdown";
 import Alert from "../components/Alert";
 import { Navigate } from "react-router-dom";
+import Table from "../components/EditableTable";
 import { AuthContext } from "../AuthContext";
 import CircleBounceLoader from "../components/Loader";
 import axios from "axios";
@@ -31,8 +32,15 @@ const ProductDashboard = () => {
   const [isValuationChecked, setIsValuationChecked] = useState(false);
   const [firstOption, setFirstOption] = useState(null);
 
+  const [rowTableHeaders, setRowTableHeaders] = useState([]);
+  const [rowTableData, setRowTableData] = useState([]);
+  const [rowName, setRowName] = useState("");
+  const [code, setCode] = useState("");
+  const [isRowSelect, setIsRowSelect] = useState(false);
+
   const token = localStorage.getItem("authToken");
   const now = new Date();
+  let rowDataStatus = false;
 
   const formatDate = (date) => {
     const localDate = new Date(date);
@@ -97,6 +105,8 @@ const ProductDashboard = () => {
 
   // ---------------------- FETCH TABLE DATA ----------------------
   const fetchData = async () => {
+     setRowTableData([]);
+            setRowTableHeaders([]);
     setSearchInput("");
     setVendorSearchInput("");
     if (!firstOption) return;
@@ -110,6 +120,8 @@ const ProductDashboard = () => {
           params: {
             currentDate: formatDate(now),
             date: date,
+             rowSelect: isRowSelect,
+            vendorCode: code,
             state: isValuationChecked,
             selectedOptions: selectedOptions.map((option) => option.code).join(","),
           },
@@ -124,8 +136,98 @@ const ProductDashboard = () => {
         setTimeout(() => setAlert(null), 3000);
         return;
       }
+rowDataStatus = response.data.rowDataStatus;
+      if (
+        rowDataStatus === true ||
+        String(rowDataStatus).toLowerCase() === "true"
+      ) {
+        const rowData = response.data.rowRecords;
+        
+        // Clear previous table data
+        setRowTableData([]);
+        setRowTableHeaders([]);
 
-      const tableData = response.data.tableRecords;
+        if (!Array.isArray(rowData) || rowData.length === 0) {
+          setDisable(false);
+          setAlert({
+            message: "No data available to display",
+            type: "error",
+          });
+          setTimeout(() => setAlert(null), 3000);
+          return;
+        } else {
+          const updatedTableData = rowData
+            .map((item) => {
+              // Validate item and required fields
+              if (!item || !item.COMPANY_CODE) {
+                console.warn("Invalid rowData item:", item);
+                return null;
+              }
+
+              const matchingOption = firstOption.find(
+                (option) => option.code === item.COMPANY_CODE
+              );
+              const companyName = matchingOption
+                ? matchingOption.name
+                : "UNKNOWN";
+
+              // Create new object with all original fields plus COMPANY_NAME
+              return {
+                ...item,
+                COMPANY_NAME: companyName,
+              };
+            })
+            .filter((item) => item !== null) // Remove invalid items
+            .sort((a, b) => {
+              // Sort by COMPANY_CODE in ascending order
+              return a.COMPANY_CODE.localeCompare(b.COMPANY_CODE);
+            });
+
+          const baseRowHeaders = [
+            "COMPANY_CODE",
+            "COMPANY_NAME",
+            "SERIALNO",
+            "COSTPRICE",
+            "SCALEPRICE",
+            "QUANTITY",
+          ];
+
+          const baseRowHeaderMapping = {
+            COMPANY_CODE: "Company Code",
+            COMPANY_NAME: "Company Name",
+            SERIALNO: "Serial Number",
+            COSTPRICE: "Cost Price",
+            SCALEPRICE: "Unit Price",
+            QUANTITY: "Quantity",
+          };
+
+          const customRowHeaders = isValuationChecked
+            ? [...baseRowHeaders, "COST_VALUE", "SALES_VALUE"]
+            : baseRowHeaders;
+
+          const customRowHeaderMapping = isValuationChecked
+            ? {
+                ...baseRowHeaderMapping,
+                COST_VALUE: "Cost Value",
+                SALES_VALUE: "Sales Value",
+              }
+            : baseRowHeaderMapping;
+          const customHeaders = customRowHeaders.map(
+            (key) => customRowHeaderMapping[key] || key
+          );
+          setRowTableHeaders(customHeaders);
+          const formattedTableData = updatedTableData.map((item) =>
+            customRowHeaders.map((key) => item[key])
+          );
+          setRowTableData(formattedTableData);
+
+          setDisable(false);
+        }
+      } else {
+        setRowTableData([]);
+        setRowTableHeaders([]);
+
+        const tableData = response.data.tableRecords;
 
       const updatedTableData = tableData.map((item) => {
         const matchingOption = firstOption.find((option) => option.code === item.COMPANY_CODE);
@@ -196,7 +298,14 @@ const ProductDashboard = () => {
       setVendorNames([...new Set(products.map((item) => item.VENDOR_NAME))]);
 
       setDisable(false);
+      }
+setDisable(false);
+      
     } catch (err) {
+      setFilteredRecords([]);
+      setTableHeadings([]);
+      setRowTableData([]);
+      setRowTableHeaders([]);
       setDisable(false);
       setAlert({ message: err.response?.data?.message || "Error Occurred", type: "error" });
       setTimeout(() => setAlert(null), 3000);
@@ -210,7 +319,12 @@ const ProductDashboard = () => {
   }, []);
 
   useEffect(() => {
-    fetchData();
+    if (firstOption && !isRowSelect) {
+    fetchData(); // only for main table
+    }
+    if( isRowSelect) {
+      fetchData(); // only for row table
+    }
     if (isChecked) {
       const intervalId = setInterval(() => window.location.reload(), 180000);
       return () => clearInterval(intervalId);
@@ -258,6 +372,13 @@ const ProductDashboard = () => {
     setFilteredRecords(filtered);
   };
 
+  const fetchRowData = async (row) => {
+    setIsRowSelect(true);
+    setRowName(row.VENDOR_NAME);
+    setCode(row.VENDOR_CODE);
+    await fetchData();
+  };
+
   const handleDateChange = (date) => setSelectedDate(date);
   const handleDropdownChange = (options) => setSelectedOptions(options);
   const handleCheckboxChange = () => setIsChecked((prev) => !prev);
@@ -274,6 +395,9 @@ const ProductDashboard = () => {
     }
     else {
       setSubmitted(true);
+      setIsRowSelect(false);
+      setRowName("");
+      setCode("");
       fetchData();
     }
   };
@@ -431,7 +555,28 @@ const ProductDashboard = () => {
                 <label className="ml-2 text-md">With Stock Valuation</label>
               </div>
 
-              <NestedDynamicTable data={filteredRecords} mainHeadings={tableHeadings} title="Product Stock Data" />
+              <NestedDynamicTable data={filteredRecords} mainHeadings={tableHeadings} title="Product Stock Data" onRowSelect={(row) => fetchRowData(row)}/>
+           
+            {Array.isArray(rowTableData) && rowTableData.length > 0 && isRowSelect  && (
+              
+                  <div className="mt-5 overflow-x-auto">
+                    <p className="text-center text-[#bc4a17] text-lg sm:text-xl font-bold mt-5">
+                      {rowName ? `${rowName}` : ""}
+                    </p>
+                    <div className="w-max mx-auto">
+                      <Table
+                        headers={rowTableHeaders}
+                        data={rowTableData}
+                        formatColumns={[3, 4, 6, 7]}
+                        formatColumnsQuantity={[5]}
+                        editableColumns={[]}
+                        rightAlignedColumns={[3, 4, 5, 6, 7]}
+                        bin={true}
+                      />
+                    </div>
+                  </div>
+                )}
+            
             </div>
           </div>
         )}

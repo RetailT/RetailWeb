@@ -144,6 +144,7 @@ function App() {
   };
 
   const requestData = async (mode, data, inputValue) => {
+    
     setSalesData([]);
     setSalesHeaders([]);
     try {
@@ -374,6 +375,18 @@ function App() {
       if (response.data.message === "Item Found Successfully") {
         const salesData = response.data.salesData;
 
+        if(!Array.isArray(salesData) || salesData.length === 0){
+          setSalesData([]);
+          setSalesHeaders([]);
+          setAlert({
+            message: "No Sales Found for the selected date range",
+            type: "error",  
+          });
+          setTimeout(() => setAlert(null), 3000);
+          setDisable(false);
+          return;
+        }
+        
         const headings = [
           "SALESDATE",
           "COMPANY_CODE",
@@ -786,6 +799,7 @@ function App() {
                               data={priceTableData}
                               editableColumns={[]}
                               bin={true}
+                              rightAlignedColumns={[3,4,5,6]}
                             />
                           </div>
                         </div>
@@ -805,6 +819,7 @@ function App() {
                               formatColumnsQuantity={[2]}
                               editableColumns={[]}
                               bin={true}
+                              rightAlignedColumns={[2]}
                             />
                           </div>
                         </div>
@@ -823,6 +838,7 @@ function App() {
                               data={colorWiseTableData}
                               formatColumnsQuantity={[1]}
                               editableColumns={[]}
+                              rightAlignedColumns={[1]}
                               bin={true}
                             />
                           </div>
@@ -878,6 +894,7 @@ function App() {
                             formatColumnsQuantity={[4]}
                             editableColumns={[]}
                             bin={true}
+                            rightAlignedColumns={[2,3,4,5,6]}
                           />
                         </div>
                       )}

@@ -196,7 +196,7 @@ const NestedDynamicTable = ({ data, mainHeadings, title, onRowSelect }) => {
                         className={`px-6 py-3 whitespace-nowrap text-sm text-gray-900 border border-gray-300 ${
                           ["amount", "quantity", "costprice", "unitprice", "salesvalue", "costvalue"].includes(sub.toLowerCase())
                             ? "text-right"
-                            : "text-center"
+                            : "text-left"
                         }`}
                       >
                         {["amount", "quantity", "costprice", "unitprice", "salesvalue", "costvalue"].includes(sub.toLowerCase())
