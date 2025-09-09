@@ -2051,8 +2051,6 @@ else if ((state===true || String(state).toLowerCase() === "true") && currentDate
 
    }
 
-    console.log("reportQuery length", reportQuery ? reportQuery.recordset.length : 0);
-console.log("invoiceData length", invoiceData.length);
 
     res.status(200).json({
   message: "Data found",
