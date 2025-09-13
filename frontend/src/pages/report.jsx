@@ -145,7 +145,14 @@ const Report = () => {
         ) {
           const invoiceHeaders = invoiceHeadings.map(({ label }) => label);
 
-          const formattedInvoiceData = invoiceData.map((item) =>
+          // 1️⃣ Sort by invoice number ascending
+          const sortedInvoiceData = [...invoiceData].sort((a, b) => {
+            // Make sure they're numbers, not strings
+            return Number(a.INVOICENO) - Number(b.INVOICENO);
+          });
+
+          // 2️⃣ Then format
+          const formattedInvoiceData = sortedInvoiceData.map((item) =>
             invoiceHeadings.map(({ key }) => {
               if (!item[key]) return ""; // Handle missing keys
               if (
@@ -182,7 +189,14 @@ const Report = () => {
         } else if (data && data.length !== 0) {
           const headers = customLabels.map(({ label }) => label);
 
-          const formattedData = data.map((item) =>
+          const sortedData = [...data].sort((a, b) => {
+            if (a.company_code < b.company_code) return -1;
+            if (a.company_code > b.company_code) return 1;
+            return 0;
+          });
+
+          // Then format
+          const formattedData = sortedData.map((item) =>
             customLabels.map(({ key }) => {
               if (!item[key]) return ""; // Handle missing keys
               if (key === "SALESDATE") {

@@ -234,7 +234,7 @@ useEffect(() => {
           debug: true,
         },
       };
-      console.log("Data to be sent:", data);
+      
       axios
         .put(
           `${process.env.REACT_APP_BACKEND_URL}reset-database-connection`,
@@ -349,9 +349,15 @@ setNewCustomerID("");
             setCSaCategory(user.c_sa_category === "T");
             setCSaSCategory(user.c_sa_scategory === "T");
             setCSaVendor(user.c_sa_vendor === "T");
+            setSProduct(user.s_product === "T");
+            setSDepartment(user.s_department === "T");
+            setSCategory(user.s_category === "T");
+            setSSCategory(user.s_scategory === "T");
+            setSVendor(user.s_vendor === "T");
             setCompanyName(user.COMPANY_NAME || "");
             setStartDate(user.START_DATE || "");
             setEndDate(user.END_DATE || "");
+            
 
             // setData(user);
             // userPermisionDetails(user);
