@@ -15,6 +15,7 @@ const axios = require("axios");
 const posback = process.env.DB_DATABASE3;
 const rtweb = process.env.DB_DATABASE2;
 const posmain = process.env.DB_DATABASE1;
+const port_number = 1443
 
 const dbConfig1 = {
   user: process.env.DB_USER, // Database username
@@ -25,7 +26,7 @@ const dbConfig1 = {
     encrypt: false, // Disable encryption
     trustServerCertificate: true, // Trust server certificate (useful for local databases)
   },
-  port: 1443,
+  port: port_number,
 };
 
 const dbConnection = {
@@ -37,7 +38,7 @@ const dbConnection = {
     encrypt: false,
     trustServerCertificate: true,
   },
-  port: 1443, // verify this port is correct for your DB server
+  port: port_number, // verify this port is correct for your DB server
 };
 
 //report data, current report, company dashboard,
@@ -270,7 +271,8 @@ async function updateTables() {
 async function syncDB() {
   try {
     await mssql.close();
-    await mssql.connect(dbConfig1);
+    // await mssql.connect(dbConnection);
+    await connectToDatabase()
 
     const dbConnectionData = await syncDBConnection();
 
@@ -6609,22 +6611,23 @@ exports.resetDatabaseConnection = async (req, res) => {
     });
 
     // Connect to the database
-    const config = {
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
-      server: process.env.DB_SERVER,
-      database: process.env.DB_DATABASE1,
-      options: {
-        encrypt: false,
-        trustServerCertificate: true,
-      },
-      port: 1443, //---------1433 initialy there
-      connectionTimeout: 30000,
-      requestTimeout: 30000,
-    };
+    // const config = {
+    //   user: process.env.DB_USER,
+    //   password: process.env.DB_PASSWORD,
+    //   server: process.env.DB_SERVER,
+    //   database: process.env.DB_DATABASE1,
+    //   options: {
+    //     encrypt: false,
+    //     trustServerCertificate: true,
+    //   },
+    //   port: 1443, //---------1433 initialy there
+    //   connectionTimeout: 30000,
+    //   requestTimeout: 30000,
+    // };
     console.log("Connecting to database");
 
-    pool = await mssql.connect(config);
+    // pool = await mssql.connect(dbConnection);
+    pool = await connectToDatabase();
     console.log("Database connected");
     transaction = new mssql.Transaction(pool);
     await transaction.begin();
@@ -7091,7 +7094,8 @@ exports.serverConnection = async (req, res) => {
     try {
       await mssql.close();
 
-      await mssql.connect(dbConnection);
+      // await mssql.connect(dbConnection);
+      await connectToDatabase()
 
       const [tableRecords] = await Promise.all([
         mssql.query(`

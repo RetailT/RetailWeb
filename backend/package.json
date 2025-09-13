@@ -21,6 +21,7 @@
     "moment": "^2.30.1",
     "mssql": "^11.0.1",
     "nodemailer": "^7.0.3",
+    "react-barcode-reader": "^0.0.2",
     "serverless-http": "^3.2.0"
   },
   "devDependencies": {
