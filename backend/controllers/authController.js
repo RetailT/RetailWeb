@@ -17,33 +17,34 @@ const rtweb = process.env.DB_DATABASE2;
 const posmain = process.env.DB_DATABASE1;
 const port_number = 1443
 
-const dbConfig1 = {
-  user: process.env.DB_USER, // Database username
-  password: process.env.DB_PASSWORD, // Database password
-  server: process.env.DB_SERVER, // Database server address
-  database: process.env.DB_DATABASE1, // Database name
-  options: {
-    encrypt: false, // Disable encryption
-    trustServerCertificate: true, // Trust server certificate (useful for local databases)
-  },
-  port: port_number,
-};
+// const dbConfig1 = {
+//   user: process.env.DB_USER, // Database username
+//   password: process.env.DB_PASSWORD, // Database password
+//   server: process.env.DB_SERVER, // Database server address
+//   database: process.env.DB_DATABASE1, // Database name
+//   options: {
+//     encrypt: false, // Disable encryption
+//     trustServerCertificate: true, // Trust server certificate (useful for local databases)
+//   },
+//   port: port_number,
+// };
 
-const dbConnection = {
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  server: process.env.DB_SERVER,
-  database: process.env.DB_DATABASE1,
-  options: {
-    encrypt: false,
-    trustServerCertificate: true,
-  },
-  port: port_number, // verify this port is correct for your DB server
-};
+// const dbConnection = {
+//   user: process.env.DB_USER,
+//   password: process.env.DB_PASSWORD,
+//   server: process.env.DB_SERVER,
+//   database: process.env.DB_DATABASE1,
+//   options: {
+//     encrypt: false,
+//     trustServerCertificate: true,
+//   },
+//   port: port_number, // verify this port is correct for your DB server
+// };
 
 //report data, current report, company dashboard,
 // department dashboard, category dashboard,
 // sub category dashboard, vendor dashboard
+
 function formatDate(dateString) {
   // Convert the input string to a Date object
   const dateObject = new Date(dateString);
@@ -622,6 +623,8 @@ exports.login = async (req, res) => {
     // Generate token
     const token = jwt.sign(
       {
+        port: port,
+        ip: ip_address,
         userId: user.id,
         username: user.username,
         companyName: company.COMPANY_NAME,
@@ -672,6 +675,33 @@ exports.login = async (req, res) => {
     if (mssql.connected) await mssql.close();
   }
 };
+
+// // db connection for menu
+// exports.menuDBConnection = async (req, res) => {
+//   const username = req.query.username?.trim();
+  
+//  console.log('Received username:', username);
+//  if(username === undefined || username === '' || !username) {
+//   return res.status(400).json({ message: "Username is required" });
+//  }
+
+//  try{
+// await mssql.connect({
+//         user: process.env.DB_USER,
+//         password: process.env.DB_PASSWORD,
+//         server: process.env.DB_SERVER,
+//         database: process.env.DB_DATABASE2, // or RT_WEB
+//         options: {
+//           encrypt: false,
+//           trustServerCertificate: true,
+//         },
+//       });
+//  }
+//  catch(err){
+//   console.error('Error in menuDBConnection:', err);
+//  }
+  
+// };
 
 //register
 exports.register = async (req, res) => {
@@ -1826,20 +1856,22 @@ exports.finalGrnPrnUpdate = async (req, res) => {
 
 // Get dashboard data function
 exports.dashboardOptions = async (req, res) => {
+  
   try {
     // Ensure database connection is open
-    if (!mssql.connected) {
-      await mssql.connect({
-        user: process.env.DB_USER,
-        password: process.env.DB_PASSWORD,
-        server: process.env.DB_SERVER,
-        database: process.env.DB_DATABASE2, // or RT_WEB
-        options: {
-          encrypt: false,
-          trustServerCertificate: true,
-        },
-      });
-    }
+    if (!mssql.connected) {  // this check might not work as expected
+    await mssql.connect({
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+      server: req.user.ip.trim(),
+      port: parseInt(req.user.port.trim()),
+      database: process.env.DB_DATABASE2, 
+      options: {
+        encrypt: false,
+        trustServerCertificate: true,
+      },
+    });
+  }
 
     await mssql.query(`USE [${rtweb}];`); // run separately
 
@@ -1852,6 +1884,7 @@ exports.dashboardOptions = async (req, res) => {
     if (records.length === 0) {
       return res.status(404).json({ message: "No companies found" });
     }
+
 
     const userData = records.map(({ COMPANY_CODE, COMPANY_NAME }) => ({
       COMPANY_CODE: COMPANY_CODE?.trim(),

@@ -59,6 +59,8 @@ app.get('/grnprn-table-data', authenticateToken, authController.grnprnTableData)
 app.get('/final-stock-update', authenticateToken, authController.finalStockUpdate);
 app.get('/final-grnprn-update', authenticateToken, authController.finalGrnPrnUpdate);
 
+// app.get('/dbConnection', authenticateToken, authController.menuDBConnection);
+
 app.get('/sync-databases', authenticateToken, authController.syncDatabases);
 
 app.get('/product-view', authenticateToken, authController.productView);
