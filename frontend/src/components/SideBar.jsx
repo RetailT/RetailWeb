@@ -81,19 +81,19 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
   }
 
   const establishConnection = async () => {
-    try {
-      const response = await axios.get(
-              `${process.env.REACT_APP_BACKEND_URL}dbConnection`,
-              {
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                }
-              }
-            );
+    // try {
+    //   const response = await axios.get(
+    //           `${process.env.REACT_APP_BACKEND_URL}dbConnection`,
+    //           {
+    //             headers: {
+    //               Authorization: `Bearer ${token}`,
+    //             }
+    //           }
+    //         );
 
-    } catch (error) {
-      console.error("Backend call failed", error);
-    }
+    // } catch (error) {
+    //   console.error("Backend call failed", error);
+    // }
 
     
   };
