@@ -676,34 +676,34 @@ exports.login = async (req, res) => {
   }
 };
 
-// // db connection for menu
-// exports.menuDBConnection = async (req, res) => {
-//   const username = req.query.username?.trim();
-  
-//  console.log('Received username:', username);
-//  if(username === undefined || username === '' || !username) {
-//   return res.status(400).json({ message: "Username is required" });
-//  }
+// db connection for menu
+exports.menuDBConnection = async (req, res) => {
+ mssql.close();
 
-//  try{
-// await mssql.connect({
-//         user: process.env.DB_USER,
-//         password: process.env.DB_PASSWORD,
-//         server: process.env.DB_SERVER,
-//         database: process.env.DB_DATABASE2, // or RT_WEB
-//         options: {
-//           encrypt: false,
-//           trustServerCertificate: true,
-//         },
-//       });
-//  }
-//  catch(err){
-//   console.error('Error in menuDBConnection:', err);
-//  }
-  
-// };
+ try{
+await mssql.connect({
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+      server: req.user.ip.trim(),
+      port: parseInt(req.user.port.trim()),
+      database: process.env.DB_DATABASE2, 
+      options: {
+        encrypt: false,
+        trustServerCertificate: true,
+      },
+    });
 
-//register
+    res.status(200).json({ message: "Menu DB Connection Successful" });
+ }
+ catch(err){
+  console.error('Error in menuDBConnection:', err);
+  res.status(500).json({ message: "Menu DB Connection Failed" });
+  
+ }
+  
+};
+
+// register
 exports.register = async (req, res) => {
   let pool;
   try {
