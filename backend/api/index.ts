@@ -85,7 +85,7 @@ app.delete('/grnprn-delete', authenticateToken, authController.grnprnDelete);
 app.put('/reset-database-connection', authenticateToken, authController.resetDatabaseConnection);
 
 
-// // for local development -- comment out in production
+// for local development -- comment out in production
 // if (process.env.NODE_ENV !== "production") {
 //   app.listen(5000, () => {
 //     console.log(`Server is running on http://localhost:5000`);

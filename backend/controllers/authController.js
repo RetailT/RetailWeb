@@ -1906,9 +1906,19 @@ exports.dashboardOptions = async (req, res) => {
 // Get vendor data function
 exports.vendorOptions = async (req, res) => {
   try {
-    // const posback = process.env.DB_DATABASE3 || "POSBACK_SYSTEM"; // Define the DB name
-    const pool = await connectToDatabase(); // Assumes this connects initially to any DB
-
+    
+    const pool = await mssql.connect({
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+      server: req.user.ip.trim(),
+      port: parseInt(req.user.port.trim()),
+      database: process.env.DB_DATABASE2, 
+      options: {
+        encrypt: false,
+        trustServerCertificate: true,
+      },
+    });
+  
     const result = await pool.request().query(`
       USE [${posback}];
       SELECT VENDORCODE, VENDORNAME FROM tb_VENDOR;
@@ -6419,12 +6429,24 @@ exports.grnprnTableData = async (req, res) => {
 exports.productName = async (req, res) => {
   try {
     // Try finding a product code via barcode link table
+    const pool = await mssql.connect({
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+      server: req.user.ip.trim(),
+      port: parseInt(req.user.port.trim()),
+      database: process.env.DB_DATABASE2, 
+      options: {
+        encrypt: false,
+        trustServerCertificate: true,
+      },
+    }); 
+
     const query = `
   USE [${posback}];
   SELECT PRODUCT_NAMELONG FROM tb_PRODUCT;
 `;
 
-    const productNames = await new mssql.Request().query(query);
+    const productNames = await pool.request().query(query);
 
     const productNamesData = productNames.recordset;
     if (!productNamesData || productNamesData.length === 0) {
