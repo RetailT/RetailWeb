@@ -414,8 +414,8 @@ function App() {
       }
       else{
         setDisable(false);
-        setAlert({ message: response.data.message || "Error Occured", type: "error" });
-      setTimeout(() => setAlert(null), 3000);
+      //   setAlert({ message: response.data.message || "Error Occured", type: "error" });
+      // setTimeout(() => setAlert(null), 3000);
       }
     } catch (err) {
       setAlert({
