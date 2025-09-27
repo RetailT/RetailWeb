@@ -29,17 +29,19 @@ const port_number = 1443
 //   port: port_number,
 // };
 
-// const dbConnection = {
-//   user: process.env.DB_USER,
-//   password: process.env.DB_PASSWORD,
-//   server: process.env.DB_SERVER,
-//   database: process.env.DB_DATABASE1,
-//   options: {
-//     encrypt: false,
-//     trustServerCertificate: true,
-//   },
-//   port: port_number, // verify this port is correct for your DB server
-// };
+const dbConnection = (user_ip, user_port) => ({
+  user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+      server: user_ip.trim(),
+      database: process.env.DB_DATABASE2,     
+      port: parseInt(user_port.trim()),
+      options: {
+        encrypt: false,
+        trustServerCertificate: true,
+      },
+      connectionTimeout: 5000, // << timeout in ms
+      requestTimeout: 5000,
+});
 
 //report data, current report, company dashboard,
 // department dashboard, category dashboard,
@@ -304,19 +306,20 @@ async function syncDB() {
       try {
         await mssql.close();
 
-        const syncdbConfig = {
-          user: process.env.DB_USER,
-          password: process.env.DB_PASSWORD,
-          server: syncdbIp,
-          database: process.env.DB_DATABASE2,
-          options: {
-            encrypt: false,
-            trustServerCertificate: true,
-          },
-          port: syncdbPort,
-        };
+        // const syncdbConfig = {
+        //   user: process.env.DB_USER,
+        //   password: process.env.DB_PASSWORD,
+        //   server: syncdbIp,
+        //   database: process.env.DB_DATABASE2,
+        //   options: {
+        //     encrypt: false,
+        //     trustServerCertificate: true,
+        //   },
+        //   port: syncdbPort,
+        // };
 
-        await mssql.connect(syncdbConfig);
+        const user_ip = String(customer.IP).trim();      
+        await mssql.connect(dbConnection(user_ip, customer.PORT));
         console.log(
           `Successfully connected to sync database at ${syncdbIp}:${syncdbPort}`
         );
@@ -593,21 +596,22 @@ exports.login = async (req, res) => {
     await mssql.close();
 
     // Connect to dynamic DB
-    const dynamicDbConfig = {
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
-      server: ip_address.trim(),
-      database: process.env.DB_DATABASE2,
-      options: {
-        encrypt: false,
-        trustServerCertificate: true,
-      },
-      port: parseInt(port.trim()),
-      connectionTimeout: 5000, // << timeout in ms
-      requestTimeout: 5000,
-    };
+    // const dynamicDbConfig = {
+    //   user: process.env.DB_USER,
+    //   password: process.env.DB_PASSWORD,
+    //   server: ip_address.trim(),
+    //   database: process.env.DB_DATABASE2,
+    //   options: {
+    //     encrypt: false,
+    //     trustServerCertificate: true,
+    //   },
+    //   port: parseInt(port.trim()),
+    //   connectionTimeout: 5000, // << timeout in ms
+    //   requestTimeout: 5000,
+    // };
 
-    const dynamicPool = await mssql.connect(dynamicDbConfig);
+    const user_ip = String(ip_address).trim();  
+    const dynamicPool = await mssql.connect(dbConnection(user_ip, port));
 
     const companyResult = await dynamicPool
       .request()
@@ -676,32 +680,32 @@ exports.login = async (req, res) => {
   }
 };
 
-// db connection for menu
-exports.menuDBConnection = async (req, res) => {
- mssql.close();
+// // db connection for menu
+// exports.menuDBConnection = async (req, res) => {
+//  mssql.close();
 
- try{
-await mssql.connect({
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
-      server: req.user.ip.trim(),
-      port: parseInt(req.user.port.trim()),
-      database: process.env.DB_DATABASE2, 
-      options: {
-        encrypt: false,
-        trustServerCertificate: true,
-      },
-    });
+//  try{
+// await mssql.connect({
+//       user: process.env.DB_USER,
+//       password: process.env.DB_PASSWORD,
+//       server: req.user.ip.trim(),
+//       port: parseInt(req.user.port.trim()),
+//       database: process.env.DB_DATABASE2, 
+//       options: {
+//         encrypt: false,
+//         trustServerCertificate: true,
+//       },
+//     });
 
-    res.status(200).json({ message: "Menu DB Connection Successful" });
- }
- catch(err){
-  console.error('Error in menuDBConnection:', err);
-  res.status(500).json({ message: "Menu DB Connection Failed" });
+//     res.status(200).json({ message: "Menu DB Connection Successful" });
+//  }
+//  catch(err){
+//   console.error('Error in menuDBConnection:', err);
+//   res.status(500).json({ message: "Menu DB Connection Failed" });
   
- }
+//  }
   
-};
+// };
 
 // register
 exports.register = async (req, res) => {
@@ -924,7 +928,9 @@ exports.updateTempSalesTable = async (req, res) => {
     } = req.body;
 
     const { trDate, trTime } = currentDateTime();
-    const pool = await connectToDatabase();
+
+    const user_ip = String(decoded.ip).trim(); 
+    const pool = await mssql.connect(dbConnection(user_ip,decoded.port));
     // Switch DB manually using a USE statement
 
     await mssql.query(`USE [${rtweb}];`);
@@ -1188,7 +1194,8 @@ exports.updateTempTogTable = async (req, res) => {
 
     const { trDate, trTime } = currentDateTime();
 
-    const pool = await connectToDatabase();
+    const user_ip = String(decoded.ip).trim(); 
+    const pool = await mssql.connect(dbConnection(user_ip, decoded.port));
     // ✅ Switch database explicitly
     await mssql.query(`USE [${rtweb}];`);
 
@@ -1860,18 +1867,22 @@ exports.dashboardOptions = async (req, res) => {
   try {
     // Ensure database connection is open
     if (!mssql.connected) {  // this check might not work as expected
-    await mssql.connect({
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
-      server: req.user.ip.trim(),
-      port: parseInt(req.user.port.trim()),
-      database: process.env.DB_DATABASE2, 
-      options: {
-        encrypt: false,
-        trustServerCertificate: true,
-      },
-    });
-  }
+      await mssql.close(); // close existing connection if any
+      const user_ip = String(req.user.ip).trim(); 
+      await mssql.connect(dbConnection(user_ip, req.user.port));
+    }
+    // await mssql.connect({
+    //   user: process.env.DB_USER,
+    //   password: process.env.DB_PASSWORD,
+    //   server: req.user.ip.trim(),
+    //   port: parseInt(req.user.port.trim()),
+    //   database: process.env.DB_DATABASE2, 
+    //   options: {
+    //     encrypt: false,
+    //     trustServerCertificate: true,
+    //   },
+    // });
+  // }
 
     await mssql.query(`USE [${rtweb}];`); // run separately
 
@@ -1906,18 +1917,21 @@ exports.dashboardOptions = async (req, res) => {
 // Get vendor data function
 exports.vendorOptions = async (req, res) => {
   try {
+    const user_ip = String(req.user.ip).trim(); 
+    const pool = new mssql.ConnectionPool(dbConnection(user_ip, req.user.port));
+await pool.connect();
     
-    const pool = await mssql.connect({
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
-      server: req.user.ip.trim(),
-      port: parseInt(req.user.port.trim()),
-      database: process.env.DB_DATABASE2, 
-      options: {
-        encrypt: false,
-        trustServerCertificate: true,
-      },
-    });
+    // const pool = await mssql.connect({
+    //   user: process.env.DB_USER,
+    //   password: process.env.DB_PASSWORD,
+    //   server: req.user.ip.trim(),
+    //   port: parseInt(req.user.port.trim()),
+    //   database: process.env.DB_DATABASE2, 
+    //   options: {
+    //     encrypt: false,
+    //     trustServerCertificate: true,
+    //   },
+    // });
   
     const result = await pool.request().query(`
       USE [${posback}];
@@ -1973,7 +1987,15 @@ exports.reportData = async (req, res) => {
 
     const { state, rowClicked, fromDate, toDate, currentDate, invoiceNo } = req.query;
 
+     if (!mssql.connected) {
+      console.log('no connection')
+      const user_ip = String(req.user.ip).trim();
+    await mssql.connect(dbConnection(user_ip, req.user.port));
+    }
+
 let reportQuery;
+
+
 
 if (rowClicked===false || String(rowClicked).toLowerCase() === "false") {
   if ((state===false || String(state).toLowerCase() === "false") && fromDate && toDate && selectedOptions && selectedOptions.length > 0) {
@@ -2260,6 +2282,12 @@ exports.loadingDashboard = async (req, res) => {
         .json({ message: "Invalid characters in company codes" });
     }
 
+    if (!mssql.connected) {
+      console.log('no connection')
+      const user_ip = String(req.user.ip).trim();
+    await mssql.connect(dbConnection(user_ip, req.user.port));
+    }
+
     const formattedCurrentDate = formatDate(currentDate);
     const formattedFromDate = formatDate(fromDate);
     const formattedToDate = formatDate(toDate);
@@ -2403,6 +2431,7 @@ exports.loadingDashboard = async (req, res) => {
   }
 };
 
+
 //department dashboard
 exports.departmentDashboard = async (req, res) => {
   try {
@@ -2437,6 +2466,12 @@ exports.departmentDashboard = async (req, res) => {
       ) {
         return res.status(400).json({ message: "No company codes provided" });
       }
+
+      if (!mssql.connected) {
+      console.log('no connection')
+      const user_ip = String(req.user.ip).trim();
+    await mssql.connect(dbConnection(user_ip, req.user.port));
+    }
 
       const formattedCurrentDate = formatDate(currentDate);
       const formattedFromDate = formatDate(fromDate);
@@ -2584,6 +2619,12 @@ exports.categoryDashboard = async (req, res) => {
         return res.status(400).json({ message: "No company codes provided" });
       }
 
+      if (!mssql.connected) {
+      console.log('no connection')
+      const user_ip = String(req.user.ip).trim();
+    await mssql.connect(dbConnection(user_ip, req.user.port));
+    }
+
       const formattedCurrentDate = formatDate(currentDate);
       const formattedFromDate = formatDate(fromDate);
       const formattedToDate = formatDate(toDate);
@@ -2710,6 +2751,12 @@ exports.subCategoryDashboard = async (req, res) => {
         return res.status(400).json({ message: "No company codes provided" });
       }
 
+      if (!mssql.connected) {
+      console.log('no connection')
+      const user_ip = String(req.user.ip).trim();
+    await mssql.connect(dbConnection(user_ip, req.user.port));
+    }
+
       const formattedCurrentDate = formatDate(currentDate);
       const formattedFromDate = formatDate(fromDate);
       const formattedToDate = formatDate(toDate);
@@ -2833,6 +2880,12 @@ exports.vendorDashboard = async (req, res) => {
       ) {
         return res.status(400).json({ message: "No company codes provided" });
       }
+
+      if (!mssql.connected) {
+      console.log('no connection')
+      const user_ip = String(req.user.ip).trim();
+    await mssql.connect(dbConnection(user_ip, req.user.port));
+    }
 
       const formattedCurrentDate = formatDate(currentDate);
       const formattedFromDate = formatDate(fromDate);
@@ -2972,6 +3025,12 @@ exports.colorSizeSalesProductDashboard = async (req, res) => {
         return res.status(400).json({ message: "No company codes provided" });
       }
 
+      if (!mssql.connected) {
+      console.log('no connection')
+      const user_ip = String(req.user.ip).trim();
+    await mssql.connect(dbConnection(user_ip, req.user.port));
+    }
+
       const formattedCurrentDate = formatDate(currentDate);
       const formattedFromDate = formatDate(fromDate);
       const formattedToDate = formatDate(toDate);
@@ -3101,6 +3160,12 @@ exports.colorSizeSalesProduct = async (req, res) => {
         .join(",");
 
       try {
+        if (!mssql.connected) {
+      console.log('no connection')
+      const user_ip = String(req.user.ip).trim();
+    await mssql.connect(dbConnection(user_ip, req.user.port));
+    }
+
         const [tableRecords] = await Promise.all([
           mssql.query(`
             USE [${rtweb}];
@@ -3170,6 +3235,12 @@ exports.colorSizeSalesDepartment = async (req, res) => {
         .join(",");
 
       try {
+        if (!mssql.connected) {
+      console.log('no connection')
+      const user_ip = String(req.user.ip).trim();
+    await mssql.connect(dbConnection(user_ip, req.user.port));
+    }
+
         const [tableRecords] = await Promise.all([
           mssql.query(`
             USE [${rtweb}];
@@ -3239,6 +3310,12 @@ exports.colorSizeSalesCategory = async (req, res) => {
         .join(",");
 
       try {
+        if (!mssql.connected) {
+      console.log('no connection')
+      const user_ip = String(req.user.ip).trim();
+    await mssql.connect(dbConnection(user_ip, req.user.port));
+    }
+
         const [tableRecords] = await Promise.all([
           mssql.query(`
             USE [${rtweb}];
@@ -3308,6 +3385,12 @@ exports.colorSizeSalesSubCategory = async (req, res) => {
         .join(",");
 
       try {
+        if (!mssql.connected) {
+      console.log('no connection')
+      const user_ip = String(req.user.ip).trim();
+    await mssql.connect(dbConnection(user_ip, req.user.port));
+    }
+
         const [tableRecords] = await Promise.all([
           mssql.query(`
             USE [${rtweb}];
@@ -3377,6 +3460,12 @@ exports.colorSizeSalesVendor = async (req, res) => {
         .join(",");
 
       try {
+        if (!mssql.connected) {
+      console.log('no connection')
+      const user_ip = String(req.user.ip).trim();
+    await mssql.connect(dbConnection(user_ip, req.user.port));
+    }
+
         const [tableRecords] = await Promise.all([
           mssql.query(`
             USE [${rtweb}];
@@ -3461,6 +3550,12 @@ exports.colorSizeStockProductDashboard = async (req, res) => {
       ) {
         return res.status(400).json({ message: "No company codes provided" });
       }
+
+       if (!mssql.connected) {
+      console.log('no connection')
+      const user_ip = String(req.user.ip).trim();
+    await mssql.connect(dbConnection(user_ip, req.user.port));
+    }
 
       // Format dates
       const formattedCurrentDate = formatDate(currentDate);
@@ -3697,6 +3792,12 @@ exports.colorSizeStockDepartmentDashboard = async (req, res) => {
       ) {
         return res.status(400).json({ message: "No company codes provided" });
       }
+
+       if (!mssql.connected) {
+      console.log('no connection')
+      const user_ip = String(req.user.ip).trim();
+    await mssql.connect(dbConnection(user_ip, req.user.port));
+    }
 
       // Format dates
       const formattedCurrentDate = formatDate(currentDate);
@@ -3989,6 +4090,12 @@ exports.colorSizeStockCategoryDashboard = async (req, res) => {
       ) {
         return res.status(400).json({ message: "No company codes provided" });
       }
+
+       if (!mssql.connected) {
+      console.log('no connection')
+      const user_ip = String(req.user.ip).trim();
+    await mssql.connect(dbConnection(user_ip, req.user.port));
+    }
 
       // Format dates
       const formattedCurrentDate = formatDate(currentDate);
@@ -4284,6 +4391,11 @@ exports.colorSizeStockSubCategoryDashboard = async (req, res) => {
         return res.status(400).json({ message: "No company codes provided" });
       }
 
+       if (!mssql.connected) {
+      console.log('no connection')
+      const user_ip = String(req.user.ip).trim();
+    await mssql.connect(dbConnection(user_ip, req.user.port));
+    }
       // Format dates
       const formattedCurrentDate = formatDate(currentDate);
       const formattedDate = formatDate(date);
@@ -4573,6 +4685,12 @@ exports.colorSizeStockVendorDashboard = async (req, res) => {
       ) {
         return res.status(400).json({ message: "No company codes provided" });
       }
+
+       if (!mssql.connected) {
+      console.log('no connection')
+      const user_ip = String(req.user.ip).trim();
+    await mssql.connect(dbConnection(user_ip, req.user.port));
+    }
 
       // Format dates
       const formattedCurrentDate = formatDate(currentDate);
@@ -4871,6 +4989,12 @@ exports.stockProductDashboard = async (req, res) => {
       // -------------------------
       let query;
 
+       if (!mssql.connected) {
+      console.log('no connection')
+      const user_ip = String(req.user.ip).trim();
+    await mssql.connect(dbConnection(user_ip, req.user.port));
+    }
+
       if (formattedCurrentDate === formattedDate) {
         query = `
           USE ${rtweb};
@@ -5038,6 +5162,11 @@ exports.stockDepartmentDashboard = async (req, res) => {
         return res.status(400).json({ message: "No company codes provided" });
       }
 
+       if (!mssql.connected) {
+      console.log('no connection')
+      const user_ip = String(req.user.ip).trim();
+    await mssql.connect(dbConnection(user_ip, req.user.port));
+    }
       // Format dates
       const formattedCurrentDate = formatDate(currentDate);
       const formattedDate = formatDate(date);
@@ -5242,6 +5371,12 @@ exports.stockCategoryDashboard = async (req, res) => {
       ) {
         return res.status(400).json({ message: "No company codes provided" });
       }
+
+       if (!mssql.connected) {
+      console.log('no connection')
+      const user_ip = String(req.user.ip).trim();
+    await mssql.connect(dbConnection(user_ip, req.user.port));
+    }
 
       // Format dates
       const formattedCurrentDate = formatDate(currentDate);
@@ -5451,6 +5586,12 @@ exports.stockSubCategoryDashboard = async (req, res) => {
       ) {
         return res.status(400).json({ message: "No company codes provided" });
       }
+
+       if (!mssql.connected) {
+      console.log('no connection')
+      const user_ip = String(req.user.ip).trim();
+    await mssql.connect(dbConnection(user_ip, req.user.port));
+    }
 
       // Format dates
       const formattedCurrentDate = formatDate(currentDate);
@@ -5665,6 +5806,12 @@ exports.stockVendorDashboard = async (req, res) => {
         return res.status(400).json({ message: "No company codes provided" });
       }
 
+       if (!mssql.connected) {
+      console.log('no connection')
+      const user_ip = String(req.user.ip).trim();
+    await mssql.connect(dbConnection(user_ip, req.user.port));
+    }
+
       // Format dates
       const formattedCurrentDate = formatDate(currentDate);
       const formattedDate = formatDate(date);
@@ -5834,7 +5981,7 @@ exports.scan = async (req, res) => {
   const codeData = req.query.data?.trim();
   const company = req.query.company?.trim();
   const name = req.query.name?.trim();
-
+  
   if ((!codeData || codeData === "No result") && !name) {
     return res.status(400).json({
       message: "Please provide a valid barcode or product code or name",
@@ -5846,47 +5993,62 @@ exports.scan = async (req, res) => {
   }
 
   try {
+    // mssql.close(); // Close existing connections
+    const pool = await mssql.connect(dbConnection(String(req.user.ip).trim(), req.user.port));
+
     let productCode = null;
-    let stockQty;
+    let stockQty = 0;
     let salesData = [];
     let colorWiseData = [];
     let status = "F";
     let foundCode = null;
     let colorwiseActive = false;
 
+    // Check if COLORSIZE is active
     const colorSizeQuery = `
-      SELECT COLORSIZE_ACTIVE FROM [${rtweb}].dbo.tb_COMPANY WHERE MAIN = 'T';
+      SELECT COLORSIZE_ACTIVE 
+      FROM [${rtweb}].dbo.tb_COMPANY 
+      WHERE MAIN = 'T';
     `;
-    const colorSize = await mssql.query(colorSizeQuery);
+    const colorSize = await pool.request().query(colorSizeQuery);
     if (colorSize.recordset.length > 0) {
       status = colorSize.recordset[0].COLORSIZE_ACTIVE;
     }
 
     if (status === "T") {
+      // --- Barcode / Product Code Search ---
       if (codeData && codeData !== "No result") {
         const barcodeQuery = `
-          SELECT PRODUCT_CODE FROM [${posback}].dbo.tb_STOCKRELOAD WHERE SERIALNO = @serial;
+          SELECT PRODUCT_CODE 
+          FROM [${posback}].dbo.tb_STOCKRELOAD 
+          WHERE SERIALNO = @serial;
         `;
-        const request = new mssql.Request();
-        request.input("serial", codeData);
-        const barcodeResult = await request.query(barcodeQuery);
+        const barcodeResult = await pool.request()
+          .input("serial", codeData)
+          .query(barcodeQuery);
+
         if (barcodeResult.recordset.length > 0) {
           productCode = barcodeResult.recordset[0].PRODUCT_CODE;
         }
 
-        // If not found in barcode link, use product table directly
         const productQuery = productCode
           ? `
               SELECT PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE 
-              FROM [${posback}].dbo.tb_PRODUCT WHERE PRODUCT_CODE = @code;`
+              FROM [${posback}].dbo.tb_PRODUCT 
+              WHERE PRODUCT_CODE = @code;
+            `
           : `
               SELECT PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE 
               FROM [${posback}].dbo.tb_PRODUCT 
-              WHERE PRODUCT_CODE = @code OR BARCODE = @code OR BARCODE2 = @code;`;
+              WHERE PRODUCT_CODE = @code 
+                 OR BARCODE = @code 
+                 OR BARCODE2 = @code;
+            `;
 
-        const productRequest = new mssql.Request();
-        productRequest.input("code", productCode || codeData);
-        QueryData = await productRequest.query(productQuery);
+        const QueryData = await pool.request()
+          .input("code", productCode || codeData)
+          .query(productQuery);
+
         salesData = QueryData.recordset;
 
         if (!salesData || salesData.length === 0) {
@@ -5896,25 +6058,31 @@ exports.scan = async (req, res) => {
         foundCode = salesData[0].PRODUCT_CODE;
 
         const stockQuery = `
-        USE [${posback}];
-        SELECT ISNULL(SUM(STOCK), 0) AS STOCK 
-        FROM tb_STOCK 
-        WHERE COMPANY_CODE = '${company}' 
-          AND (BIN = 'F' OR BIN IS NULL) 
-          AND PRODUCT_CODE = '${foundCode}';
-      `;
-        const stockResult = await mssql.query(stockQuery);
+          SELECT ISNULL(SUM(STOCK), 0) AS STOCK 
+          FROM [${posback}].dbo.tb_STOCK 
+          WHERE COMPANY_CODE = @company 
+            AND (BIN = 'F' OR BIN IS NULL) 
+            AND PRODUCT_CODE = @pcode;
+        `;
+        const stockResult = await pool.request()
+          .input("company", company)
+          .input("pcode", foundCode)
+          .query(stockQuery);
+
         stockQty = stockResult.recordset[0]?.STOCK ?? 0;
       }
 
-      if (name && name !== "") {
+      // --- Search by Product Name ---
+      if (name) {
         const productQuery = `
-        USE [${posback}];
-        SELECT PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE 
-        FROM tb_PRODUCT 
-        WHERE PRODUCT_NAMELONG = '${name}';
-      `;
-        const salesDataResult = await mssql.query(productQuery);
+          SELECT PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE 
+          FROM [${posback}].dbo.tb_PRODUCT 
+          WHERE PRODUCT_NAMELONG = @name;
+        `;
+        const salesDataResult = await pool.request()
+          .input("name", name)
+          .query(productQuery);
+
         salesData = salesDataResult.recordset;
 
         if (!salesData || salesData.length === 0) {
@@ -5924,67 +6092,83 @@ exports.scan = async (req, res) => {
         foundCode = salesData[0].PRODUCT_CODE;
 
         const stockQuery = `
-        USE [${posback}];
-        SELECT ISNULL(SUM(STOCK), 0) AS STOCK 
-        FROM tb_STOCK 
-        WHERE COMPANY_CODE = '${company}' 
-          AND (BIN = 'F' OR BIN IS NULL) 
-          AND PRODUCT_CODE = '${foundCode}';
-      `;
-        const stockResult = await mssql.query(stockQuery);
+          SELECT ISNULL(SUM(STOCK), 0) AS STOCK 
+          FROM [${posback}].dbo.tb_STOCK 
+          WHERE COMPANY_CODE = @company 
+            AND (BIN = 'F' OR BIN IS NULL) 
+            AND PRODUCT_CODE = @pcode;
+        `;
+        const stockResult = await pool.request()
+          .input("company", company)
+          .input("pcode", foundCode)
+          .query(stockQuery);
+
         stockQty = stockResult.recordset[0]?.STOCK ?? 0;
 
         const codeQuery = `
-          USE [${posback}];
-          SELECT PRODUCT_CODE FROM tb_STOCKRELOAD WHERE PRODUCT_NAME = '${name}';
+          SELECT PRODUCT_CODE 
+          FROM [${posback}].dbo.tb_STOCKRELOAD 
+          WHERE PRODUCT_NAME = @name;
         `;
-        const PCode = await mssql.query(codeQuery);
+        const PCode = await pool.request()
+          .input("name", name)
+          .query(codeQuery);
 
         if (PCode.recordset && PCode.recordset.length > 0) {
           productCode = PCode.recordset[0].PRODUCT_CODE;
         }
       }
 
-      if (productCode !== "" || foundCode !== "") {
+      // --- Color/Size Data ---
+      if (productCode || foundCode) {
         const code = productCode ? productCode : foundCode;
         const colorSizeQuery = `
-          USE [${posback}];
           SELECT SERIALNO, COLORCODE, SIZECODE, 0 AS STOCK 
-          FROM tb_STOCKRELOAD 
-          WHERE SERIALNO <> '' AND PRODUCT_CODE = '${code}';
+          FROM [${posback}].dbo.tb_STOCKRELOAD 
+          WHERE SERIALNO <> '' 
+            AND PRODUCT_CODE = @code;
         `;
-        const colorSizeData = await mssql.query(colorSizeQuery);
+        const colorSizeData = await pool.request()
+          .input("code", code)
+          .query(colorSizeQuery);
+
         colorWiseData = colorSizeData.recordset;
         colorwiseActive = true;
       }
     } else {
+      // --- Barcode / Product Code Search (NO COLORSIZE) ---
       if (codeData && codeData !== "No result") {
-        // Try finding a product code via barcode link table
         const query = `
-        USE [${posback}];
-        SELECT PRODUCT_CODE FROM tb_BARCODELINK WHERE BARCODE = '${codeData}';
-      `;
-        const barcodeResult = await mssql.query(query);
+          SELECT PRODUCT_CODE 
+          FROM [${posback}].dbo.tb_BARCODELINK 
+          WHERE BARCODE = @barcode;
+        `;
+        const barcodeResult = await pool.request()
+          .input("barcode", codeData)
+          .query(query);
 
         if (barcodeResult.recordset.length > 0) {
           productCode = barcodeResult.recordset[0].PRODUCT_CODE;
         }
 
-        // If not found in barcode link, use product table directly
         const productQuery = productCode
           ? `
-          USE [${posback}];
-          SELECT PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE 
-          FROM tb_PRODUCT WHERE PRODUCT_CODE = '${productCode}';
-        `
+              SELECT PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE 
+              FROM [${posback}].dbo.tb_PRODUCT 
+              WHERE PRODUCT_CODE = @code;
+            `
           : `
-          USE [${posback}];
-          SELECT PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE 
-          FROM tb_PRODUCT 
-          WHERE PRODUCT_CODE = '${codeData}' OR BARCODE = '${codeData}' OR BARCODE2 = '${codeData}';
-        `;
+              SELECT PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE 
+              FROM [${posback}].dbo.tb_PRODUCT 
+              WHERE PRODUCT_CODE = @code 
+                 OR BARCODE = @code 
+                 OR BARCODE2 = @code;
+            `;
 
-        const salesDataResult = await mssql.query(productQuery);
+        const salesDataResult = await pool.request()
+          .input("code", productCode || codeData)
+          .query(productQuery);
+
         salesData = salesDataResult.recordset;
 
         if (!salesData || salesData.length === 0) {
@@ -5994,25 +6178,31 @@ exports.scan = async (req, res) => {
         foundCode = salesData[0].PRODUCT_CODE;
 
         const stockQuery = `
-        USE [${posback}];
-        SELECT ISNULL(SUM(STOCK), 0) AS STOCK 
-        FROM tb_STOCK 
-        WHERE COMPANY_CODE = '${company}' 
-          AND (BIN = 'F' OR BIN IS NULL) 
-          AND PRODUCT_CODE = '${foundCode}';
-      `;
-        const stockResult = await mssql.query(stockQuery);
+          SELECT ISNULL(SUM(STOCK), 0) AS STOCK 
+          FROM [${posback}].dbo.tb_STOCK 
+          WHERE COMPANY_CODE = @company 
+            AND (BIN = 'F' OR BIN IS NULL) 
+            AND PRODUCT_CODE = @pcode;
+        `;
+        const stockResult = await pool.request()
+          .input("company", company)
+          .input("pcode", foundCode)
+          .query(stockQuery);
+
         stockQty = stockResult.recordset[0]?.STOCK ?? 0;
       }
 
-      if (name && name !== "") {
+      // --- Search by Product Name ---
+      if (name) {
         const productQuery = `
-        USE [${posback}];
-        SELECT PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE 
-        FROM tb_PRODUCT 
-        WHERE PRODUCT_NAMELONG = '${name}';
-      `;
-        const salesDataResult = await mssql.query(productQuery);
+          SELECT PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE 
+          FROM [${posback}].dbo.tb_PRODUCT 
+          WHERE PRODUCT_NAMELONG = @name;
+        `;
+        const salesDataResult = await pool.request()
+          .input("name", name)
+          .query(productQuery);
+
         salesData = salesDataResult.recordset;
 
         if (!salesData || salesData.length === 0) {
@@ -6022,27 +6212,30 @@ exports.scan = async (req, res) => {
         foundCode = salesData[0].PRODUCT_CODE;
 
         const stockQuery = `
-        USE [${posback}];
-        SELECT ISNULL(SUM(STOCK), 0) AS STOCK 
-        FROM tb_STOCK 
-        WHERE COMPANY_CODE = '${company}' 
-          AND (BIN = 'F' OR BIN IS NULL) 
-          AND PRODUCT_CODE = '${foundCode}';
-      `;
-        const stockResult = await mssql.query(stockQuery);
+          SELECT ISNULL(SUM(STOCK), 0) AS STOCK 
+          FROM [${posback}].dbo.tb_STOCK 
+          WHERE COMPANY_CODE = @company 
+            AND (BIN = 'F' OR BIN IS NULL) 
+            AND PRODUCT_CODE = @pcode;
+        `;
+        const stockResult = await pool.request()
+          .input("company", company)
+          .input("pcode", foundCode)
+          .query(stockQuery);
+
         stockQty = stockResult.recordset[0]?.STOCK ?? 0;
       }
     }
 
     return res.status(200).json({
       message: "Item Found Successfully",
-      salesData: salesData,
+      salesData,
       amount: stockQty,
       colorWiseData,
       colorwiseActive,
     });
   } catch (error) {
-    console.error("Error retrieving barcode data:", error);
+    console.error("Error retrieving barcode data in scan:", error);
     return res.status(500).json({ message: "Failed to scan data" });
   }
 };
@@ -6067,6 +6260,11 @@ exports.productView = async (req, res) => {
   };
 
   try {
+     if (!mssql.connected) {
+      console.log('no connection')
+      const user_ip = String(req.user.ip).trim();
+    await mssql.connect(dbConnection(user_ip, req.user.port));
+    }
     let productCode = null;
     let result = null;
     let status = "F";
@@ -6251,7 +6449,7 @@ exports.productView = async (req, res) => {
       colorWiseData: colorWiseData || [],
     });
   } catch (error) {
-    console.error("Error retrieving barcode data:", error);
+    console.error("Error retrieving barcode data in product view:", error);
     return res
       .status(500)
       .json({ message: "Failed to fetch product view data" });
@@ -6271,6 +6469,11 @@ exports.productViewSales = async (req, res) => {
   }
 
   try {
+     if (!mssql.connected) {
+      console.log('no connection')
+      const user_ip = String(req.user.ip).trim();
+    await mssql.connect(dbConnection(user_ip, req.user.port));
+    }
     const salesQuery = `
           USE [${posback}];
           SELECT SALESDATE, COMPANY_CODE, PRODUCT_CODE, COST_PRICE, UNIT_PRICE, SUM(QTY) AS QTY, 
@@ -6292,7 +6495,7 @@ exports.productViewSales = async (req, res) => {
       salesData: salesData || [],
     });
   } catch (error) {
-    console.error("Error retrieving barcode data:", error);
+    console.error("Error retrieving barcode data in product view sales:", error);
     return res
       .status(500)
       .json({ message: "Failed to fetch product view data" });
@@ -6313,6 +6516,8 @@ exports.stockUpdate = async (req, res) => {
   const type = String(selectedType).trim();
 
   try {
+     
+
     await mssql.query(`USE [${rtweb}];`); // ✅ Explicit DB switch
 
     let query;
@@ -6347,7 +6552,9 @@ exports.stockUpdate = async (req, res) => {
     } else {
       return res.status(400).json({ message: "Invalid stock type provided" });
     }
-    const pool = await connectToDatabase();
+
+    const user_ip = String(req.user.ip).trim(); 
+    const pool = await mssql.connect(dbConnection(user_ip, req.user.port));
     const request = pool.request();
     request.input("company", mssql.NChar(10), company);
 
@@ -6383,7 +6590,8 @@ exports.grnprnTableData = async (req, res) => {
   const company = String(code).trim();
 
   try {
-    const pool = await mssql.connect(); // Use global pool or connect function
+    const user_ip = String(req.user.ip).trim(); 
+    const pool = await mssql.connect(dbConnection(user_ip, req.user.port));
 
     let query = `USE [${rtweb}];\n`;
 
@@ -6409,6 +6617,7 @@ exports.grnprnTableData = async (req, res) => {
       return res.status(400).json({ message: "Invalid selectedType" });
     }
 
+    
     const result = await pool.request().query(query);
 
     if (result.recordset.length === 0) {
@@ -6429,17 +6638,9 @@ exports.grnprnTableData = async (req, res) => {
 exports.productName = async (req, res) => {
   try {
     // Try finding a product code via barcode link table
-    const pool = await mssql.connect({
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
-      server: req.user.ip.trim(),
-      port: parseInt(req.user.port.trim()),
-      database: process.env.DB_DATABASE2, 
-      options: {
-        encrypt: false,
-        trustServerCertificate: true,
-      },
-    }); 
+
+    const user_ip = String(req.user.ip).trim(); 
+    const pool = await mssql.connect(dbConnection(user_ip, req.user.port));
 
     const query = `
   USE [${posback}];
@@ -6458,7 +6659,7 @@ exports.productName = async (req, res) => {
       names: productNamesData,
     });
   } catch (error) {
-    console.error("Error retrieving barcode data:", error);
+    console.error("Error retrieving product names:", error);
     return res
       .status(500)
       .json({ message: "Failed to retrieve product names" });
