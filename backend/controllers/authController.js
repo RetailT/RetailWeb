@@ -1,4 +1,5 @@
 const { connectToDatabase } = require("../config/db");
+const { connectToUserDatabase } = require("../config/userdb");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const moment = require("moment");
@@ -29,19 +30,20 @@ const port_number = 1443
 //   port: port_number,
 // };
 
-const dbConnection = (user_ip, user_port) => ({
-  user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
-      server: user_ip.trim(),
-      database: process.env.DB_DATABASE2,     
-      port: parseInt(user_port.trim()),
-      options: {
-        encrypt: false,
-        trustServerCertificate: true,
-      },
-      connectionTimeout: 5000, // << timeout in ms
-      requestTimeout: 5000,
-});
+// const dbConnection = (user_ip, user_port) => ({
+//   user: process.env.DB_USER,
+//       password: process.env.DB_PASSWORD,
+//       server: user_ip.trim(),
+//       database: process.env.DB_DATABASE2,     
+//       port: parseInt(user_port.trim()),
+//       options: {
+//         encrypt: false,
+//         trustServerCertificate: true,
+//       },
+//       connectionTimeout: 5000, // << timeout in ms
+//       requestTimeout: 5000,
+// });
+
 
 //report data, current report, company dashboard,
 // department dashboard, category dashboard,
@@ -319,7 +321,8 @@ async function syncDB() {
         // };
 
         const user_ip = String(customer.IP).trim();      
-        await mssql.connect(dbConnection(user_ip, customer.PORT));
+        await connectToUserDatabase(user_ip, customer.PORT.trim());
+        
         console.log(
           `Successfully connected to sync database at ${syncdbIp}:${syncdbPort}`
         );
@@ -610,8 +613,12 @@ exports.login = async (req, res) => {
     //   requestTimeout: 5000,
     // };
 
-    const user_ip = String(ip_address).trim();  
-    const dynamicPool = await mssql.connect(dbConnection(user_ip, port));
+    const user_ip = String(ip_address).trim();
+      const dynamicPool = await connectToUserDatabase(user_ip, port.trim());
+      if (!dynamicPool.connected) {
+        return res.status(500).json({ message: "Database connection failed" });
+      }
+    
 
     const companyResult = await dynamicPool
       .request()
@@ -930,7 +937,10 @@ exports.updateTempSalesTable = async (req, res) => {
     const { trDate, trTime } = currentDateTime();
 
     const user_ip = String(decoded.ip).trim(); 
-    const pool = await mssql.connect(dbConnection(user_ip,decoded.port));
+      const pool = await connectToUserDatabase(user_ip, decoded.port.trim());
+      // if (!pool.connected) {
+      //   return res.status(500).json({ message: "Database connection failed" });
+      // }
     // Switch DB manually using a USE statement
 
     await mssql.query(`USE [${rtweb}];`);
@@ -1028,6 +1038,8 @@ exports.updateTempGrnTable = async (req, res) => {
     }
 
     const username = decoded.username;
+    const user_ip = String(decoded.ip).trim(); 
+      const pool = await connectToUserDatabase(user_ip, decoded.port.trim());
 
     const {
       company,
@@ -1085,7 +1097,7 @@ exports.updateTempGrnTable = async (req, res) => {
             .json({ message: "Invalid type. Must be GRN or PRN." });
         }
 
-        const insertRequest = new mssql.Request();
+        const insertRequest = pool.request();
         insertRequest.input("company", mssql.NChar(10), company);
         insertRequest.input("vendor_code", mssql.NChar(10), vendor_code);
         insertRequest.input("vendor_name", mssql.NChar(50), vendor_name);
@@ -1127,7 +1139,7 @@ exports.updateTempGrnTable = async (req, res) => {
           .json({ message: "Invalid type. Must be GRN or PRN." });
       }
 
-      const insertRequest = new mssql.Request();
+      const insertRequest = pool.request();
       insertRequest.input("company", mssql.NChar(10), company);
       insertRequest.input("vendor_code", mssql.NChar(10), vendor_code);
       insertRequest.input("vendor_name", mssql.NChar(50), vendor_name);
@@ -1179,6 +1191,7 @@ exports.updateTempTogTable = async (req, res) => {
 
     const username = decoded.username;
 
+
     const {
       company,
       companyCodeTo,
@@ -1194,8 +1207,12 @@ exports.updateTempTogTable = async (req, res) => {
 
     const { trDate, trTime } = currentDateTime();
 
-    const user_ip = String(decoded.ip).trim(); 
-    const pool = await mssql.connect(dbConnection(user_ip, decoded.port));
+     const user_ip = String(decoded.ip).trim(); 
+      const pool = await connectToUserDatabase(user_ip, decoded.port.trim());
+      // if (!pool.connected) {
+      //   return res.status(500).json({ message: "Database connection failed" });
+      // }
+
     // ✅ Switch database explicitly
     await mssql.query(`USE [${rtweb}];`);
 
@@ -1863,39 +1880,23 @@ exports.finalGrnPrnUpdate = async (req, res) => {
 
 // Get dashboard data function
 exports.dashboardOptions = async (req, res) => {
-  
   try {
-    // Ensure database connection is open
-    if (!mssql.connected) {  // this check might not work as expected
-      await mssql.close(); // close existing connection if any
-      const user_ip = String(req.user.ip).trim(); 
-      await mssql.connect(dbConnection(user_ip, req.user.port));
-    }
-    // await mssql.connect({
-    //   user: process.env.DB_USER,
-    //   password: process.env.DB_PASSWORD,
-    //   server: req.user.ip.trim(),
-    //   port: parseInt(req.user.port.trim()),
-    //   database: process.env.DB_DATABASE2, 
-    //   options: {
-    //     encrypt: false,
-    //     trustServerCertificate: true,
-    //   },
-    // });
-  // }
+    const user_ip = String(req.user.ip).trim();
+    const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
 
-    await mssql.query(`USE [${rtweb}];`); // run separately
+    // Switch database context
+    await pool.request().query(`USE [${rtweb}];`);
 
-    const result = await mssql.query(`
-  SELECT COMPANY_CODE, COMPANY_NAME FROM tb_COMPANY;
-`);
+    const result = await pool.request().query(`
+      SELECT COMPANY_CODE, COMPANY_NAME 
+      FROM tb_COMPANY;
+    `);
 
     const records = result.recordset || [];
 
     if (records.length === 0) {
       return res.status(404).json({ message: "No companies found" });
     }
-
 
     const userData = records.map(({ COMPANY_CODE, COMPANY_NAME }) => ({
       COMPANY_CODE: COMPANY_CODE?.trim(),
@@ -1917,9 +1918,14 @@ exports.dashboardOptions = async (req, res) => {
 // Get vendor data function
 exports.vendorOptions = async (req, res) => {
   try {
-    const user_ip = String(req.user.ip).trim(); 
-    const pool = new mssql.ConnectionPool(dbConnection(user_ip, req.user.port));
-await pool.connect();
+  
+const user_ip = String(req.user.ip).trim(); 
+      const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+      await pool.connect();
+      // if (!pool.connected) {
+      //   return res.status(500).json({ message: "Database connection failed" });
+      // }
+      
     
     // const pool = await mssql.connect({
     //   user: process.env.DB_USER,
@@ -1962,170 +1968,141 @@ await pool.connect();
 //report data
 exports.reportData = async (req, res) => {
   try {
+    // --- Auth ---
     const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      return res
-        .status(403)
-        .json({ message: "No authorization token provided" });
-    }
+    if (!authHeader) return res.status(403).json({ message: "No authorization token provided" });
 
     const token = authHeader.split(" ")[1];
-    if (!token) {
-      return res.status(403).json({ message: "Token is missing" });
-    }
+    if (!token) return res.status(403).json({ message: "Token is missing" });
 
     const decoded = await verifyToken(token, process.env.JWT_SECRET);
     const username = decoded.username;
 
-    // Normalize selectedOptions from query string
-    let selectedOptions =
-      req.query.companyCodes || req.query["companyCodes[]"];
-
-    if (typeof selectedOptions === "string") {
-      selectedOptions = [selectedOptions];
-    }
+    // --- Normalize selectedOptions ---
+    let selectedOptions = req.query.companyCodes || req.query["companyCodes[]"];
+    if (typeof selectedOptions === "string") selectedOptions = [selectedOptions];
 
     const { state, rowClicked, fromDate, toDate, currentDate, invoiceNo } = req.query;
 
-     if (!mssql.connected) {
-      console.log('no connection')
-      const user_ip = String(req.user.ip).trim();
-    await mssql.connect(dbConnection(user_ip, req.user.port));
+    // --- Connect to user DB ---
+    const user_ip = String(req.user.ip).trim();
+    const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+
+    let reportQuery;
+
+    // --- Main report ---
+    if (rowClicked === false || String(rowClicked).toLowerCase() === "false") {
+      if ((state === false || String(state).toLowerCase() === "false") && fromDate && toDate && selectedOptions?.length > 0) {
+
+        const formattedFromDate = formatDate(fromDate);
+        const formattedToDate = formatDate(toDate);
+        const reportType = "INVOICEWISE";
+
+        // Clean previous data
+        await pool.request().query(`
+          USE RT_WEB;
+          DELETE FROM tb_SALESVIEW WHERE REPUSER = '${username}';
+        `);
+
+        // Run SP for each company
+        for (const companyCode of selectedOptions) {
+          await pool.request().query(`
+            EXEC RT_WEB.dbo.Sp_SalesView 
+              @COMPANY_CODE='${companyCode}', 
+              @DATE1='${formattedFromDate}', 
+              @DATE2='${formattedToDate}', 
+              @REPUSER='${username}', 
+              @REPORT_TYPE='${reportType}';
+          `);
+        }
+
+        // Main report query
+        reportQuery = await pool.request().query(`
+          USE RT_WEB;
+          SELECT INVOICENO, COMPANY_CODE, UNITNO, REPNO, 'CASH' AS PRODUCT_NAME, 
+                 ISNULL(SUM(CASE PRODUCT_NAME 
+                   WHEN 'CASH' THEN AMOUNT 
+                   WHEN 'BALANCE' THEN -AMOUNT 
+                   ELSE 0 END), 0) AS AMOUNT, SALESDATE
+          FROM tb_SALESVIEW 
+          WHERE (ID='PT' OR ID='BL') AND PRODUCT_NAME IN ('CASH', 'BALANCE') AND REPUSER='${username}'
+          GROUP BY COMPANY_CODE, SALESDATE, UNITNO, REPNO, INVOICENO
+          
+          UNION ALL
+          
+          SELECT INVOICENO, COMPANY_CODE, UNITNO, REPNO, PRODUCT_NAME, 
+                 ISNULL(SUM(AMOUNT),0) AS AMOUNT, SALESDATE
+          FROM tb_SALESVIEW 
+          WHERE ID='PT' AND PRODUCT_NAME NOT IN ('CASH','BALANCE') AND REPUSER='${username}'
+          GROUP BY COMPANY_CODE, SALESDATE, UNITNO, REPNO, INVOICENO, PRODUCT_NAME;
+        `);
+
+      } else if ((state === true || String(state).toLowerCase() === "true") && currentDate && selectedOptions?.length > 0) {
+        const date = formatDate(currentDate);
+        const reportType = "INVOICEWISE";
+
+        await pool.request().query(`
+          USE RT_WEB;
+          DELETE FROM tb_SALESVIEW WHERE REPUSER='${username}';
+        `);
+
+        for (const companyCode of selectedOptions) {
+          await pool.request().query(`
+            EXEC RT_WEB.dbo.Sp_SalesCurView 
+              @COMPANY_CODE='${companyCode}', 
+              @DATE='${date}', 
+              @REPUSER='${username}', 
+              @REPORT_TYPE='${reportType}';
+          `);
+        }
+
+        reportQuery = await pool.request().query(`
+          USE RT_WEB;
+          SELECT INVOICENO, COMPANY_CODE, UNITNO, REPNO, 'CASH' AS PRODUCT_NAME, 
+                 ISNULL(SUM(CASE PRODUCT_NAME 
+                   WHEN 'CASH' THEN AMOUNT 
+                   WHEN 'BALANCE' THEN -AMOUNT 
+                   ELSE 0 END), 0) AS AMOUNT, SALESDATE
+          FROM tb_SALESVIEW 
+          WHERE (ID='PT' OR ID='BL') AND PRODUCT_NAME IN ('CASH', 'BALANCE') AND REPUSER='${username}'
+          GROUP BY COMPANY_CODE, SALESDATE, UNITNO, REPNO, INVOICENO
+          
+          UNION ALL
+          
+          SELECT INVOICENO, COMPANY_CODE, UNITNO, REPNO, PRODUCT_NAME, 
+                 ISNULL(SUM(AMOUNT),0) AS AMOUNT, SALESDATE
+          FROM tb_SALESVIEW 
+          WHERE ID='PT' AND PRODUCT_NAME NOT IN ('CASH','BALANCE') AND REPUSER='${username}'
+          GROUP BY COMPANY_CODE, SALESDATE, UNITNO, REPNO, INVOICENO, PRODUCT_NAME;
+        `);
+      }
     }
 
-let reportQuery;
-
-
-
-if (rowClicked===false || String(rowClicked).toLowerCase() === "false") {
-  if ((state===false || String(state).toLowerCase() === "false") && fromDate && toDate && selectedOptions && selectedOptions.length > 0) {
-const formattedFromDate = formatDate(fromDate);
-    const formattedToDate = formatDate(toDate);
-    const reportType = "INVOICEWISE";
-
-    // Clean previous data
-    await mssql.query`
-      USE RT_WEB;
-      DELETE FROM tb_SALESVIEW WHERE REPUSER = ${username};
-    `;
-
-    // Run SP for each company
-    for (const companyCode of selectedOptions) {
-      await mssql.query`
-        EXEC RT_WEB.dbo.Sp_SalesView 
-        @COMPANY_CODE = ${companyCode},
-        @DATE1 = ${formattedFromDate},
-        @DATE2 = ${formattedToDate},
-        @REPUSER = ${username},
-        @REPORT_TYPE = ${reportType};
-      `;
-    }
-
-    // Main report query
-    reportQuery = await mssql.query`
-      USE RT_WEB;
-      SELECT 
-        INVOICENO, COMPANY_CODE, UNITNO, REPNO, 'CASH' AS PRODUCT_NAME, 
-        ISNULL(SUM(CASE PRODUCT_NAME 
-          WHEN 'CASH' THEN AMOUNT 
-          WHEN 'BALANCE' THEN -AMOUNT 
-          ELSE 0 END), 0) AS AMOUNT, 
-        SALESDATE
-      FROM tb_SALESVIEW 
-      WHERE (ID='PT' OR ID='BL') 
-        AND PRODUCT_NAME IN ('CASH', 'BALANCE') 
-        AND REPUSER = ${username}
-      GROUP BY COMPANY_CODE, SALESDATE, UNITNO, REPNO, INVOICENO
-
-      UNION ALL
-
-      SELECT 
-        INVOICENO, COMPANY_CODE, UNITNO, REPNO, PRODUCT_NAME, 
-        ISNULL(SUM(AMOUNT), 0) AS AMOUNT, SALESDATE
-      FROM tb_SALESVIEW 
-      WHERE ID='PT' 
-        AND PRODUCT_NAME NOT IN ('CASH', 'BALANCE') 
-        AND REPUSER = ${username}
-      GROUP BY COMPANY_CODE, SALESDATE, UNITNO, REPNO, INVOICENO, PRODUCT_NAME;
-    `;
-
-}
-else if ((state===true || String(state).toLowerCase() === "true") && currentDate && selectedOptions && selectedOptions.length > 0) {
-  const date = formatDate(currentDate);
-    const reportType = "INVOICEWISE";
-
-    // Step 1: Clean previous report data
-    await mssql.query`
-      USE RT_WEB;
-      DELETE FROM tb_SALESVIEW WHERE REPUSER = ${username};
-    `;
-
-    // Step 2: Execute SP for each company
-    for (const companyCode of selectedOptions) {
-      await mssql.query`
-        EXEC RT_WEB.dbo.Sp_SalesCurView 
-        @COMPANY_CODE = ${companyCode}, 
-        @DATE = ${date}, 
-        @REPUSER = ${username}, 
-        @REPORT_TYPE = ${reportType};
-      `;
-    }
-
-    // Step 3: Fetch summarized report data
-    reportQuery = await mssql.query`
-      USE RT_WEB;
-      SELECT 
-        INVOICENO, COMPANY_CODE, UNITNO, REPNO, 'CASH' AS PRODUCT_NAME, 
-        ISNULL(SUM(CASE PRODUCT_NAME 
-          WHEN 'CASH' THEN AMOUNT 
-          WHEN 'BALANCE' THEN -AMOUNT 
-          ELSE 0 END), 0) AS AMOUNT, 
-        SALESDATE
-      FROM tb_SALESVIEW 
-      WHERE (ID = 'PT' OR ID = 'BL') 
-        AND PRODUCT_NAME IN ('CASH', 'BALANCE') 
-        AND REPUSER = ${username}
-      GROUP BY COMPANY_CODE, SALESDATE, UNITNO, REPNO, INVOICENO
-
-      UNION ALL
-
-      SELECT 
-        INVOICENO, COMPANY_CODE, UNITNO, REPNO, PRODUCT_NAME, 
-        ISNULL(SUM(AMOUNT), 0) AS AMOUNT, SALESDATE
-      FROM tb_SALESVIEW 
-      WHERE ID = 'PT' 
-        AND PRODUCT_NAME NOT IN ('CASH', 'BALANCE') 
-        AND REPUSER = ${username}
-      GROUP BY COMPANY_CODE, SALESDATE, UNITNO, REPNO, INVOICENO, PRODUCT_NAME;
-    `;
-}
-}
-
+    // --- Invoice data when row clicked ---
     let invoiceData = [];
     let invoiceDataState = false;
-   if (rowClicked===true || String(rowClicked).toLowerCase() === "true") {
 
-      const result = await mssql.query`
+    if (rowClicked === true || String(rowClicked).toLowerCase() === "true") {
+      const result = await pool.request().query(`
         USE RT_WEB;
-        SELECT INVOICENO, PRODUCT_CODE, PRODUCT_NAME, QTY, AMOUNT, COSTPRICE, UNITPRICE, DISCOUNT 
+        SELECT INVOICENO, PRODUCT_CODE, PRODUCT_NAME, QTY, AMOUNT, COSTPRICE, UNITPRICE, DISCOUNT
         FROM tb_SALESVIEW 
-        WHERE INVOICENO = ${invoiceNo} 
-          AND ID IN ('SL', 'SLF', 'RF', 'RFF') 
-          AND REPUSER = ${username};
-      `;
+        WHERE INVOICENO='${invoiceNo}' AND ID IN ('SL','SLF','RF','RFF') AND REPUSER='${username}';
+      `);
+
       invoiceData = result.recordset;
       invoiceDataState = true;
+    }
 
-   }
-
-
+    // --- Response ---
     res.status(200).json({
-  message: "Data found",
-  success: true,
-  invoiceDataState,
-  reportData: reportQuery ? reportQuery.recordset : [],
-  invoiceData,
-});
+      message: "Data found",
+      success: true,
+      invoiceDataState,
+      reportData: reportQuery ? reportQuery.recordset : [],
+      invoiceData,
+    });
+
   } catch (error) {
     console.error("Error generating report:", error);
     res.status(500).json({ message: "Failed to generate report" });
@@ -2244,6 +2221,7 @@ else if ((state===true || String(state).toLowerCase() === "true") && currentDate
 
 //company dashboard
 exports.loadingDashboard = async (req, res) => {
+  console.log('---------------------------------------------')
   try {
     // Auth (unchanged)
     const authHeader = req.headers.authorization;
@@ -2282,11 +2260,15 @@ exports.loadingDashboard = async (req, res) => {
         .json({ message: "Invalid characters in company codes" });
     }
 
-    if (!mssql.connected) {
-      console.log('no connection')
-      const user_ip = String(req.user.ip).trim();
-    await mssql.connect(dbConnection(user_ip, req.user.port));
-    }
+    // if (!mssql.connected) {
+    //   console.log('no connection')
+    //   const user_ip = String(req.user.ip).trim();
+    // await mssql.connect(dbConnection(user_ip, req.user.port));
+    // }
+
+    const user_ip = String(req.user.ip).trim(); 
+     await connectToUserDatabase(user_ip, req.user.port.trim());
+     
 
     const formattedCurrentDate = formatDate(currentDate);
     const formattedFromDate = formatDate(fromDate);
@@ -2308,6 +2290,7 @@ exports.loadingDashboard = async (req, res) => {
         .input("REPORT_TYPE", mssql.NVarChar(50), reportType);
 
       if (fromDate && toDate) {
+        console.log('fromDate and toDate')
         request
           .input("DATE1", mssql.Char(10), formattedFromDate)
           .input("DATE2", mssql.Char(10), formattedToDate);
@@ -2335,12 +2318,16 @@ exports.loadingDashboard = async (req, res) => {
         `;
         await request.query(query);
       }
+      console.log(`Stored procedure executed for company: ${companyCode}`);
     }
 
+    console.log("All stored procedures executed");
     // Rest of the code (result queries, formatting, and response) remains unchanged
     const companyCodesList = selectedOptions
       .map((code) => `'${code}'`)
       .join(", ");
+
+      console.log("Company Codes List:", companyCodesList);
 
     const loadingDashboardResult = await new mssql.Request().input(
       "username",
@@ -2360,6 +2347,8 @@ exports.loadingDashboard = async (req, res) => {
       FROM tb_SALES_DASHBOARD_VIEW
       WHERE COMPANY_CODE IN (${companyCodesList}) AND REPUSER = @username;
     `);
+
+    console.log("Loading dashboard result query executed");
 
     const record = await new mssql.Request().input(
       "username",
@@ -2381,6 +2370,8 @@ exports.loadingDashboard = async (req, res) => {
       WHERE COMPANY_CODE IN (${companyCodesList}) AND REPUSER = @username
       GROUP BY COMPANY_CODE;
     `);
+
+    console.log("Record query executed");
 
     const cashierPointRecord = await new mssql.Request().input(
       "username",
@@ -2404,6 +2395,7 @@ exports.loadingDashboard = async (req, res) => {
       GROUP BY COMPANY_CODE, UNITNO;
     `);
 
+    console.log("Dashboard data queries executed");
     const formattedResult =
       loadingDashboardResult && Array.isArray(loadingDashboardResult.recordset)
         ? loadingDashboardResult.recordset.map((row) => ({
@@ -2418,6 +2410,7 @@ exports.loadingDashboard = async (req, res) => {
           }))
         : [];
 
+        console.log("Formatted Result:");
     res.status(200).json({
       message: "Processed parameters for company codes",
       success: true,
@@ -2430,7 +2423,6 @@ exports.loadingDashboard = async (req, res) => {
     res.status(500).json({ message: "Failed to load company dashboard data" });
   }
 };
-
 
 //department dashboard
 exports.departmentDashboard = async (req, res) => {
@@ -2467,11 +2459,15 @@ exports.departmentDashboard = async (req, res) => {
         return res.status(400).json({ message: "No company codes provided" });
       }
 
-      if (!mssql.connected) {
-      console.log('no connection')
-      const user_ip = String(req.user.ip).trim();
-    await mssql.connect(dbConnection(user_ip, req.user.port));
-    }
+    //   if (!mssql.connected) {
+    //   console.log('no connection')
+    //   const user_ip = String(req.user.ip).trim();
+    // await mssql.connect(dbConnection(user_ip, req.user.port));
+    // }
+
+    const user_ip = String(req.user.ip).trim(); 
+      await connectToUserDatabase(user_ip, req.user.port.trim());
+      
 
       const formattedCurrentDate = formatDate(currentDate);
       const formattedFromDate = formatDate(fromDate);
@@ -2619,11 +2615,15 @@ exports.categoryDashboard = async (req, res) => {
         return res.status(400).json({ message: "No company codes provided" });
       }
 
-      if (!mssql.connected) {
-      console.log('no connection')
-      const user_ip = String(req.user.ip).trim();
-    await mssql.connect(dbConnection(user_ip, req.user.port));
-    }
+    //   if (!mssql.connected) {
+    //   console.log('no connection')
+    //   const user_ip = String(req.user.ip).trim();
+    // await mssql.connect(dbConnection(user_ip, req.user.port));
+    // }
+
+    const user_ip = String(req.user.ip).trim(); 
+    await connectToUserDatabase(user_ip, req.user.port.trim());
+      
 
       const formattedCurrentDate = formatDate(currentDate);
       const formattedFromDate = formatDate(fromDate);
@@ -2751,11 +2751,15 @@ exports.subCategoryDashboard = async (req, res) => {
         return res.status(400).json({ message: "No company codes provided" });
       }
 
-      if (!mssql.connected) {
-      console.log('no connection')
-      const user_ip = String(req.user.ip).trim();
-    await mssql.connect(dbConnection(user_ip, req.user.port));
-    }
+    //   if (!mssql.connected) {
+    //   console.log('no connection')
+    //   const user_ip = String(req.user.ip).trim();
+    // await mssql.connect(dbConnection(user_ip, req.user.port));
+    // }
+
+    const user_ip = String(req.user.ip).trim(); 
+      await connectToUserDatabase(user_ip, req.user.port.trim());
+     
 
       const formattedCurrentDate = formatDate(currentDate);
       const formattedFromDate = formatDate(fromDate);
@@ -2881,11 +2885,15 @@ exports.vendorDashboard = async (req, res) => {
         return res.status(400).json({ message: "No company codes provided" });
       }
 
-      if (!mssql.connected) {
-      console.log('no connection')
-      const user_ip = String(req.user.ip).trim();
-    await mssql.connect(dbConnection(user_ip, req.user.port));
-    }
+    //   if (!mssql.connected) {
+    //   console.log('no connection')
+    //   const user_ip = String(req.user.ip).trim();
+    // await mssql.connect(dbConnection(user_ip, req.user.port));
+    // }
+
+    const user_ip = String(req.user.ip).trim(); 
+       await connectToUserDatabase(user_ip, req.user.port.trim());
+     
 
       const formattedCurrentDate = formatDate(currentDate);
       const formattedFromDate = formatDate(fromDate);
@@ -3025,12 +3033,14 @@ exports.colorSizeSalesProductDashboard = async (req, res) => {
         return res.status(400).json({ message: "No company codes provided" });
       }
 
-      if (!mssql.connected) {
-      console.log('no connection')
-      const user_ip = String(req.user.ip).trim();
-    await mssql.connect(dbConnection(user_ip, req.user.port));
-    }
-
+    //   if (!mssql.connected) {
+    //   console.log('no connection')
+    //   const user_ip = String(req.user.ip).trim();
+    // await mssql.connect(dbConnection(user_ip, req.user.port));
+    // }
+const user_ip = String(req.user.ip).trim(); 
+      await connectToUserDatabase(user_ip, req.user.port.trim());
+      
       const formattedCurrentDate = formatDate(currentDate);
       const formattedFromDate = formatDate(fromDate);
       const formattedToDate = formatDate(toDate);
@@ -3160,11 +3170,15 @@ exports.colorSizeSalesProduct = async (req, res) => {
         .join(",");
 
       try {
-        if (!mssql.connected) {
-      console.log('no connection')
-      const user_ip = String(req.user.ip).trim();
-    await mssql.connect(dbConnection(user_ip, req.user.port));
-    }
+    //     if (!mssql.connected) {
+    //   console.log('no connection')
+    //   const user_ip = String(req.user.ip).trim();
+    // await mssql.connect(dbConnection(user_ip, req.user.port));
+    // }
+
+    const user_ip = String(req.user.ip).trim(); 
+     await connectToUserDatabase(user_ip, req.user.port.trim());
+      
 
         const [tableRecords] = await Promise.all([
           mssql.query(`
@@ -3235,11 +3249,15 @@ exports.colorSizeSalesDepartment = async (req, res) => {
         .join(",");
 
       try {
-        if (!mssql.connected) {
-      console.log('no connection')
-      const user_ip = String(req.user.ip).trim();
-    await mssql.connect(dbConnection(user_ip, req.user.port));
-    }
+    //     if (!mssql.connected) {
+    //   console.log('no connection')
+    //   const user_ip = String(req.user.ip).trim();
+    // await mssql.connect(dbConnection(user_ip, req.user.port));
+    // }
+
+    const user_ip = String(req.user.ip).trim(); 
+      await connectToUserDatabase(user_ip, req.user.port.trim());
+      
 
         const [tableRecords] = await Promise.all([
           mssql.query(`
@@ -3310,11 +3328,15 @@ exports.colorSizeSalesCategory = async (req, res) => {
         .join(",");
 
       try {
-        if (!mssql.connected) {
-      console.log('no connection')
-      const user_ip = String(req.user.ip).trim();
-    await mssql.connect(dbConnection(user_ip, req.user.port));
-    }
+    //     if (!mssql.connected) {
+    //   console.log('no connection')
+    //   const user_ip = String(req.user.ip).trim();
+    // await mssql.connect(dbConnection(user_ip, req.user.port));
+    // }
+
+    const user_ip = String(req.user.ip).trim(); 
+    await connectToUserDatabase(user_ip, req.user.port.trim());
+      
 
         const [tableRecords] = await Promise.all([
           mssql.query(`
@@ -3385,11 +3407,15 @@ exports.colorSizeSalesSubCategory = async (req, res) => {
         .join(",");
 
       try {
-        if (!mssql.connected) {
-      console.log('no connection')
-      const user_ip = String(req.user.ip).trim();
-    await mssql.connect(dbConnection(user_ip, req.user.port));
-    }
+    //     if (!mssql.connected) {
+    //   console.log('no connection')
+    //   const user_ip = String(req.user.ip).trim();
+    // await mssql.connect(dbConnection(user_ip, req.user.port));
+    // }
+
+    const user_ip = String(req.user.ip).trim(); 
+     await connectToUserDatabase(user_ip, req.user.port.trim());
+     
 
         const [tableRecords] = await Promise.all([
           mssql.query(`
@@ -3460,11 +3486,15 @@ exports.colorSizeSalesVendor = async (req, res) => {
         .join(",");
 
       try {
-        if (!mssql.connected) {
-      console.log('no connection')
-      const user_ip = String(req.user.ip).trim();
-    await mssql.connect(dbConnection(user_ip, req.user.port));
-    }
+    //     if (!mssql.connected) {
+    //   console.log('no connection')
+    //   const user_ip = String(req.user.ip).trim();
+    // await mssql.connect(dbConnection(user_ip, req.user.port));
+    // }
+
+    const user_ip = String(req.user.ip).trim(); 
+    await connectToUserDatabase(user_ip, req.user.port.trim());
+      
 
         const [tableRecords] = await Promise.all([
           mssql.query(`
@@ -3551,11 +3581,15 @@ exports.colorSizeStockProductDashboard = async (req, res) => {
         return res.status(400).json({ message: "No company codes provided" });
       }
 
-       if (!mssql.connected) {
-      console.log('no connection')
-      const user_ip = String(req.user.ip).trim();
-    await mssql.connect(dbConnection(user_ip, req.user.port));
-    }
+    //    if (!mssql.connected) {
+    //   console.log('no connection')
+    //   const user_ip = String(req.user.ip).trim();
+    // await mssql.connect(dbConnection(user_ip, req.user.port));
+    // }
+
+    const user_ip = String(req.user.ip).trim(); 
+      await connectToUserDatabase(user_ip, req.user.port.trim());
+      
 
       // Format dates
       const formattedCurrentDate = formatDate(currentDate);
@@ -3793,11 +3827,15 @@ exports.colorSizeStockDepartmentDashboard = async (req, res) => {
         return res.status(400).json({ message: "No company codes provided" });
       }
 
-       if (!mssql.connected) {
-      console.log('no connection')
-      const user_ip = String(req.user.ip).trim();
-    await mssql.connect(dbConnection(user_ip, req.user.port));
-    }
+    //    if (!mssql.connected) {
+    //   console.log('no connection')
+    //   const user_ip = String(req.user.ip).trim();
+    // await mssql.connect(dbConnection(user_ip, req.user.port));
+    // }
+
+    const user_ip = String(req.user.ip).trim(); 
+    await connectToUserDatabase(user_ip, req.user.port.trim());
+      
 
       // Format dates
       const formattedCurrentDate = formatDate(currentDate);
@@ -4078,39 +4116,44 @@ exports.colorSizeStockCategoryDashboard = async (req, res) => {
         selectedOptions,
       } = req.query;
 
-      // Convert selectedOptions to array if it's a string
+      // Convert booleans
+      rowSelect =
+        rowSelect === true ||
+        String(rowSelect).toLowerCase() === "true";
+      state =
+        state === true || String(state).toLowerCase() === "true";
+
+      // Convert selectedOptions to array
       if (typeof selectedOptions === "string") {
-        selectedOptions = selectedOptions.split(",").map((code) => code.trim());
+        selectedOptions = selectedOptions
+          .split(",")
+          .map((code) => code.trim())
+          .filter((x) => x);
       }
 
-      if (
-        !Array.isArray(selectedOptions) ||
-        selectedOptions.length === 0 ||
-        selectedOptions[0] === ""
-      ) {
+      if (!Array.isArray(selectedOptions) || selectedOptions.length === 0) {
         return res.status(400).json({ message: "No company codes provided" });
       }
 
-       if (!mssql.connected) {
-      console.log('no connection')
+      // -------------------------
+      // 3️⃣ Connect to DB
+      // -------------------------
       const user_ip = String(req.user.ip).trim();
-    await mssql.connect(dbConnection(user_ip, req.user.port));
-    }
-
+      const pool = await connectToUserDatabase(user_ip, req.user.port);
+      const request = pool.request();
+      if (!pool.connected) {
+        return res.status(500).json({ message: "Database connection failed" });
+      }
       // Format dates
       const formattedCurrentDate = formatDate(currentDate);
       const formattedDate = formatDate(date);
 
-      // Create request instance
-      const request = new mssql.Request();
-
       // -------------------------
-      // 3️⃣ Build Query to Create View
+      // 4️⃣ Build Query to Create View
       // -------------------------
-      let query;
-
+      let viewQuery;
       if (formattedCurrentDate === formattedDate) {
-        query = `
+        viewQuery = `
           USE ${rtweb};
           IF OBJECT_ID('dbo.vw_STOCK_BALANCE', 'V') IS NOT NULL
               DROP VIEW dbo.vw_STOCK_BALANCE;
@@ -4139,7 +4182,7 @@ exports.colorSizeStockCategoryDashboard = async (req, res) => {
                 P.SCALEPRICE,
                 P.PRODUCT_NAMELONG');`;
       } else {
-        query = `
+        viewQuery = `
           USE ${rtweb};
           IF OBJECT_ID('dbo.vw_STOCK_BALANCE', 'V') IS NOT NULL
               DROP VIEW dbo.vw_STOCK_BALANCE;
@@ -4171,22 +4214,13 @@ exports.colorSizeStockCategoryDashboard = async (req, res) => {
         `;
       }
 
-      // -------------------------
-      // 4️⃣ Execute View Update
-      // -------------------------
-      let result;
       try {
-        result = await request.query(query);
+        await request.query(viewQuery);
       } catch (error) {
         console.error("Error updating view:", error);
         return res.status(500).json({ message: "Error updating stock view" });
       }
 
-      if (!result) {
-        return res
-          .status(403)
-          .json({ message: "Error occurred in view updating" });
-      }
 
       // -------------------------
       // 5️⃣ Fetch Table Records
@@ -4196,129 +4230,134 @@ exports.colorSizeStockCategoryDashboard = async (req, res) => {
       let tableRecords;
       let rowRecords;
       let rowDataStatus = false;
+
       try {
-        if (state === true || String(state).toLowerCase() === "true") {
-          if (
-            rowSelect === true ||
-            String(rowSelect).toLowerCase() === "true"
-          ) {
-            rowRecords = await mssql.query(`
-    USE [${rtweb}];
-    SELECT   
-        LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
-        LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
-        LTRIM(RTRIM(s.CATCODE)) AS CATEGORY_CODE,
-        c.CATNAME AS CATEGORY_NAME,
-        LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
-        s.PRODUCT_NAMELONG AS PRODUCT_NAME,
-        SUM(s.QTY) AS QUANTITY,
-        SUM(s.QTY * s.COSTPRICE) AS COST_VALUE,
-        SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,
-        s.COSTPRICE,
-        s.SCALEPRICE
-    FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
-    LEFT JOIN [${posback}].dbo.tb_CATEGORY c
-        ON LTRIM(RTRIM(s.CATCODE)) = LTRIM(RTRIM(c.CATCODE))
-    WHERE s.COMPANY_CODE IN (${inClause}) AND s.CATCODE = '${categoryCode}'
-    GROUP BY 
-        s.COMPANY_CODE, 
-        s.PRODUCT_CODE, 
-        s.CATCODE, 
-        c.CATNAME,
-        LTRIM(RTRIM(s.SERIALNO)),
-        s.PRODUCT_NAMELONG, 
-        s.COSTPRICE, 
-        s.SCALEPRICE;
-  `);
+        if (state) {
+          if (rowSelect) {
+            rowRecords = await pool
+              .request()
+              .query(`
+                USE [${rtweb}];
+                SELECT   
+                    LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
+                    LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
+                    LTRIM(RTRIM(s.CATCODE)) AS CATEGORY_CODE,
+                    c.CATNAME AS CATEGORY_NAME,
+                    LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
+                    s.PRODUCT_NAMELONG AS PRODUCT_NAME,
+                    SUM(s.QTY) AS QUANTITY,
+                    SUM(s.QTY * s.COSTPRICE) AS COST_VALUE,
+                    SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,
+                    s.COSTPRICE,
+                    s.SCALEPRICE
+                FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
+                LEFT JOIN [${posback}].dbo.tb_CATEGORY c
+                    ON LTRIM(RTRIM(s.CATCODE)) = LTRIM(RTRIM(c.CATCODE))
+                WHERE s.COMPANY_CODE IN (${inClause}) AND s.CATCODE = '${categoryCode}'
+                GROUP BY 
+                    s.COMPANY_CODE, 
+                    s.PRODUCT_CODE, 
+                    s.CATCODE, 
+                    c.CATNAME,
+                    LTRIM(RTRIM(s.SERIALNO)),
+                    s.PRODUCT_NAMELONG, 
+                    s.COSTPRICE, 
+                    s.SCALEPRICE;
+              `);
             rowDataStatus = true;
           }
-          tableRecords = await mssql.query(`
-    USE [${rtweb}];
-    SELECT   
-        LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
-        LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
-        LTRIM(RTRIM(s.CATCODE)) AS CATEGORY_CODE,
-        c.CATNAME AS CATEGORY_NAME,
-        s.PRODUCT_NAMELONG AS PRODUCT_NAME,
-        LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
-        SUM(s.QTY) AS QUANTITY,
-        SUM(s.QTY * s.COSTPRICE) AS COST_VALUE,
-        SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,
-        s.COSTPRICE,
-        s.SCALEPRICE
-    FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
-    LEFT JOIN [${posback}].dbo.tb_CATEGORY c
-        ON LTRIM(RTRIM(s.CATCODE)) = LTRIM(RTRIM(c.CATCODE))
-    WHERE s.COMPANY_CODE IN (${inClause})
-    GROUP BY 
-        s.COMPANY_CODE, 
-        s.PRODUCT_CODE, 
-        s.CATCODE, 
-        c.CATNAME,
-        LTRIM(RTRIM(s.SERIALNO)),
-        s.PRODUCT_NAMELONG, 
-        s.COSTPRICE, 
-        s.SCALEPRICE;
-  `);
+
+          tableRecords = await pool
+            .request()
+            .query(`
+              USE [${rtweb}];
+              SELECT   
+                  LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
+                  LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
+                  LTRIM(RTRIM(s.CATCODE)) AS CATEGORY_CODE,
+                  c.CATNAME AS CATEGORY_NAME,
+                  s.PRODUCT_NAMELONG AS PRODUCT_NAME,
+                  LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
+                  SUM(s.QTY) AS QUANTITY,
+                  SUM(s.QTY * s.COSTPRICE) AS COST_VALUE,
+                  SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,
+                  s.COSTPRICE,
+                  s.SCALEPRICE
+              FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
+              LEFT JOIN [${posback}].dbo.tb_CATEGORY c
+                  ON LTRIM(RTRIM(s.CATCODE)) = LTRIM(RTRIM(c.CATCODE))
+              WHERE s.COMPANY_CODE IN (${inClause})
+              GROUP BY 
+                  s.COMPANY_CODE, 
+                  s.PRODUCT_CODE, 
+                  s.CATCODE, 
+                  c.CATNAME,
+                  LTRIM(RTRIM(s.SERIALNO)),
+                  s.PRODUCT_NAMELONG, 
+                  s.COSTPRICE, 
+                  s.SCALEPRICE;
+            `);
         } else {
-          if (
-            rowSelect === true ||
-            String(rowSelect).toLowerCase() === "true"
-          ) {
-            rowRecords = await mssql.query(`
-    USE [${rtweb}];
-    SELECT   
-        LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
-        LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
-        LTRIM(RTRIM(s.CATCODE)) AS CATEGORY_CODE,
-        c.CATNAME AS CATEGORY_NAME,
-        s.PRODUCT_NAMELONG AS PRODUCT_NAME,
-        LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
-        SUM(s.QTY) AS QUANTITY,
-        s.COSTPRICE,
-        s.SCALEPRICE
-    FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
-    LEFT JOIN [${posback}].dbo.tb_CATEGORY c
-        ON LTRIM(RTRIM(s.DEPTCODE)) = LTRIM(RTRIM(c.DEPTCODE))
-    WHERE s.COMPANY_CODE IN (${inClause}) AND s.CATCODE = '${categoryCode}'
-    GROUP BY 
-        s.COMPANY_CODE, 
-        s.PRODUCT_CODE, 
-        s.CATCODE, 
-        LTRIM(RTRIM(s.SERIALNO)),
-        c.CATNAME,
-        s.PRODUCT_NAMELONG, 
-        s.COSTPRICE, 
-        s.SCALEPRICE;
-  `);
+          if (rowSelect) {
+            rowRecords = await pool
+              .request()
+              .query(`
+                USE [${rtweb}];
+                SELECT   
+                    LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
+                    LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
+                    LTRIM(RTRIM(s.CATCODE)) AS CATEGORY_CODE,
+                    c.CATNAME AS CATEGORY_NAME,
+                    s.PRODUCT_NAMELONG AS PRODUCT_NAME,
+                    LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
+                    SUM(s.QTY) AS QUANTITY,
+                    s.COSTPRICE,
+                    s.SCALEPRICE
+                FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
+                LEFT JOIN [${posback}].dbo.tb_CATEGORY c
+                    ON LTRIM(RTRIM(s.DEPTCODE)) = LTRIM(RTRIM(c.DEPTCODE))
+                WHERE s.COMPANY_CODE IN (${inClause}) AND s.CATCODE = '${categoryCode}'
+                GROUP BY 
+                    s.COMPANY_CODE, 
+                    s.PRODUCT_CODE, 
+                    s.CATCODE, 
+                    LTRIM(RTRIM(s.SERIALNO)),
+                    c.CATNAME,
+                    s.PRODUCT_NAMELONG, 
+                    s.COSTPRICE, 
+                    s.SCALEPRICE;
+              `);
             rowDataStatus = true;
           }
-          tableRecords = await mssql.query(`
-    USE [${rtweb}];
-    SELECT   
-        LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
-        LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
-        LTRIM(RTRIM(s.CATCODE)) AS CATEGORY_CODE,
-        c.CATNAME AS CATEGORY_NAME,
-        s.PRODUCT_NAMELONG AS PRODUCT_NAME,
-        LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
-        SUM(s.QTY) AS QUANTITY,
-        s.COSTPRICE,
-        s.SCALEPRICE
-    FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
-    LEFT JOIN [${posback}].dbo.tb_CATEGORY c
-        ON LTRIM(RTRIM(s.DEPTCODE)) = LTRIM(RTRIM(c.DEPTCODE))
-    WHERE s.COMPANY_CODE IN (${inClause})
-    GROUP BY 
-        s.COMPANY_CODE, 
-        s.PRODUCT_CODE, 
-        s.CATCODE, 
-        LTRIM(RTRIM(s.SERIALNO)),
-        c.CATNAME,
-        s.PRODUCT_NAMELONG, 
-        s.COSTPRICE, 
-        s.SCALEPRICE;
-  `);
+
+          tableRecords = await pool
+            .request()
+            .query(`
+              USE [${rtweb}];
+              SELECT   
+                  LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
+                  LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
+                  LTRIM(RTRIM(s.CATCODE)) AS CATEGORY_CODE,
+                  c.CATNAME AS CATEGORY_NAME,
+                  s.PRODUCT_NAMELONG AS PRODUCT_NAME,
+                  LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
+                  SUM(s.QTY) AS QUANTITY,
+                  s.COSTPRICE,
+                  s.SCALEPRICE
+              FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
+              LEFT JOIN [${posback}].dbo.tb_CATEGORY c
+                  ON LTRIM(RTRIM(s.DEPTCODE)) = LTRIM(RTRIM(c.DEPTCODE))
+              WHERE s.COMPANY_CODE IN (${inClause})
+              GROUP BY 
+                  s.COMPANY_CODE, 
+                  s.PRODUCT_CODE, 
+                  s.CATCODE, 
+                  LTRIM(RTRIM(s.SERIALNO)),
+                  c.CATNAME,
+                  s.PRODUCT_NAMELONG, 
+                  s.COSTPRICE, 
+                  s.SCALEPRICE;
+            `);
         }
 
         return res.status(200).json({
@@ -4326,7 +4365,7 @@ exports.colorSizeStockCategoryDashboard = async (req, res) => {
           success: true,
           tableRecords: tableRecords.recordset || [],
           rowRecords: rowRecords ? rowRecords.recordset || [] : [],
-          rowDataStatus: rowDataStatus,
+          rowDataStatus,
         });
       } catch (fetchErr) {
         console.error("Error fetching product data:", fetchErr);
@@ -4391,11 +4430,15 @@ exports.colorSizeStockSubCategoryDashboard = async (req, res) => {
         return res.status(400).json({ message: "No company codes provided" });
       }
 
-       if (!mssql.connected) {
-      console.log('no connection')
-      const user_ip = String(req.user.ip).trim();
-    await mssql.connect(dbConnection(user_ip, req.user.port));
-    }
+    //    if (!mssql.connected) {
+    //   console.log('no connection')
+    //   const user_ip = String(req.user.ip).trim();
+    // await mssql.connect(dbConnection(user_ip, req.user.port));
+    // }
+
+    const user_ip = String(req.user.ip).trim(); 
+    await connectToUserDatabase(user_ip, req.user.port.trim());
+      
       // Format dates
       const formattedCurrentDate = formatDate(currentDate);
       const formattedDate = formatDate(date);
@@ -4686,12 +4729,14 @@ exports.colorSizeStockVendorDashboard = async (req, res) => {
         return res.status(400).json({ message: "No company codes provided" });
       }
 
-       if (!mssql.connected) {
-      console.log('no connection')
-      const user_ip = String(req.user.ip).trim();
-    await mssql.connect(dbConnection(user_ip, req.user.port));
-    }
-
+    //    if (!mssql.connected) {
+    //   console.log('no connection')
+    //   const user_ip = String(req.user.ip).trim();
+    // await mssql.connect(dbConnection(user_ip, req.user.port));
+    // }
+const user_ip = String(req.user.ip).trim(); 
+  await connectToUserDatabase(user_ip, req.user.port.trim());
+      
       // Format dates
       const formattedCurrentDate = formatDate(currentDate);
       const formattedDate = formatDate(date);
@@ -4989,11 +5034,13 @@ exports.stockProductDashboard = async (req, res) => {
       // -------------------------
       let query;
 
-       if (!mssql.connected) {
-      console.log('no connection')
-      const user_ip = String(req.user.ip).trim();
-    await mssql.connect(dbConnection(user_ip, req.user.port));
-    }
+    //    if (!mssql.connected) {
+    //   console.log('no connection')
+    //   const user_ip = String(req.user.ip).trim();
+    // await mssql.connect(dbConnection(user_ip, req.user.port));
+    // }
+    const user_ip = String(req.user.ip).trim(); 
+  await connectToUserDatabase(user_ip, req.user.port.trim());
 
       if (formattedCurrentDate === formattedDate) {
         query = `
@@ -5162,11 +5209,14 @@ exports.stockDepartmentDashboard = async (req, res) => {
         return res.status(400).json({ message: "No company codes provided" });
       }
 
-       if (!mssql.connected) {
-      console.log('no connection')
-      const user_ip = String(req.user.ip).trim();
-    await mssql.connect(dbConnection(user_ip, req.user.port));
-    }
+    //    if (!mssql.connected) {
+    //   console.log('no connection')
+    //   const user_ip = String(req.user.ip).trim();
+    // await mssql.connect(dbConnection(user_ip, req.user.port));
+    // }
+    const user_ip = String(req.user.ip).trim(); 
+  await connectToUserDatabase(user_ip, req.user.port.trim());
+
       // Format dates
       const formattedCurrentDate = formatDate(currentDate);
       const formattedDate = formatDate(date);
@@ -5372,11 +5422,14 @@ exports.stockCategoryDashboard = async (req, res) => {
         return res.status(400).json({ message: "No company codes provided" });
       }
 
-       if (!mssql.connected) {
-      console.log('no connection')
-      const user_ip = String(req.user.ip).trim();
-    await mssql.connect(dbConnection(user_ip, req.user.port));
-    }
+    //    if (!mssql.connected) {
+    //   console.log('no connection')
+    //   const user_ip = String(req.user.ip).trim();
+    // await mssql.connect(dbConnection(user_ip, req.user.port));
+    // }
+
+    const user_ip = String(req.user.ip).trim(); 
+  await connectToUserDatabase(user_ip, req.user.port.trim());
 
       // Format dates
       const formattedCurrentDate = formatDate(currentDate);
@@ -5587,11 +5640,14 @@ exports.stockSubCategoryDashboard = async (req, res) => {
         return res.status(400).json({ message: "No company codes provided" });
       }
 
-       if (!mssql.connected) {
-      console.log('no connection')
-      const user_ip = String(req.user.ip).trim();
-    await mssql.connect(dbConnection(user_ip, req.user.port));
-    }
+    //    if (!mssql.connected) {
+    //   console.log('no connection')
+    //   const user_ip = String(req.user.ip).trim();
+    // await mssql.connect(dbConnection(user_ip, req.user.port));
+    // }
+
+    const user_ip = String(req.user.ip).trim(); 
+  await connectToUserDatabase(user_ip, req.user.port.trim());
 
       // Format dates
       const formattedCurrentDate = formatDate(currentDate);
@@ -5806,11 +5862,14 @@ exports.stockVendorDashboard = async (req, res) => {
         return res.status(400).json({ message: "No company codes provided" });
       }
 
-       if (!mssql.connected) {
-      console.log('no connection')
-      const user_ip = String(req.user.ip).trim();
-    await mssql.connect(dbConnection(user_ip, req.user.port));
-    }
+    //    if (!mssql.connected) {
+    //   console.log('no connection')
+    //   const user_ip = String(req.user.ip).trim();
+    // await mssql.connect(dbConnection(user_ip, req.user.port));
+    // }
+
+    const user_ip = String(req.user.ip).trim(); 
+  await connectToUserDatabase(user_ip, req.user.port.trim());
 
       // Format dates
       const formattedCurrentDate = formatDate(currentDate);
@@ -5994,7 +6053,9 @@ exports.scan = async (req, res) => {
 
   try {
     // mssql.close(); // Close existing connections
-    const pool = await mssql.connect(dbConnection(String(req.user.ip).trim(), req.user.port));
+    // const pool = await mssql.connect(dbConnection(String(req.user.ip).trim(), req.user.port));
+    const user_ip = String(req.user.ip).trim(); 
+    const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
 
     let productCode = null;
     let stockQty = 0;
@@ -6260,11 +6321,14 @@ exports.productView = async (req, res) => {
   };
 
   try {
-     if (!mssql.connected) {
-      console.log('no connection')
-      const user_ip = String(req.user.ip).trim();
-    await mssql.connect(dbConnection(user_ip, req.user.port));
-    }
+    //  if (!mssql.connected) {
+    //   console.log('no connection')
+    //   const user_ip = String(req.user.ip).trim();
+    // await mssql.connect(dbConnection(user_ip, req.user.port));
+    // }
+    const user_ip = String(req.user.ip).trim(); 
+  await connectToUserDatabase(user_ip, req.user.port.trim());
+
     let productCode = null;
     let result = null;
     let status = "F";
@@ -6469,11 +6533,13 @@ exports.productViewSales = async (req, res) => {
   }
 
   try {
-     if (!mssql.connected) {
-      console.log('no connection')
-      const user_ip = String(req.user.ip).trim();
-    await mssql.connect(dbConnection(user_ip, req.user.port));
-    }
+    //  if (!mssql.connected) {
+    //   console.log('no connection')
+    //   const user_ip = String(req.user.ip).trim();
+    // await mssql.connect(dbConnection(user_ip, req.user.port));
+    // }
+    const user_ip = String(req.user.ip).trim(); 
+  await connectToUserDatabase(user_ip, req.user.port.trim());
     const salesQuery = `
           USE [${posback}];
           SELECT SALESDATE, COMPANY_CODE, PRODUCT_CODE, COST_PRICE, UNIT_PRICE, SUM(QTY) AS QTY, 
@@ -6553,8 +6619,10 @@ exports.stockUpdate = async (req, res) => {
       return res.status(400).json({ message: "Invalid stock type provided" });
     }
 
+    // const user_ip = String(req.user.ip).trim(); 
+    // const pool = await mssql.connect(dbConnection(user_ip, req.user.port));
     const user_ip = String(req.user.ip).trim(); 
-    const pool = await mssql.connect(dbConnection(user_ip, req.user.port));
+  const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
     const request = pool.request();
     request.input("company", mssql.NChar(10), company);
 
@@ -6590,8 +6658,11 @@ exports.grnprnTableData = async (req, res) => {
   const company = String(code).trim();
 
   try {
+    // const user_ip = String(req.user.ip).trim(); 
+    // const pool = await mssql.connect(dbConnection(user_ip, req.user.port));
+
     const user_ip = String(req.user.ip).trim(); 
-    const pool = await mssql.connect(dbConnection(user_ip, req.user.port));
+    const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
 
     let query = `USE [${rtweb}];\n`;
 
@@ -6639,24 +6710,27 @@ exports.productName = async (req, res) => {
   try {
     // Try finding a product code via barcode link table
 
+    // const user_ip = String(req.user.ip).trim(); 
+    // const pool = await mssql.connect(dbConnection(user_ip, req.user.port));
+
+    // mssql.close();
     const user_ip = String(req.user.ip).trim(); 
-    const pool = await mssql.connect(dbConnection(user_ip, req.user.port));
+  const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
 
     const query = `
   USE [${posback}];
   SELECT PRODUCT_NAMELONG FROM tb_PRODUCT;
 `;
 
-    const productNames = await pool.request().query(query);
+    const result = await pool.request().query(query);
 
-    const productNamesData = productNames.recordset;
-    if (!productNamesData || productNamesData.length === 0) {
+    if (!result.recordset || result.recordset.length === 0) {
       return res.status(404).json({ message: "Product names not found" });
     }
 
     return res.status(200).json({
-      message: "Product names found",
-      names: productNamesData,
+       message: "Product names found",
+      names: result.recordset,
     });
   } catch (error) {
     console.error("Error retrieving product names:", error);
