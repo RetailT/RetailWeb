@@ -10,6 +10,22 @@ import { AuthContext } from "../AuthContext";
 import CircleBounceLoader from "../components/Loader";
 import axios from "axios";
 import NestedDynamicTable from "../components/DynamicTable";
+import { debounce } from "lodash";
+
+class ErrorBoundary extends React.Component {
+  state = { hasError: false };
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return <div>Something went wrong while rendering the table. Please try refreshing or selecting fewer options.</div>;
+    }
+    return this.props.children;
+  }
+}
 
 const ProductDashboard = () => {
   const { authToken } = useContext(AuthContext);
@@ -31,12 +47,15 @@ const ProductDashboard = () => {
   const [isChecked, setIsChecked] = useState(true);
   const [isValuationChecked, setIsValuationChecked] = useState(false);
   const [firstOption, setFirstOption] = useState(null);
-
   const [rowTableHeaders, setRowTableHeaders] = useState([]);
   const [rowTableData, setRowTableData] = useState([]);
   const [rowName, setRowName] = useState("");
   const [code, setCode] = useState("");
   const [isRowSelect, setIsRowSelect] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 50;
+  const [rowCurrentPage, setRowCurrentPage] = useState(1);
+  const rowPageSize = 50;
 
   const token = localStorage.getItem("authToken");
   const now = new Date();
@@ -82,31 +101,10 @@ const ProductDashboard = () => {
     }
   };
 
-  // ---------------------- AGGREGATE DATA ----------------------
-  function aggregateData(data) {
-    const productMap = new Map();
-
-    data.forEach((record) => {
-      const { PRODUCT_NAME, PRODUCT_CODE, CATEGORY_NAME, CATEGORY_CODE, COMPANY_CODE, COMPANY_NAME, ...rest } = record;
-      const key = `${PRODUCT_NAME}_${CATEGORY_NAME}`;
-
-      if (!productMap.has(key)) {
-        productMap.set(key, { PRODUCT_NAME, PRODUCT_CODE, CATEGORY_NAME, CATEGORY_CODE, COMPANY_CODE, COMPANY_NAME });
-      }
-
-      const currentRecord = productMap.get(key);
-      Object.keys(rest).forEach((field) => {
-        if (rest[field] !== "") currentRecord[field] = rest[field];
-      });
-    });
-
-    return { products: Array.from(productMap.values()), categories: [] };
-  }
-
   // ---------------------- FETCH TABLE DATA ----------------------
   const fetchData = async () => {
     setRowTableData([]);
-            setRowTableHeaders([]);
+    setRowTableHeaders([]);
     setSearchInput("");
     setCategorySearchInput("");
     if (!firstOption) return;
@@ -128,189 +126,186 @@ const ProductDashboard = () => {
         }
       );
 
+      console.log("response", response.data);
+
       if (response.data.message !== "Processed parameters for company codes") {
         setFilteredRecords([]);
-          setTableHeadings([]);
-        setDisable(false);
+        setTableHeadings([]);
         setAlert({ message: response.data.message, type: "error" });
         setTimeout(() => setAlert(null), 3000);
         return;
       }
 
-      rowDataStatus = response.data.rowDataStatus;
+      const rowDataStatus = response.data.rowDataStatus;
 
-      if (
-        rowDataStatus === true ||
-        String(rowDataStatus).toLowerCase() === "true"
-      ){
+      if (rowDataStatus === true || String(rowDataStatus).toLowerCase() === "true") {
         const rowData = response.data.rowRecords;
-
-        // Clear previous table data
         setRowTableData([]);
         setRowTableHeaders([]);
+        setRowCurrentPage(1); // Reset row table pagination
 
         if (!Array.isArray(rowData) || rowData.length === 0) {
-          setDisable(false);
-          setAlert({
-            message: "No data available to display",
-            type: "error",
-          });
+          setAlert({ message: "No data available to display", type: "error" });
           setTimeout(() => setAlert(null), 3000);
           return;
-        } else {
-          const updatedTableData = rowData
-            .map((item) => {
-              // Validate item and required fields
-              if (!item || !item.COMPANY_CODE) {
-                console.warn("Invalid rowData item:", item);
-                return null;
-              }
-
-              const matchingOption = firstOption.find(
-                (option) => option.code === item.COMPANY_CODE
-              );
-              const companyName = matchingOption
-                ? matchingOption.name
-                : "UNKNOWN";
-
-              // Create new object with all original fields plus COMPANY_NAME
-              return {
-                ...item,
-                COMPANY_NAME: companyName,
-              };
-            })
-            .filter((item) => item !== null) // Remove invalid items
-            .sort((a, b) => {
-              // Sort by COMPANY_CODE in ascending order
-              return a.COMPANY_CODE.localeCompare(b.COMPANY_CODE);
-            });
-
-          const baseRowHeaders = [
-            "COMPANY_CODE",
-            "COMPANY_NAME",
-            "SERIALNO",
-            "COSTPRICE",
-            "SCALEPRICE",
-            "QUANTITY",
-          ];
-
-          const baseRowHeaderMapping = {
-            COMPANY_CODE: "Company Code",
-            COMPANY_NAME: "Company Name",
-            SERIALNO: "Serial Number",
-            COSTPRICE: "Cost Price",
-            SCALEPRICE: "Unit Price",
-            QUANTITY: "Quantity",
-          };
-
-          const customRowHeaders = isValuationChecked
-            ? [...baseRowHeaders, "COST_VALUE", "SALES_VALUE"]
-            : baseRowHeaders;
-
-          const customRowHeaderMapping = isValuationChecked
-            ? {
-                ...baseRowHeaderMapping,
-                COST_VALUE: "Cost Value",
-                SALES_VALUE: "Sales Value",
-              }
-            : baseRowHeaderMapping;
-          const customHeaders = customRowHeaders.map(
-            (key) => customRowHeaderMapping[key] || key
-          );
-          setRowTableHeaders(customHeaders);
-          const formattedTableData = updatedTableData.map((item) =>
-            customRowHeaders.map((key) => item[key])
-          );
-          setRowTableData(formattedTableData);
-
-          setDisable(false);
         }
-      }
-      else{
-        setRowTableData([]);
-        setRowTableHeaders([]);
-const tableData = response.data.tableRecords;
 
-      const updatedTableData = tableData.map((item) => {
-        const matchingOption = firstOption.find((option) => option.code === item.COMPANY_CODE);
-        const companyName = matchingOption ? matchingOption.name : "UNKNOWN";
+        const updatedTableData = rowData
+          .map((item) => {
+            if (!item || !item.COMPANY_CODE) {
+              console.warn("Invalid rowData item:", item);
+              return null;
+            }
+            const matchingOption = firstOption.find(
+              (option) => option.code === item.COMPANY_CODE
+            );
+            const companyName = matchingOption ? matchingOption.name : "UNKNOWN";
+            return { ...item, COMPANY_NAME: companyName };
+          })
+          .filter((item) => item !== null)
+          .sort((a, b) => a.COMPANY_CODE.localeCompare(b.COMPANY_CODE));
 
-        const baseData = {
-          PRODUCT_NAME: item.PRODUCT_NAME,
-          PRODUCT_CODE: item.PRODUCT_CODE,
-          CATEGORY_NAME: item.CATEGORY_NAME,
-          CATEGORY_CODE: item.CATEGORY_CODE,
-          COMPANY_CODE: item.COMPANY_CODE,
-          COMPANY_NAME: companyName,
-          [`${companyName}_COSTPRICE`]: item.COSTPRICE,
-          [`${companyName}_UNITPRICE`]: item.SCALEPRICE,
-          [`${companyName}_QUANTITY`]: item.QUANTITY,
+        const baseRowHeaders = [
+          "COMPANY_CODE",
+          "COMPANY_NAME",
+          "SERIALNO",
+          "COSTPRICE",
+          "SCALEPRICE",
+          "QUANTITY",
+        ];
+
+        const baseRowHeaderMapping = {
+          COMPANY_CODE: "Company Code",
+          COMPANY_NAME: "Company Name",
+          SERIALNO: "Serial Number",
+          COSTPRICE: "Cost Price",
+          SCALEPRICE: "Unit Price",
+          QUANTITY: "Quantity",
         };
 
-        if (isValuationChecked) {
-          return {
-            ...baseData,
-            [`${companyName}_COSTVALUE`]: item.COST_VALUE,
-            [`${companyName}_SALESVALUE`]: item.SALES_VALUE,
+        const customRowHeaders = isValuationChecked
+          ? [...baseRowHeaders, "COST_VALUE", "SALES_VALUE"]
+          : baseRowHeaders;
+
+        const customRowHeaderMapping = isValuationChecked
+          ? {
+              ...baseRowHeaderMapping,
+              COST_VALUE: "Cost Value",
+              SALES_VALUE: "Sales Value",
+            }
+          : baseRowHeaderMapping;
+
+        const customHeaders = customRowHeaders.map(
+          (key) => customRowHeaderMapping[key] || key
+        );
+
+        setRowTableHeaders(customHeaders);
+        const formattedTableData = updatedTableData.map((item) =>
+          customRowHeaders.map((key) => item[key])
+        );
+        setRowTableData(formattedTableData);
+      } else {
+        setRowTableData([]);
+        setRowTableHeaders([]);
+        setRowCurrentPage(1); // Reset row table pagination
+
+        const tableData = response.data.tableRecords;
+
+        const companyMap = new Map(firstOption.map(opt => [opt.code, opt.name]));
+        const productMap = new Map();
+        const companySet = new Set();
+
+        tableData.forEach((item) => {
+          const companyName = companyMap.get(item.COMPANY_CODE) || "UNKNOWN";
+          companySet.add(companyName);
+
+          const key = `${item.PRODUCT_NAME}_${item.CATEGORY_NAME}`;
+
+          if (!productMap.has(key)) {
+            productMap.set(key, {
+              PRODUCT_NAME: item.PRODUCT_NAME,
+              PRODUCT_CODE: item.PRODUCT_CODE,
+              CATEGORY_NAME: item.CATEGORY_NAME,
+              CATEGORY_CODE: item.CATEGORY_CODE,
+              companies: new Map(),
+            });
+          }
+
+          const current = productMap.get(key);
+          const companyData = {
+            COSTPRICE: item.COSTPRICE,
+            UNITPRICE: item.SCALEPRICE,
+            QUANTITY: item.QUANTITY,
           };
-        } else return baseData;
-      });
 
-      const namesArray = firstOption.map((option) => option.name);
-      const filteredNames = namesArray.filter((name) =>
-        updatedTableData.some((record) => record.COMPANY_NAME === name)
-      );
+          if (isValuationChecked) {
+            companyData.COSTVALUE = item.COST_VALUE;
+            companyData.SALESVALUE = item.SALES_VALUE;
+          }
 
-      const mainHeadings = [
-        { label: "PRODUCT", subHeadings: ["CODE", "NAME"] },
-        { label: "CATEGORY", subHeadings: ["CODE", "NAME"] },
-        ...filteredNames.map((name) => ({
-          label: name.replace(/\s+/g, "_"),
-          subHeadings: isValuationChecked
-            ? ["COSTPRICE", "UNITPRICE", "QUANTITY", "COSTVALUE", "SALESVALUE"]
-            : ["COSTPRICE", "UNITPRICE", "QUANTITY"],
-        })),
-      ];
-
-      setTableHeadings(mainHeadings);
-
-      const transformedData = updatedTableData.map((row) => {
-        const newRow = {};
-        for (let key in row) {
-          const normalizedKey = key.replace(/\s+/g, "_");
-          newRow[normalizedKey] = row[key];
-        }
-        filteredNames.forEach((name) => {
-          const formattedName = name.replace(/\s+/g, "_");
-          ["AMOUNT", "QUANTITY", "COSTPRICE", "UNITPRICE"].forEach((field) => {
-            if (!newRow.hasOwnProperty(`${formattedName}_${field}`)) newRow[`${formattedName}_${field}`] = "";
-          });
-          if (isValuationChecked) ["COSTVALUE", "SALESVALUE"].forEach((field) => {
-            if (!newRow.hasOwnProperty(`${formattedName}_${field}`)) newRow[`${formattedName}_${field}`] = "";
-          });
+          current.companies.set(companyName, companyData);
         });
-        return newRow;
-      });
 
-      const { products } = aggregateData(transformedData);
+        const filteredNames = Array.from(companySet).sort((a, b) => a.localeCompare(b));
 
-      setTableRecords(products);
-      setFilteredRecords(products);
-      setProductNames([...new Set(products.map((item) => item.PRODUCT_NAME))]);
-      setCategoryNames([...new Set(products.map((item) => item.CATEGORY_NAME))]);
+        const mainHeadings = [
+          { label: "PRODUCT", subHeadings: ["CODE", "NAME"] },
+          { label: "CATEGORY", subHeadings: ["CODE", "NAME"] },
+          ...filteredNames.map((name) => ({
+            label: name.replace(/\s+/g, "_"),
+            subHeadings: isValuationChecked
+              ? ["COSTPRICE", "UNITPRICE", "QUANTITY", "COSTVALUE", "SALESVALUE"]
+              : ["COSTPRICE", "UNITPRICE", "QUANTITY"],
+          })),
+        ];
 
-      setDisable(false);
+        setTableHeadings(mainHeadings);
+
+        const products = Array.from(productMap.values()).map((entry) => {
+          const row = {
+            PRODUCT_NAME: entry.PRODUCT_NAME,
+            PRODUCT_CODE: entry.PRODUCT_CODE,
+            CATEGORY_NAME: entry.CATEGORY_NAME,
+            CATEGORY_CODE: entry.CATEGORY_CODE,
+          };
+
+          filteredNames.forEach((name) => {
+            const formattedName = name.replace(/\s+/g, "_");
+            const companyData = entry.companies.get(name) || {};
+
+            row[`${formattedName}_COSTPRICE`] = companyData.COSTPRICE || "";
+            row[`${formattedName}_UNITPRICE`] = companyData.UNITPRICE || "";
+            row[`${formattedName}_QUANTITY`] = companyData.QUANTITY || "";
+
+            if (isValuationChecked) {
+              row[`${formattedName}_COSTVALUE`] = companyData.COSTVALUE || "";
+              row[`${formattedName}_SALESVALUE`] = companyData.SALESVALUE || "";
+            }
+          });
+
+          return row;
+        });
+
+        setTableRecords(products);
+        setFilteredRecords(products);
+        setProductNames([...new Set(products.map((item) => item.PRODUCT_NAME))]);
+        setCategoryNames([...new Set(products.map((item) => item.CATEGORY_NAME))]);
+        setCurrentPage(1);
       }
-setDisable(false);
-      
     } catch (err) {
+      console.log("err", err);
       setFilteredRecords([]);
       setTableHeadings([]);
       setRowTableData([]);
       setRowTableHeaders([]);
-      setDisable(false);
-      setAlert({ message: err.response?.data?.message || "Error Occurred", type: "error" });
+      setRowCurrentPage(1);
+      setAlert({
+        message: err.response?.data?.message || "Error Occurred",
+        type: "error",
+      });
       setTimeout(() => setAlert(null), 3000);
+    } finally {
+      setDisable(false);
     }
   };
 
@@ -321,11 +316,11 @@ setDisable(false);
   }, []);
 
   useEffect(() => {
-     if (firstOption && !isRowSelect) {
-    fetchData(); // only for main table
+    if (firstOption && !isRowSelect) {
+      fetchData();
     }
-    if( isRowSelect) {
-      fetchData(); // only for row table
+    if (isRowSelect) {
+      fetchData();
     }
     if (isChecked) {
       const intervalId = setInterval(() => window.location.reload(), 180000);
@@ -337,47 +332,49 @@ setDisable(false);
   if (!authToken) return <Navigate to="/login" replace />;
 
   // ---------------------- FILTER HANDLERS ----------------------
+  const handleFilter = debounce((productValue, categoryValue) => {
+    const filtered = tableRecords.filter((item) => {
+      const matchProduct =
+        !productValue || item.PRODUCT_NAME.toLowerCase().includes(productValue.toLowerCase());
+      const matchCategory =
+        !categoryValue || item.CATEGORY_NAME.toLowerCase().includes(categoryValue.toLowerCase());
+      return matchProduct && matchCategory;
+    });
+
+    setFilteredRecords(filtered);
+    setCurrentPage(1);
+  }, 300);
+
   const handleInputChange = (e, isProduct = true) => {
     const value = e.target.value;
     if (isProduct) {
       setSearchInput(value);
       setShowProductSuggestions(value !== "");
+      handleFilter(value, categorySearchInput);
     } else {
       setCategorySearchInput(value);
       setShowCategorySuggestions(value !== "");
+      handleFilter(searchInput, value);
     }
-
-    const filtered = tableRecords.filter((item) => {
-      const matchProduct = !searchInput || item.PRODUCT_NAME.toLowerCase().includes(isProduct ? value.toLowerCase() : searchInput.toLowerCase());
-      const matchCategory = !categorySearchInput || item.CATEGORY_NAME.toLowerCase().includes(isProduct ? categorySearchInput.toLowerCase() : value.toLowerCase());
-      return matchProduct && matchCategory;
-    });
-
-    setFilteredRecords(filtered);
   };
 
   const handleSelectName = (name, isProduct = true) => {
     if (isProduct) {
       setSearchInput(name);
       setShowProductSuggestions(false);
+      handleFilter(name, categorySearchInput);
     } else {
       setCategorySearchInput(name);
       setShowCategorySuggestions(false);
+      handleFilter(searchInput, name);
     }
-
-    const filtered = tableRecords.filter(
-      (item) =>
-        (!searchInput || item.PRODUCT_NAME.toLowerCase() === (isProduct ? name.toLowerCase() : searchInput.toLowerCase())) &&
-        (!categorySearchInput || item.CATEGORY_NAME.toLowerCase() === (isProduct ? categorySearchInput.toLowerCase() : name.toLowerCase()))
-    );
-
-    setFilteredRecords(filtered);
   };
 
   const fetchRowData = async (row) => {
     setIsRowSelect(true);
     setRowName(row.CATEGORY_NAME);
     setCode(row.CATEGORY_CODE);
+    setRowCurrentPage(1); // Reset row table pagination on new row selection
     await fetchData();
   };
 
@@ -390,16 +387,15 @@ setDisable(false);
     if (!date) {
       setAlert({ message: "Please select the date", type: "error" });
       setTimeout(() => setAlert(null), 3000);
-    } 
-    else if (selectedOptions.length === 0) {
+    } else if (selectedOptions.length === 0) {
       setAlert({ message: "Please select a company", type: "error" });
       setTimeout(() => setAlert(null), 3000);
-    }
-    else {
+    } else {
       setSubmitted(true);
       setIsRowSelect(false);
       setRowName("");
       setCode("");
+      setRowCurrentPage(1); // Reset row table pagination on submit
       fetchData();
     }
   };
@@ -409,6 +405,24 @@ setDisable(false);
   const companyOptions = userData
     ? userData.map((item) => ({ code: item.COMPANY_CODE.trim(), name: item.COMPANY_NAME.trim() }))
     : [];
+
+  const paginatedRecords = filteredRecords.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const totalPages = Math.ceil(filteredRecords.length / pageSize);
+
+  const paginatedRowRecords = rowTableData.slice((rowCurrentPage - 1) * rowPageSize, rowCurrentPage * rowPageSize);
+  const rowTotalPages = Math.ceil(rowTableData.length / rowPageSize);
+
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage);
+    }
+  };
+
+  const handleRowPageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= rowTotalPages) {
+      setRowCurrentPage(newPage);
+    }
+  };
 
   // ---------------------- JSX ----------------------
   return (
@@ -522,44 +536,98 @@ setDisable(false);
             </div>
           )}
 
-           {(submitted || isChecked) && (
-          <div className="flex flex-col w-full space-y-5 mt-10">
-            <div className="overflow-x-auto bg-white p-4 rounded-md shadow-md min-w-[300px]">
-              <div className="flex flex-col sm:flex-row justify-between gap-4 mb-10">
-                <div className="relative w-full sm:w-1/2">
-                  <input type="text" placeholder="Search Product" value={searchInput} onChange={(e) => handleInputChange(e, true)} className="border px-3 py-2 w-full rounded-md" />
-                  {showProductSuggestions && (
-                    <ul className="absolute bg-white border w-full max-h-40 overflow-y-auto z-10">
-                      {productNames.filter((name) => name.toLowerCase().includes(searchInput.toLowerCase())).map((name, idx) => (
-                        <li key={idx} className="px-3 py-2 hover:bg-gray-200 cursor-pointer" onClick={() => handleSelectName(name, true)}>
-                          {name}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+          {(submitted || isChecked) && (
+            <div className="flex flex-col w-full space-y-5 mt-10">
+              <div className="overflow-x-auto bg-white p-4 rounded-md shadow-md min-w-[300px]">
+                <div className="flex flex-col sm:flex-row justify-between gap-4 mb-10">
+                  <div className="relative w-full sm:w-1/2">
+                    <input
+                      type="text"
+                      placeholder="Search Product"
+                      value={searchInput}
+                      onChange={(e) => handleInputChange(e, true)}
+                      className="border px-3 py-2 w-full rounded-md"
+                    />
+                    {showProductSuggestions && (
+                      <ul className="absolute bg-white border w-full max-h-40 overflow-y-auto z-10">
+                        {productNames
+                          .filter((name) => name.toLowerCase().includes(searchInput.toLowerCase()))
+                          .map((name, idx) => (
+                            <li
+                              key={idx}
+                              className="px-3 py-2 hover:bg-gray-200 cursor-pointer"
+                              onClick={() => handleSelectName(name, true)}
+                            >
+                              {name}
+                            </li>
+                          ))}
+                      </ul>
+                    )}
+                  </div>
+                  <div className="relative w-full sm:w-1/2">
+                    <input
+                      type="text"
+                      placeholder="Search Category"
+                      value={categorySearchInput}
+                      onChange={(e) => handleInputChange(e, false)}
+                      className="border px-3 py-2 w-full rounded-md"
+                    />
+                    {showCategorySuggestions && (
+                      <ul className="absolute bg-white border w-full max-h-40 overflow-y-auto z-10">
+                        {categoryNames
+                          .filter((name) => name.toLowerCase().includes(categorySearchInput.toLowerCase()))
+                          .map((name, idx) => (
+                            <li
+                              key={idx}
+                              className="px-3 py-2 hover:bg-gray-200 cursor-pointer"
+                              onClick={() => handleSelectName(name, false)}
+                            >
+                              {name}
+                            </li>
+                          ))}
+                      </ul>
+                    )}
+                  </div>
                 </div>
-                <div className="relative w-full sm:w-1/2">
-                  <input type="text" placeholder="Search Category" value={categorySearchInput} onChange={(e) => handleInputChange(e, false)} className="border px-3 py-2 w-full rounded-md" />
-                  {showCategorySuggestions && (
-                    <ul className="absolute bg-white border w-full max-h-40 overflow-y-auto z-10">
-                      {categoryNames.filter((name) => name.toLowerCase().includes(categorySearchInput.toLowerCase())).map((name, idx) => (
-                        <li key={idx} className="px-3 py-2 hover:bg-gray-200 cursor-pointer" onClick={() => handleSelectName(name, false)}>
-                          {name}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+
+                <div className="flex items-center mt-5 mb-10">
+                  <input
+                    type="checkbox"
+                    checked={isValuationChecked}
+                    onChange={handleValuationCheckboxChange}
+                    className="h-3 w-3 text-blue-600 focus:ring-blue-500"
+                  />
+                  <label className="ml-2 text-md">With Stock Valuation</label>
                 </div>
-              </div>
 
-              <div className="flex items-center mt-5 mb-10">
-                <input type="checkbox" checked={isValuationChecked} onChange={handleValuationCheckboxChange} className="h-3 w-3 text-blue-600 focus:ring-blue-500" />
-                <label className="ml-2 text-md">With Stock Valuation</label>
-              </div>
+                <ErrorBoundary>
+                  <NestedDynamicTable
+                    data={paginatedRecords}
+                    mainHeadings={tableHeadings}
+                    title="Product Stock Data"
+                    onRowSelect={(row) => fetchRowData(row)}
+                  />
+                </ErrorBoundary>
 
-              <NestedDynamicTable data={filteredRecords} mainHeadings={tableHeadings} title="Product Stock Data" onRowSelect={(row) => fetchRowData(row)} />
-            
-             {Array.isArray(rowTableData) && rowTableData.length > 0 && isRowSelect  && (
+                <div className="flex justify-between mt-4">
+                  <button
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="px-4 py-2 bg-gray-200 rounded-md disabled:opacity-50"
+                  >
+                    Previous
+                  </button>
+                  <span>Page {currentPage} of {totalPages}</span>
+                  <button
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="px-4 py-2 bg-gray-200 rounded-md disabled:opacity-50"
+                  >
+                    Next
+                  </button>
+                </div>
+
+                {Array.isArray(rowTableData) && rowTableData.length > 0 && isRowSelect && (
                   <div className="mt-5 overflow-x-auto">
                     <p className="text-center text-[#bc4a17] text-lg sm:text-xl font-bold mt-5">
                       {rowName ? `${rowName}` : ""}
@@ -567,7 +635,7 @@ setDisable(false);
                     <div className="w-max mx-auto">
                       <Table
                         headers={rowTableHeaders}
-                        data={rowTableData}
+                        data={paginatedRowRecords}
                         formatColumns={[3, 4, 6, 7]}
                         formatColumnsQuantity={[5]}
                         editableColumns={[]}
@@ -575,12 +643,28 @@ setDisable(false);
                         bin={true}
                       />
                     </div>
+                    <div className="flex justify-between mt-4">
+                      <button
+                        onClick={() => handleRowPageChange(rowCurrentPage - 1)}
+                        disabled={rowCurrentPage === 1}
+                        className="px-4 py-2 bg-gray-200 rounded-md disabled:opacity-50"
+                      >
+                        Previous
+                      </button>
+                      <span>Page {rowCurrentPage} of {rowTotalPages}</span>
+                      <button
+                        onClick={() => handleRowPageChange(rowCurrentPage + 1)}
+                        disabled={rowCurrentPage === rowTotalPages}
+                        className="px-4 py-2 bg-gray-200 rounded-md disabled:opacity-50"
+                      >
+                        Next
+                      </button>
+                    </div>
                   </div>
                 )}
-            
+              </div>
             </div>
-          </div>
-        )}
+          )}
         </div>
       </div>
     </div>
