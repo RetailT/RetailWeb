@@ -7,7 +7,7 @@ const mssql = require("mssql");
 const crypto = require("crypto");
 const https = require("https");
 const qs = require("qs");
-const nodemailer = require("nodemailer");
+// const nodemailer = require("nodemailer");
 const { sendPasswordResetEmail } = require("../utils/nodemailer");
 const { promisify } = require("util");
 const verifyToken = promisify(jwt.verify);
@@ -16,7 +16,7 @@ const axios = require("axios");
 const posback = process.env.DB_DATABASE3;
 const rtweb = process.env.DB_DATABASE2;
 const posmain = process.env.DB_DATABASE1;
-const port_number = 1443
+// const port_number = 1443
 
 // const dbConfig1 = {
 //   user: process.env.DB_USER, // Database username
@@ -515,10 +515,17 @@ exports.syncDatabases = async (req, res) => {
 
 //login
 exports.login = async (req, res) => {
-  await mssql.close();
+  if (mssql.connected) {
+    await mssql.close();
+    console.log("✅ Database connection closed successfully");
+  }
   let pool;
+  
   try {
     pool = await connectToDatabase();
+    if (!pool.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
 
     const { username, password, ip } = req.body;
     const date = moment().format("YYYY-MM-DD HH:mm:ss");
@@ -716,9 +723,17 @@ exports.login = async (req, res) => {
 
 // register
 exports.register = async (req, res) => {
+  if (mssql.connected) {
+    await mssql.close();
+    console.log("✅ Database connection closed successfully");
+  }
   let pool;
+ 
   try {
     pool = await connectToDatabase();
+    if (!pool.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
 
     const { username, email, password } = req.body;
     if (!username || !email || !password) {
@@ -771,7 +786,12 @@ exports.register = async (req, res) => {
 
 //reset password
 exports.resetPassword = async (req, res) => {
+  if (mssql.connected) {
+    await mssql.close();
+    console.log("✅ Database connection closed successfully");
+  }
   let pool;
+  
 
   const { token, newPassword } = req.body;
 
@@ -783,6 +803,9 @@ exports.resetPassword = async (req, res) => {
 
   try {
     pool = await connectToDatabase();
+    if (!pool.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
 
     // Find user by reset token
     const result = await pool.request().input("token", mssql.VarChar, token)
@@ -829,7 +852,12 @@ exports.resetPassword = async (req, res) => {
 
 //forgot password
 exports.forgotPassword = async (req, res) => {
+ if (mssql.connected) {
+    await mssql.close();
+    console.log("✅ Database connection closed successfully");
+  }
   let pool;
+ 
   const { username } = req.body;
 
   if (!username) {
@@ -838,6 +866,10 @@ exports.forgotPassword = async (req, res) => {
 
   try {
     pool = await connectToDatabase();
+    if (!pool.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
+  
 
     // Check if user exists
     const result = await pool
@@ -937,7 +969,15 @@ exports.updateTempSalesTable = async (req, res) => {
     const { trDate, trTime } = currentDateTime();
 
     const user_ip = String(decoded.ip).trim(); 
+    if (mssql.connected) {
+    await mssql.close();
+    console.log("✅ Database connection closed successfully");
+  }
       const pool = await connectToUserDatabase(user_ip, decoded.port.trim());
+
+      if (!pool || !pool.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
       // if (!pool.connected) {
       //   return res.status(500).json({ message: "Database connection failed" });
       // }
@@ -1039,8 +1079,14 @@ exports.updateTempGrnTable = async (req, res) => {
 
     const username = decoded.username;
     const user_ip = String(decoded.ip).trim(); 
+    if (mssql.connected) {
+    await mssql.close();
+    console.log("✅ Database connection closed successfully");
+  }
       const pool = await connectToUserDatabase(user_ip, decoded.port.trim());
-
+if (!pool || !pool.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
     const {
       company,
       type,
@@ -1208,11 +1254,17 @@ exports.updateTempTogTable = async (req, res) => {
     const { trDate, trTime } = currentDateTime();
 
      const user_ip = String(decoded.ip).trim(); 
+     if (mssql.connected) {
+    await mssql.close();
+    console.log("✅ Database connection closed successfully");
+  }
       const pool = await connectToUserDatabase(user_ip, decoded.port.trim());
       // if (!pool.connected) {
       //   return res.status(500).json({ message: "Database connection failed" });
       // }
-
+if (!pool || !pool.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
     // ✅ Switch database explicitly
     await mssql.query(`USE [${rtweb}];`);
 
@@ -1293,38 +1345,63 @@ exports.stockUpdateDelete = async (req, res) => {
   const username = req.query.username;
   const selectedType = req.query.selectedType;
 
+  // Input validation
   if (isNaN(idx) || !username || !selectedType) {
     return res.status(400).json({
-      message: "Invalid or missing 'idx' or 'username' or 'type' parameter",
+      message: "Invalid or missing 'idx', 'username', or 'type' parameter",
     });
   }
 
-  const transaction = new mssql.Transaction();
-
   try {
+    // Close existing connection if open
+    if (mssql.connected) {
+      await mssql.close();
+      console.log("✅ Previous MSSQL connection closed");
+    }
+
+    // Connect using user-specific IP and port
+    const pool = await connectToUserDatabase(
+      String(req.user.ip).trim(),
+      req.user.port.trim()
+    );
+
+    // Check if pool is connected
+    if (!pool?.connected) {
+      return res.status(500).json({ message: "❌ Database connection failed" });
+    }
+
+    // Start a new transaction
+    const transaction = new mssql.Transaction(pool);
     await transaction.begin();
 
+    // Backup record before delete
     const backupRequest = new mssql.Request(transaction);
     await backupRequest
       .input("DELETED_USER", mssql.NVarChar(50), username)
-      .input("idx", mssql.Int, idx).query(`
+      .input("idx", mssql.Int, idx)
+      .query(`
+        USE ${rtweb};
         INSERT INTO tb_STOCKRECONCILATION_DATAENTRYTEMP_BACKUP (
           COMPANY_CODE, COUNT_STATUS, TYPE, PRODUCT_CODE, PRODUCT_NAMELONG,
-          COSTPRICE, UNITPRICE, CUR_STOCK, PHY_STOCK, TRDATE, TRTIME, REPUSER, DELETED_USER, SERIALNO,COLORCODE, SIZECODE
+          COSTPRICE, UNITPRICE, CUR_STOCK, PHY_STOCK, TRDATE, TRTIME,
+          REPUSER, DELETED_USER, SERIALNO, COLORCODE, SIZECODE
         )
         SELECT 
           COMPANY_CODE, COUNT_STATUS, TYPE, PRODUCT_CODE, PRODUCT_NAMELONG,
-          COSTPRICE, UNITPRICE, CUR_STOCK, PHY_STOCK, TRDATE, TRTIME, REPUSER, @DELETED_USER, SERIALNO,COLORCODE, SIZECODE
+          COSTPRICE, UNITPRICE, CUR_STOCK, PHY_STOCK, TRDATE, TRTIME,
+          REPUSER, @DELETED_USER, SERIALNO, COLORCODE, SIZECODE
         FROM tb_STOCKRECONCILATION_DATAENTRYTEMP
         WHERE IDX = @idx
       `);
 
+    // Delete record after backup
     const deleteRequest = new mssql.Request(transaction);
     const deleteResult = await deleteRequest
       .input("idx", mssql.Int, idx)
-      .query(
-        `DELETE FROM tb_STOCKRECONCILATION_DATAENTRYTEMP WHERE IDX = @idx`
-      );
+      .query(`
+         USE ${rtweb};
+        DELETE FROM tb_STOCKRECONCILATION_DATAENTRYTEMP WHERE IDX = @idx
+      `);
 
     if (deleteResult.rowsAffected[0] === 0) {
       await transaction.rollback();
@@ -1332,15 +1409,23 @@ exports.stockUpdateDelete = async (req, res) => {
     }
 
     await transaction.commit();
-    res.status(200).json({ message: "Data deleted successfully" });
+    console.log(`✅ Stock data with IDX ${idx} deleted by ${username}`);
+    return res.status(200).json({ message: "Data deleted successfully" });
   } catch (error) {
-    if (transaction._aborted === false) {
-      await transaction.rollback();
+    console.error("❌ Error deleting stock data:", error);
+    try {
+      if (mssql.connected) await mssql.rollback();
+    } catch {}
+    return res.status(500).json({
+      message: "Failed to delete stock data",
+      error: error.message,
+    });
+  } finally {
+    // Ensure connection cleanup
+    if (mssql.connected) {
+      await mssql.close();
+      console.log("🔒 MSSQL connection closed in finally block");
     }
-    console.error("Error deleting stock data:", error);
-    res
-      .status(500)
-      .json({ message: "Failed to delete stock data", error: error.message });
   }
 };
 
@@ -1351,30 +1436,19 @@ exports.grnprnDelete = async (req, res) => {
     const username = req.query.username;
     const type = req.query.selectedType;
 
+    // Authorization check
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res
-        .status(403)
-        .json({ message: "No authorization token provided" });
+      return res.status(403).json({ message: "No authorization token provided" });
     }
 
-    if (!idx || isNaN(parseInt(idx, 10))) {
-      return res
-        .status(400)
-        .json({ message: "Invalid or missing 'idx' parameter" });
+    if (!idx || isNaN(idx)) {
+      return res.status(400).json({ message: "Invalid or missing 'idx' parameter" });
     }
 
-    const tableMap = {
-      GRN: "tb_GRN_TEMP",
-      PRN: "tb_PRN_TEMP",
-      TOG: "tb_TOG_TEMP",
-    };
-
-    const backupTableMap = {
-      GRN: "tb_GRN_TEMP_BACKUP",
-      PRN: "tb_PRN_TEMP_BACKUP",
-      TOG: "tb_TOG_TEMP_BACKUP",
-    };
+    // Map types to tables
+    const tableMap = { GRN: "tb_GRN_TEMP", PRN: "tb_PRN_TEMP", TOG: "tb_TOG_TEMP" };
+    const backupTableMap = { GRN: "tb_GRN_TEMP_BACKUP", PRN: "tb_PRN_TEMP_BACKUP", TOG: "tb_TOG_TEMP_BACKUP" };
 
     const tableName = tableMap[type];
     const backupTableName = backupTableMap[type];
@@ -1383,58 +1457,86 @@ exports.grnprnDelete = async (req, res) => {
       return res.status(400).json({ message: "Invalid 'type' parameter" });
     }
 
-    const request = new mssql.Request();
-    request.input("idx", mssql.Int, parseInt(idx, 10));
+    // Close existing connection if open
+    if (mssql.connected) {
+      await mssql.close();
+      console.log("✅ Previous MSSQL connection closed");
+    }
+
+    // Connect to user database
+    const pool = await connectToUserDatabase(String(req.user.ip).trim(), req.user.port.trim());
+    if (!pool?.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
+
+    // Start transaction
+    const transaction = new mssql.Transaction(pool);
+    await transaction.begin();
+
+    const request = new mssql.Request(transaction);
+    request.input("idx", mssql.Int, idx);
     request.input("username", mssql.NVarChar(50), username);
 
-    let deleteBackup;
-
+    // Backup query
+    let backupQuery;
     if (type !== "TOG") {
-      deleteBackup = await request.query(`
-    INSERT INTO dbo.${backupTableName} (
-      COMPANY_CODE, VENDOR_CODE, VENDOR_NAME, INVOICE_NO, TYPE,
-      PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE, CUR_STOCK,
-      PHY_STOCK, REMARKS, REPUSER, DELETED_USER, TRDATE, TRTIME, SERIALNO,COLORCODE, SIZECODE
-    )
-    SELECT 
-      COMPANY_CODE, VENDOR_CODE, VENDOR_NAME, INVOICE_NO, TYPE,
-      PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE, CUR_STOCK,
-      PHY_STOCK, REMARKS, REPUSER, @username, TRDATE, TRTIME, SERIALNO,COLORCODE, SIZECODE
-    FROM dbo.${tableName}
-    WHERE IDX = @idx
-  `);
+      backupQuery = `
+         USE ${rtweb};
+        INSERT INTO dbo.${backupTableName} (
+          COMPANY_CODE, VENDOR_CODE, VENDOR_NAME, INVOICE_NO, TYPE,
+          PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE, CUR_STOCK,
+          PHY_STOCK, REMARKS, REPUSER, DELETED_USER, TRDATE, TRTIME, SERIALNO, COLORCODE, SIZECODE
+        )
+        SELECT 
+          COMPANY_CODE, VENDOR_CODE, VENDOR_NAME, INVOICE_NO, TYPE,
+          PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE, CUR_STOCK,
+          PHY_STOCK, REMARKS, REPUSER, @username, TRDATE, TRTIME, SERIALNO, COLORCODE, SIZECODE
+        FROM dbo.${tableName}
+        WHERE IDX = @idx;
+      `;
     } else {
-      deleteBackup = await request.query(`
-    INSERT INTO dbo.${backupTableName} (
-      COMPANY_CODE, COMPANY_TO_CODE, TYPE, PRODUCT_CODE, PRODUCT_NAMELONG,
-      COSTPRICE, UNITPRICE, CUR_STOCK, PHY_STOCK, REPUSER, DELETED_USER, TRDATE, TRTIME, SERIALNO,COLORCODE, SIZECODE
-    )
-    SELECT 
-      COMPANY_CODE, COMPANY_TO_CODE, TYPE, PRODUCT_CODE, PRODUCT_NAMELONG,
-      COSTPRICE, UNITPRICE, CUR_STOCK, PHY_STOCK, REPUSER, @username, TRDATE, TRTIME, SERIALNO,COLORCODE, SIZECODE
-    FROM dbo.${tableName}
-    WHERE IDX = @idx
-  `);
+      backupQuery = `
+       USE ${rtweb};
+        INSERT INTO dbo.${backupTableName} (
+          COMPANY_CODE, COMPANY_TO_CODE, TYPE, PRODUCT_CODE, PRODUCT_NAMELONG,
+          COSTPRICE, UNITPRICE, CUR_STOCK, PHY_STOCK, REPUSER, DELETED_USER, TRDATE, TRTIME, SERIALNO, COLORCODE, SIZECODE
+        )
+        SELECT 
+          COMPANY_CODE, COMPANY_TO_CODE, TYPE, PRODUCT_CODE, PRODUCT_NAMELONG,
+          COSTPRICE, UNITPRICE, CUR_STOCK, PHY_STOCK, REPUSER, @username, TRDATE, TRTIME, SERIALNO, COLORCODE, SIZECODE
+        FROM dbo.${tableName}
+        WHERE IDX = @idx;
+      `;
     }
 
+    const deleteBackup = await request.query(backupQuery);
     if (deleteBackup.rowsAffected[0] === 0) {
-      return res
-        .status(400)
-        .json({ message: "Couldn't back up records before delete." });
+      await transaction.rollback();
+      return res.status(400).json({ message: "Couldn't back up records before delete." });
     }
 
+    // Delete query
     const deleteResult = await request.query(`
-  DELETE FROM dbo.${tableName} WHERE IDX = @idx
-`);
+      USE ${rtweb};
+      DELETE FROM dbo.${tableName} WHERE IDX = @idx;
+    `);
 
     if (deleteResult.rowsAffected[0] === 0) {
+      await transaction.rollback();
       return res.status(404).json({ message: "Data not found" });
     }
 
+    await transaction.commit();
     return res.status(200).json({ message: "Data deleted successfully" });
   } catch (error) {
-    console.error("Error deleting data:", error);
-    res.status(500).json({ message: "Failed to delete data" });
+    console.error("❌ Error deleting GRN/PRN/TOG data:", error);
+    try { if (mssql.connected) await mssql.rollback(); } catch {}
+    return res.status(500).json({ message: "Failed to delete data", error: error.message });
+  } finally {
+    if (mssql.connected) {
+      await mssql.close();
+      console.log("🔒 MSSQL connection closed in finally block");
+    }
   }
 };
 
@@ -1453,8 +1555,17 @@ exports.finalStockUpdate = async (req, res) => {
   let transaction;
 
   try {
-    const pool = await mssql.connect();
+    if (mssql.connected) {
+    await mssql.close();
+    console.log("✅ Database connection closed successfully");
+  }
 
+    const pool = await connectToUserDatabase(String(req.user.ip).trim(), req.user.port.trim());
+    
+
+    if (!pool || !pool.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
     // Use the correct DB first
     if (rtweb) await pool.request().query(`USE [${rtweb}];`);
 
@@ -1583,139 +1694,68 @@ exports.finalGrnPrnUpdate = async (req, res) => {
     });
   }
 
-  const tempTables = {
-    GRN: "tb_GRN_TEMP",
-    PRN: "tb_PRN_TEMP",
-    TOG: "tb_TOG_TEMP",
-  };
+  const tempTables = { GRN: "tb_GRN_TEMP", PRN: "tb_PRN_TEMP", TOG: "tb_TOG_TEMP" };
+  const finalTables = { GRN: "tb_GRN", PRN: "tb_PRN", TOG: "tb_TOG" };
+  const backupTables = { GRN: "tb_GRN_TEMP_BACKUP", PRN: "tb_PRN_TEMP_BACKUP", TOG: "tb_TOG_TEMP_BACKUP" };
 
-  const finalTables = {
-    GRN: "tb_GRN",
-    PRN: "tb_PRN",
-    TOG: "tb_TOG",
-  };
-
-  const backupTables = {
-    GRN: "tb_GRN_TEMP_BACKUP",
-    PRN: "tb_PRN_TEMP_BACKUP",
-    TOG: "tb_TOG_TEMP_BACKUP",
-  };
-
-  if (!tempTables[type]) {
-    return res.status(400).json({ success: false, message: "Invalid type" });
-  }
+  if (!tempTables[type]) return res.status(400).json({ success: false, message: "Invalid type" });
 
   let transaction;
   try {
-    transaction = new mssql.Transaction();
+    if (mssql.connected) await mssql.close();
+
+    const pool = await connectToUserDatabase(String(req.user.ip).trim(), req.user.port.trim());
+    if (!pool?.connected) return res.status(500).json({ message: "Database connection failed" });
+
+    transaction = new mssql.Transaction(pool);
     await transaction.begin();
 
     const request = new mssql.Request(transaction);
+    request.input("COMPANY_CODE", mssql.NChar(10), company.trim());
+    if (type !== "TOG") request.input("INVOICE_NO", mssql.NChar(50), invoice.trim());
 
-    // Step 2: Retrieve temp data
-
-    let selectResult;
-    if (type === "TOG") {
-      request.input("COMPANY_CODE", mssql.NChar(10), company.trim());
-
-      selectResult = await request.query(`
-      USE [${rtweb}];
+    // Step 1: Retrieve temp data
+    const selectResult = await request.query(`
+       USE ${rtweb};
       SELECT * FROM ${tempTables[type]} 
-      WHERE COMPANY_CODE = @COMPANY_CODE
+      ${type === "TOG" ? "WHERE COMPANY_CODE = @COMPANY_CODE" : "WHERE COMPANY_CODE = @COMPANY_CODE AND INVOICE_NO = @INVOICE_NO"}
     `);
-    } else {
-      request.input("COMPANY_CODE", mssql.NChar(10), company.trim());
-      request.input("INVOICE_NO", mssql.NChar(50), invoice.trim());
-
-      selectResult = await request.query(`
-      USE [${rtweb}];
-      SELECT * FROM ${tempTables[type]} 
-      WHERE COMPANY_CODE = @COMPANY_CODE AND INVOICE_NO = @INVOICE_NO
-    `);
-    }
 
     const records = selectResult.recordset;
-    if (records.length === 0) {
-      await transaction.rollback();
-      return res
-        .status(404)
-        .json({ success: false, message: "No data found in temp table" });
+    if (records.length === 0) { 
+      await transaction.rollback(); 
+      return res.status(404).json({ success: false, message: "No data found in temp table" }); 
     }
 
-    // Step 3: Fetch or insert document row
+    // Step 2: Update document number
     const docRequest = new mssql.Request(transaction);
     docRequest.input("COMPANY_CODE", mssql.NChar(10), company.trim());
+    let docResult = await docRequest.query(`SELECT * FROM ${rtweb}.dbo.tb_DOCUMENT WHERE COMPANY_CODE = @COMPANY_CODE`);
+    let grn = "00", prn = "00", tog = "00";
 
-    let documentResult = await docRequest.query(`
-      SELECT * FROM [RT_WEB].dbo.tb_DOCUMENT WHERE COMPANY_CODE = @COMPANY_CODE
-    `);
-
-    let grn = "00",
-      prn = "00",
-      tog = "00";
-
-    if (documentResult.recordset.length === 0) {
-      const insertDocReq = new mssql.Request(transaction);
-      insertDocReq
-        .input("COMPANY_CODE", mssql.NChar(10), company.trim())
-        .input("GRN", mssql.NVarChar(2), "00")
+    if (docResult.recordset.length === 0) {
+      await docRequest.input("GRN", mssql.NVarChar(2), "00")
         .input("PRN", mssql.NVarChar(2), "00")
         .input("TOG", mssql.NVarChar(2), "00")
-        .input("REPUSER", mssql.NVarChar(50), username.trim());
-
-      const insertDoc = await insertDocReq.query(`
-        INSERT INTO [RT_WEB].dbo.tb_DOCUMENT (COMPANY_CODE, GRN, PRN, TOG, REPUSER)
-        VALUES (@COMPANY_CODE, @GRN, @PRN, @TOG, @REPUSER)
-      `);
-      if (insertDoc.rowsAffected[0] === 0)
-        throw new Error("Document insert failed");
+        .input("REPUSER", mssql.NVarChar(50), username.trim())
+        .query(`INSERT INTO ${rtweb}.dbo.tb_DOCUMENT (COMPANY_CODE, GRN, PRN, TOG, REPUSER) VALUES (@COMPANY_CODE,@GRN,@PRN,@TOG,@REPUSER)`);
     } else {
-      const doc = documentResult.recordset[0];
-      grn = doc.GRN || "00";
-      prn = doc.PRN || "00";
-      tog = doc.TOG || "00";
+      const doc = docResult.recordset[0];
+      grn = doc.GRN || "00"; prn = doc.PRN || "00"; tog = doc.TOG || "00";
     }
 
-    // Step 4: Generate new document number
-    const newGrn = String(Number(grn) + 1).padStart(2, "0");
-    const newPrn = String(Number(prn) + 1).padStart(2, "0");
-    const newTog = String(Number(tog) + 1).padStart(2, "0");
+    const newDocNums = { GRN: String(Number(grn) + 1).padStart(2, "0"), PRN: String(Number(prn) + 1).padStart(2, "0"), TOG: String(Number(tog) + 1).padStart(2, "0") };
+    const documentNo = company.trim() + "0".repeat(10 - company.trim().length - newDocNums[type].length) + newDocNums[type];
 
-    const newDocNums = { GRN: newGrn, PRN: newPrn, TOG: newTog };
-    const companyCode = company.trim();
-    const docPart = newDocNums[type].toString();
-    const totalLength = 10;
-
-    const zeroPaddingLength =
-      totalLength - (companyCode.length + docPart.length);
-    const zeroPadding = "0".repeat(zeroPaddingLength);
-
-    const documentNo = companyCode + zeroPadding + docPart;
-
-    // Step 5: Update document number
     const updateDocReq = new mssql.Request(transaction);
     updateDocReq.input("COMPANY_CODE", mssql.NChar(10), company.trim());
-
-    if (type === "GRN") updateDocReq.input("GRN", mssql.NVarChar(2), newGrn);
-    else if (type === "PRN")
-      updateDocReq.input("PRN", mssql.NVarChar(2), newPrn);
-    else updateDocReq.input("TOG", mssql.NVarChar(2), newTog);
-
-    const updateQuery = `
-      UPDATE [RT_WEB].dbo.tb_DOCUMENT
-      SET ${type} = @${type}
-      WHERE COMPANY_CODE = @COMPANY_CODE
-    `;
-
-    const updateResult = await updateDocReq.query(updateQuery);
-    if (updateResult.rowsAffected[0] === 0) {
-      throw new Error(`Failed to update ${type} number`);
-    }
+    updateDocReq.input(type, mssql.NVarChar(2), newDocNums[type]);
+    await updateDocReq.query(`UPDATE ${rtweb}.dbo.tb_DOCUMENT SET ${type} = @${type} WHERE COMPANY_CODE = @COMPANY_CODE`);
 
     const { trDate, trTime } = currentDateTime();
 
+    // Step 3: Insert into final and backup tables
     for (const record of records) {
-      // Common parameters
       const baseInputs = {
         DOCUMENT_NO: documentNo,
         COMPANY_CODE: record.COMPANY_CODE.trim(),
@@ -1728,8 +1768,7 @@ exports.finalGrnPrnUpdate = async (req, res) => {
         REPUSER: username.trim(),
         REMARKS: remarks,
         APPROVED_USER: username,
-        trDate,
-        trTime,
+        trDate, trTime,
         VENDOR_CODE: record.VENDOR_CODE?.trim(),
         VENDOR_NAME: record.VENDOR_NAME?.trim(),
         INVOICE_NO: record.INVOICE_NO?.trim(),
@@ -1740,141 +1779,88 @@ exports.finalGrnPrnUpdate = async (req, res) => {
         SIZECODE: record.SIZECODE?.trim() || "",
       };
 
-      // Insert main
+      // Insert final table
       const insertReq = new mssql.Request(transaction);
       Object.entries(baseInputs).forEach(([key, value]) => {
         if (value !== undefined) {
-          const type =
-            key === "COSTPRICE" || key === "UNITPRICE"
-              ? mssql.Money
-              : key === "CUR_STOCK" || key === "PHY_STOCK"
-              ? mssql.Float
-              : key === "trDate" || key === "trTime"
-              ? mssql.DateTime
-              : key === "COMPANY_CODE" ||
-                key === "PRODUCT_CODE" ||
-                key === "COMPANY_TO_CODE" ||
-                key === "VENDOR_CODE" ||
-                key === "INVOICE_NO"
-              ? mssql.NChar(30)
-              : mssql.NVarChar(255); // fallback
+          let type;
+          if (key === "COSTPRICE" || key === "UNITPRICE") type = mssql.Money;
+          else if (key === "CUR_STOCK" || key === "PHY_STOCK") type = mssql.Float;
+          else if (key === "trDate" || key === "trTime") type = mssql.DateTime;
+          else if (
+            key === "COMPANY_CODE" ||
+            key === "PRODUCT_CODE" ||
+            key === "COMPANY_TO_CODE" ||
+            key === "VENDOR_CODE" ||
+            key === "INVOICE_NO"
+          ) type = mssql.NChar(30);
+          else type = mssql.NVarChar(255);
+
           insertReq.input(key, type, value);
         }
       });
 
-      let insertQuery = "",
-        backupQuery = "";
-      if (type === "GRN" || type === "PRN") {
-        insertQuery = `
-      INSERT INTO [RT_WEB].dbo.${finalTables[type]} 
-      (DOCUMENT_NO, COMPANY_CODE, VENDOR_CODE, VENDOR_NAME, INVOICE_NO, TYPE,
-       PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE,
-       CUR_STOCK, PHY_STOCK, REPUSER, REMARKS, TRDATE, TRTIME, SERIALNO,COLORCODE, SIZECODE)
-      VALUES
-      (@DOCUMENT_NO, @COMPANY_CODE, @VENDOR_CODE, @VENDOR_NAME, @INVOICE_NO, @TYPE,
-       @PRODUCT_CODE, @PRODUCT_NAMELONG, @COSTPRICE, @UNITPRICE,
-       @CUR_STOCK, @PHY_STOCK, @REPUSER, @REMARKS, @trDate, @trTime, @SERIALNO,@COLORCODE, @SIZECODE)
-    `;
-
-        backupQuery = `
-      INSERT INTO [RT_WEB].dbo.${backupTables[type]} 
-      (COMPANY_CODE, VENDOR_CODE, VENDOR_NAME, INVOICE_NO, TYPE,
-       PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE,
-       CUR_STOCK, PHY_STOCK, REPUSER, REMARKS, APPROVED_USER, TRDATE, TRTIME, SERIALNO,COLORCODE, SIZECODE)
-      VALUES
-      (@COMPANY_CODE, @VENDOR_CODE, @VENDOR_NAME, @INVOICE_NO, @TYPE,
-       @PRODUCT_CODE, @PRODUCT_NAMELONG, @COSTPRICE, @UNITPRICE,
-       @CUR_STOCK, @PHY_STOCK, @REPUSER, @REMARKS, @APPROVED_USER, @trDate, @trTime, @SERIALNO,@COLORCODE, @SIZECODE)
-    `;
-      } else if (type === "TOG") {
-        insertQuery = `
-      INSERT INTO [RT_WEB].dbo.${finalTables[type]} 
-      (DOCUMENT_NO, COMPANY_CODE, COMPANY_TO_CODE, TYPE,
-       PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE,
-       CUR_STOCK, PHY_STOCK, REMARKS, REPUSER, TRDATE, TRTIME, SERIALNO,COLORCODE, SIZECODE)
-      VALUES
-      (@DOCUMENT_NO, @COMPANY_CODE, @COMPANY_TO_CODE, @TYPE,
-       @PRODUCT_CODE, @PRODUCT_NAMELONG, @COSTPRICE, @UNITPRICE,
-       @CUR_STOCK, @PHY_STOCK, @REMARKS, @REPUSER, @trDate, @trTime, @SERIALNO,@COLORCODE, @SIZECODE)
-    `;
-
-        backupQuery = `
-      INSERT INTO [RT_WEB].dbo.${backupTables[type]} 
-      (COMPANY_CODE, COMPANY_TO_CODE, TYPE,
-       PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE,
-       CUR_STOCK, PHY_STOCK, REMARKS, REPUSER, APPROVED_USER, TRDATE, TRTIME, SERIALNO,COLORCODE, SIZECODE)
-      VALUES
-      (@COMPANY_CODE, @COMPANY_TO_CODE, @TYPE,
-       @PRODUCT_CODE, @PRODUCT_NAMELONG, @COSTPRICE, @UNITPRICE,
-       @CUR_STOCK, @PHY_STOCK, @REMARKS, @REPUSER, @APPROVED_USER, @trDate, @trTime, @SERIALNO,@COLORCODE, @SIZECODE)
-    `;
-      }
+      const insertQuery = type === "TOG" ?
+        `INSERT INTO ${rtweb}.dbo.${finalTables[type]} 
+        (DOCUMENT_NO, COMPANY_CODE, COMPANY_TO_CODE, TYPE, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE, CUR_STOCK, PHY_STOCK, REMARKS, REPUSER, TRDATE, TRTIME, SERIALNO,COLORCODE, SIZECODE)
+         VALUES (@DOCUMENT_NO,@COMPANY_CODE,@COMPANY_TO_CODE,@TYPE,@PRODUCT_CODE,@PRODUCT_NAMELONG,@COSTPRICE,@UNITPRICE,@CUR_STOCK,@PHY_STOCK,@REMARKS,@REPUSER,@trDate,@trTime,@SERIALNO,@COLORCODE,@SIZECODE)` 
+        : 
+        `INSERT INTO ${rtweb}.dbo.${finalTables[type]} 
+        (DOCUMENT_NO, COMPANY_CODE, VENDOR_CODE, VENDOR_NAME, INVOICE_NO, TYPE, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE, CUR_STOCK, PHY_STOCK, REPUSER, REMARKS, TRDATE, TRTIME, SERIALNO,COLORCODE, SIZECODE)
+         VALUES (@DOCUMENT_NO,@COMPANY_CODE,@VENDOR_CODE,@VENDOR_NAME,@INVOICE_NO,@TYPE,@PRODUCT_CODE,@PRODUCT_NAMELONG,@COSTPRICE,@UNITPRICE,@CUR_STOCK,@PHY_STOCK,@REPUSER,@REMARKS,@trDate,@trTime,@SERIALNO,@COLORCODE,@SIZECODE)`;
 
       await insertReq.query(insertQuery);
 
-      // Separate request for backup
+      // Insert backup table
       const backupReq = new mssql.Request(transaction);
       Object.entries(baseInputs).forEach(([key, value]) => {
         if (value !== undefined) {
-          const type =
-            key === "COSTPRICE" || key === "UNITPRICE"
-              ? mssql.Money
-              : key === "CUR_STOCK" || key === "PHY_STOCK"
-              ? mssql.Float
-              : key === "trDate" || key === "trTime"
-              ? mssql.DateTime
-              : key === "COMPANY_CODE" ||
-                key === "PRODUCT_CODE" ||
-                key === "COMPANY_TO_CODE" ||
-                key === "VENDOR_CODE" ||
-                key === "INVOICE_NO"
-              ? mssql.NChar(30)
-              : mssql.NVarChar(255); // fallback
+          let type;
+          if (key === "COSTPRICE" || key === "UNITPRICE") type = mssql.Money;
+          else if (key === "CUR_STOCK" || key === "PHY_STOCK") type = mssql.Float;
+          else if (key === "trDate" || key === "trTime") type = mssql.DateTime;
+          else if (
+            key === "COMPANY_CODE" ||
+            key === "PRODUCT_CODE" ||
+            key === "COMPANY_TO_CODE" ||
+            key === "VENDOR_CODE" ||
+            key === "INVOICE_NO"
+          ) type = mssql.NChar(30);
+          else type = mssql.NVarChar(255);
+
           backupReq.input(key, type, value);
         }
       });
 
+      const backupQuery = type === "TOG" ?
+        `INSERT INTO ${rtweb}.dbo.${backupTables[type]} 
+        (COMPANY_CODE, COMPANY_TO_CODE, TYPE, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE, CUR_STOCK, PHY_STOCK, REMARKS, REPUSER, APPROVED_USER, TRDATE, TRTIME, SERIALNO,COLORCODE, SIZECODE)
+         VALUES (@COMPANY_CODE,@COMPANY_TO_CODE,@TYPE,@PRODUCT_CODE,@PRODUCT_NAMELONG,@COSTPRICE,@UNITPRICE,@CUR_STOCK,@PHY_STOCK,@REMARKS,@REPUSER,@APPROVED_USER,@trDate,@trTime,@SERIALNO,@COLORCODE,@SIZECODE)` 
+        : 
+        `INSERT INTO ${rtweb}.dbo.${backupTables[type]} 
+        (COMPANY_CODE, VENDOR_CODE, VENDOR_NAME, INVOICE_NO, TYPE, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE, CUR_STOCK, PHY_STOCK, REPUSER, REMARKS, APPROVED_USER, TRDATE, TRTIME, SERIALNO,COLORCODE, SIZECODE)
+         VALUES (@COMPANY_CODE,@VENDOR_CODE,@VENDOR_NAME,@INVOICE_NO,@TYPE,@PRODUCT_CODE,@PRODUCT_NAMELONG,@COSTPRICE,@UNITPRICE,@CUR_STOCK,@PHY_STOCK,@REPUSER,@REMARKS,@APPROVED_USER,@trDate,@trTime,@SERIALNO,@COLORCODE,@SIZECODE)`;
+
       await backupReq.query(backupQuery);
     }
 
-    // Step 7: Delete temp data
-    if (type === "TOG") {
-      const deleteReq = new mssql.Request(transaction);
-      deleteReq.input("COMPANY_CODE", mssql.NChar(10), company.trim());
-
-      await deleteReq.query(`
-      DELETE FROM [RT_WEB].dbo.${tempTables[type]} 
-      WHERE COMPANY_CODE = @COMPANY_CODE 
+    // Step 4: Delete temp data
+    const deleteReq = new mssql.Request(transaction);
+    deleteReq.input("COMPANY_CODE", mssql.NChar(10), company.trim());
+    if (type !== "TOG") deleteReq.input("INVOICE_NO", mssql.NChar(50), invoice.trim());
+    await deleteReq.query(`
+      USE ${rtweb};
+      DELETE FROM ${tempTables[type]} WHERE COMPANY_CODE = @COMPANY_CODE ${type !== "TOG" ? "AND INVOICE_NO = @INVOICE_NO" : ""}
     `);
-    } else {
-      const deleteReq = new mssql.Request(transaction);
-      deleteReq.input("COMPANY_CODE", mssql.NChar(10), company.trim());
-      deleteReq.input("INVOICE_NO", mssql.NChar(50), invoice.trim());
 
-      await deleteReq.query(`
-      DELETE FROM [RT_WEB].dbo.${tempTables[type]} 
-      WHERE COMPANY_CODE = @COMPANY_CODE AND INVOICE_NO = @INVOICE_NO
-    `);
-    }
-
-    // Step 8: Commit transaction
     await transaction.commit();
-
-    return res.status(200).json({
-      success: true,
-      message: "Data moved successfully",
-      documentNo,
-    });
+    return res.status(200).json({ success: true, message: "Data moved successfully", documentNo });
   } catch (error) {
     console.error("Error in finalGrnPrnUpdate:", error.message);
-    if (transaction && !transaction._aborted) {
-      await transaction.rollback();
-    }
-    return res.status(500).json({
-      success: false,
-      message: "Unexpected error occurred",
-      error: error.message,
-    });
+    if (transaction && !transaction._aborted) await transaction.rollback();
+    return res.status(500).json({ success: false, message: "Unexpected error occurred", error: error.message });
+  } finally {
+    if (mssql.connected) await mssql.close();
   }
 };
 
@@ -1882,8 +1868,15 @@ exports.finalGrnPrnUpdate = async (req, res) => {
 exports.dashboardOptions = async (req, res) => {
   try {
     const user_ip = String(req.user.ip).trim();
+    if (mssql.connected) {
+    await mssql.close();
+    console.log("✅ Database connection closed successfully");
+  }
     const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
 
+    if (!pool.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
     // Switch database context
     await pool.request().query(`USE [${rtweb}];`);
 
@@ -1919,9 +1912,17 @@ exports.dashboardOptions = async (req, res) => {
 exports.vendorOptions = async (req, res) => {
   try {
   
-const user_ip = String(req.user.ip).trim(); 
+const user_ip = String(req.user.ip).trim();
+if (mssql.connected) {
+    await mssql.close();
+    console.log("✅ Database connection closed successfully");
+  } 
       const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
-      await pool.connect();
+      // await pool.connect();
+      
+    if (!pool.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
       // if (!pool.connected) {
       //   return res.status(500).json({ message: "Database connection failed" });
       // }
@@ -1986,8 +1987,15 @@ exports.reportData = async (req, res) => {
 
     // --- Connect to user DB ---
     const user_ip = String(req.user.ip).trim();
+    if (mssql.connected) {
+    await mssql.close();
+    console.log("✅ Database connection closed successfully");
+  }
     const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
 
+    if (!pool.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
     let reportQuery;
 
     // --- Main report ---
@@ -2221,9 +2229,8 @@ exports.reportData = async (req, res) => {
 
 //company dashboard
 exports.loadingDashboard = async (req, res) => {
-  console.log('---------------------------------------------')
-  try {
-    // Auth (unchanged)
+try {
+    // 🔹 1. Authorization
     const authHeader = req.headers.authorization;
     if (!authHeader)
       return res
@@ -2231,173 +2238,183 @@ exports.loadingDashboard = async (req, res) => {
         .json({ message: "No authorization token provided" });
 
     const token = authHeader.split(" ")[1];
-    if (!token) return res.status(403).json({ message: "Token is missing" });
+    if (!token)
+      return res.status(403).json({ message: "Token is missing" });
 
     const decoded = await verifyToken(token, process.env.JWT_SECRET);
     const username = decoded.username;
 
+    // 🔹 2. Get query params
     const { currentDate, fromDate, toDate, options } = req.query;
-
     let selectedOptions = options || req.query["options[]"] || [];
 
     if (typeof selectedOptions === "string") {
-      selectedOptions = [selectedOptions]; // Convert single string to array
+      selectedOptions = [selectedOptions];
     }
     if (!Array.isArray(selectedOptions) || selectedOptions[0] === "") {
-      selectedOptions = []; // Fallback to empty array if invalid
+      selectedOptions = [];
     }
 
-    if (selectedOptions.length === 0) {
+    if (selectedOptions.length === 0)
       return res
         .status(400)
         .json({ message: "Invalid or missing company codes" });
-    }
 
-    const isSafe = selectedOptions.every((code) => /^[a-zA-Z0-9]+$/.test(code));
-    if (!isSafe) {
+    // 🔹 3. Validate company codes
+    const isSafe = selectedOptions.every((code) =>
+      /^[a-zA-Z0-9]+$/.test(code)
+    );
+    if (!isSafe)
       return res
         .status(400)
         .json({ message: "Invalid characters in company codes" });
+
+    // 🔹 4. Handle SQL connection
+    const user_ip = String(req.user.ip).trim();
+
+    if (mssql.connected) {
+      await mssql.close();
+      console.log("✅ Previous database connection closed");
     }
 
-    // if (!mssql.connected) {
-    //   console.log('no connection')
-    //   const user_ip = String(req.user.ip).trim();
-    // await mssql.connect(dbConnection(user_ip, req.user.port));
-    // }
+    const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+    if (!pool || !pool.connected)
+      return res.status(500).json({ message: "Database connection failed" });
 
-    const user_ip = String(req.user.ip).trim(); 
-     await connectToUserDatabase(user_ip, req.user.port.trim());
-     
+    console.log("✅ Connected to user database");
 
+    // 🔹 5. Format dates
     const formattedCurrentDate = formatDate(currentDate);
     const formattedFromDate = formatDate(fromDate);
     const formattedToDate = formatDate(toDate);
     const reportType = "SALESSUM1";
+    const rtweb = "RT_WEB";
 
-    // Clear previous dashboard view data
-    await mssql.query`USE RT_WEB; DELETE FROM tb_SALES_DASHBOARD_VIEW WHERE REPUSER = ${username};`;
-    await mssql.query`USE RT_WEB; DELETE FROM tb_SALESVIEW WHERE REPUSER = ${username};`;
+    // 🔹 6. Clear previous dashboard data
+    await pool
+      .request()
+      .input("username", mssql.NVarChar, username)
+      .query(`
+        USE ${rtweb};
+        DELETE FROM tb_SALES_DASHBOARD_VIEW WHERE REPUSER = @username;
+        DELETE FROM tb_SALESVIEW WHERE REPUSER = @username;
+      `);
+    console.log("✅ Cleared previous dashboard data");
 
-    // Execute stored procedures per company
+    // 🔹 7. Execute stored procedures for each company
     for (const companyCode of selectedOptions) {
-      const request = new mssql.Request();
-
-      // Input parameters
-      request
-        .input("COMPANY_CODE", mssql.NVarChar(10), companyCode)
-        .input("REPUSER", mssql.NVarChar(100), username)
-        .input("REPORT_TYPE", mssql.NVarChar(50), reportType);
-
-      if (fromDate && toDate) {
-        console.log('fromDate and toDate')
+      try {
+        const request = pool.request();
         request
-          .input("DATE1", mssql.Char(10), formattedFromDate)
-          .input("DATE2", mssql.Char(10), formattedToDate);
+          .input("COMPANY_CODE", mssql.NVarChar(10), companyCode)
+          .input("REPUSER", mssql.NVarChar(100), username)
+          .input("REPORT_TYPE", mssql.NVarChar(50), reportType);
 
-        const query = `
-          DECLARE @REPUSER_PARAM NVARCHAR(100) = @REPUSER;
-          EXEC RT_WEB.dbo.Sp_SalesView 
-            @COMPANY_CODE = @COMPANY_CODE,
-            @DATE1 = @DATE1,
-            @DATE2 = @DATE2,
-            @REPUSER = @REPUSER_PARAM,
-            @REPORT_TYPE = @REPORT_TYPE;
-        `;
-        await request.query(query);
-      } else {
-        request.input("DATE", mssql.Char(10), formattedCurrentDate);
+        if (fromDate && toDate) {
+          request
+            .input("DATE1", mssql.Char(10), formattedFromDate)
+            .input("DATE2", mssql.Char(10), formattedToDate);
 
-        const query = `
-          DECLARE @REPUSER_PARAM NVARCHAR(100) = @REPUSER;
-          EXEC RT_WEB.dbo.Sp_SalesCurView 
-            @COMPANY_CODE = @COMPANY_CODE,
-            @DATE = @DATE,
-            @REPUSER = @REPUSER_PARAM,
-            @REPORT_TYPE = @REPORT_TYPE;
-        `;
-        await request.query(query);
+          await request.query(`
+            EXEC ${rtweb}.dbo.Sp_SalesView 
+              @COMPANY_CODE = @COMPANY_CODE,
+              @DATE1 = @DATE1,
+              @DATE2 = @DATE2,
+              @REPUSER = @REPUSER,
+              @REPORT_TYPE = @REPORT_TYPE;
+          `);
+        } else {
+          request.input("DATE", mssql.Char(10), formattedCurrentDate);
+
+          await request.query(`
+            EXEC ${rtweb}.dbo.Sp_SalesCurView 
+              @COMPANY_CODE = @COMPANY_CODE,
+              @DATE = @DATE,
+              @REPUSER = @REPUSER,
+              @REPORT_TYPE = @REPORT_TYPE;
+          `);
+        }
+
+        console.log(`✅ Stored procedure executed for company: ${companyCode}`);
+      } catch (innerErr) {
+        console.error(
+          `⚠️ Error executing procedure for company ${companyCode}:`,
+          innerErr.message
+        );
+        // Continue next company instead of failing entire request
       }
-      console.log(`Stored procedure executed for company: ${companyCode}`);
     }
 
-    console.log("All stored procedures executed");
-    // Rest of the code (result queries, formatting, and response) remains unchanged
-    const companyCodesList = selectedOptions
-      .map((code) => `'${code}'`)
-      .join(", ");
+    console.log("✅ All stored procedures executed");
 
-      console.log("Company Codes List:", companyCodesList);
+    // 🔹 8. Query dashboard data
+    const companyCodesList = selectedOptions.map((c) => `'${c}'`).join(", ");
 
-    const loadingDashboardResult = await new mssql.Request().input(
-      "username",
-      mssql.VarChar,
-      username
-    ).query(`
-      USE [${rtweb}];
-      SELECT 
-        SUM(NETSALES) AS NETSALES,
-        SUM(CASHSALES) AS CASHSALES,
-        SUM(CARDSALES) AS CARDSALES,
-        SUM(CREDITSALES) AS CREDITSALES,
-        SUM(OTHER_PAYMENT) AS OTHER_PAYMENT,
-        SUM(GVOUCHER_SALE) AS GIFT_VOUCHER,
-        SUM(PAIDOUT) AS PAIDOUT,
-        SUM(CASHINHAND) AS CASHINHAND
-      FROM tb_SALES_DASHBOARD_VIEW
-      WHERE COMPANY_CODE IN (${companyCodesList}) AND REPUSER = @username;
-    `);
+    const loadingDashboardResult = await pool
+      .request()
+      .input("username", mssql.VarChar, username)
+      .query(`
+        USE [${rtweb}];
+        SELECT 
+          SUM(NETSALES) AS NETSALES,
+          SUM(CASHSALES) AS CASHSALES,
+          SUM(CARDSALES) AS CARDSALES,
+          SUM(CREDITSALES) AS CREDITSALES,
+          SUM(OTHER_PAYMENT) AS OTHER_PAYMENT,
+          SUM(GVOUCHER_SALE) AS GIFT_VOUCHER,
+          SUM(PAIDOUT) AS PAIDOUT,
+          SUM(CASHINHAND) AS CASHINHAND
+        FROM tb_SALES_DASHBOARD_VIEW
+        WHERE COMPANY_CODE IN (${companyCodesList}) AND REPUSER = @username;
+      `);
 
-    console.log("Loading dashboard result query executed");
+    const record = await pool
+      .request()
+      .input("username", mssql.VarChar, username)
+      .query(`
+        USE [${rtweb}];
+        SELECT 
+          COMPANY_CODE,      
+          SUM(NETSALES) AS NETSALES, 
+          SUM(CASHSALES) AS CASHSALES, 
+          SUM(CARDSALES) AS CARDSALES, 
+          SUM(CREDITSALES) AS CREDITSALES, 
+          SUM(OTHER_PAYMENT) AS OTHER_PAYMENT,
+          SUM(GVOUCHER_SALE) AS GIFT_VOUCHER,
+          SUM(PAIDOUT) AS PAIDOUT,
+          SUM(CASHINHAND) AS CASHINHAND
+        FROM tb_SALES_DASHBOARD_VIEW
+        WHERE COMPANY_CODE IN (${companyCodesList}) AND REPUSER = @username
+        GROUP BY COMPANY_CODE;
+      `);
 
-    const record = await new mssql.Request().input(
-      "username",
-      mssql.VarChar,
-      username
-    ).query(`
-      USE [${rtweb}];
-      SELECT 
-        COMPANY_CODE,      
-        SUM(NETSALES) AS NETSALES, 
-        SUM(CASHSALES) AS CASHSALES, 
-        SUM(CARDSALES) AS CARDSALES, 
-        SUM(CREDITSALES) AS CREDITSALES, 
-        SUM(OTHER_PAYMENT) AS OTHER_PAYMENT,
-        SUM(GVOUCHER_SALE) AS GIFT_VOUCHER,
-        SUM(PAIDOUT) AS PAIDOUT,
-        SUM(CASHINHAND) AS CASHINHAND
-      FROM tb_SALES_DASHBOARD_VIEW
-      WHERE COMPANY_CODE IN (${companyCodesList}) AND REPUSER = @username
-      GROUP BY COMPANY_CODE;
-    `);
+    const cashierPointRecord = await pool
+      .request()
+      .input("username", mssql.VarChar, username)
+      .query(`
+        USE [${rtweb}];
+        SELECT 
+          COMPANY_CODE, 
+          UNITNO, 
+          SUM(NETSALES) AS NETSALES, 
+          SUM(CASHSALES) AS CASHSALES, 
+          SUM(CARDSALES) AS CARDSALES, 
+          SUM(CREDITSALES) AS CREDITSALES, 
+          SUM(OTHER_PAYMENT) AS OTHER_PAYMENT,
+          SUM(GVOUCHER_SALE) AS GIFT_VOUCHER,
+          SUM(PAIDOUT) AS PAIDOUT,
+          SUM(CASHINHAND) AS CASHINHAND
+        FROM tb_SALES_DASHBOARD_VIEW
+        WHERE COMPANY_CODE IN (${companyCodesList}) AND REPUSER = @username
+        GROUP BY COMPANY_CODE, UNITNO;
+      `);
 
-    console.log("Record query executed");
+    console.log("✅ Dashboard queries executed");
 
-    const cashierPointRecord = await new mssql.Request().input(
-      "username",
-      mssql.VarChar,
-      username
-    ).query(`
-      USE [${rtweb}];
-      SELECT 
-        COMPANY_CODE, 
-        UNITNO, 
-        SUM(NETSALES) AS NETSALES, 
-        SUM(CASHSALES) AS CASHSALES, 
-        SUM(CARDSALES) AS CARDSALES, 
-        SUM(CREDITSALES) AS CREDITSALES, 
-        SUM(OTHER_PAYMENT) AS OTHER_PAYMENT,
-        SUM(GVOUCHER_SALE) AS GIFT_VOUCHER,
-        SUM(PAIDOUT) AS PAIDOUT,
-        SUM(CASHINHAND) AS CASHINHAND
-      FROM tb_SALES_DASHBOARD_VIEW
-      WHERE COMPANY_CODE IN (${companyCodesList}) AND REPUSER = @username
-      GROUP BY COMPANY_CODE, UNITNO;
-    `);
-
-    console.log("Dashboard data queries executed");
+    // 🔹 9. Format result
     const formattedResult =
-      loadingDashboardResult && Array.isArray(loadingDashboardResult.recordset)
+      Array.isArray(loadingDashboardResult.recordset) &&
+      loadingDashboardResult.recordset.length > 0
         ? loadingDashboardResult.recordset.map((row) => ({
             NETSALES: parseFloat(row.NETSALES || 0).toFixed(2),
             CASHSALES: parseFloat(row.CASHSALES || 0).toFixed(2),
@@ -2410,318 +2427,358 @@ exports.loadingDashboard = async (req, res) => {
           }))
         : [];
 
-        console.log("Formatted Result:");
-    res.status(200).json({
+    // 🔹 10. Send response (return ensures single send)
+    return res.status(200).json({
       message: "Processed parameters for company codes",
       success: true,
-      result: formattedResult ?? [],
+      result: formattedResult,
       record: record?.recordset ?? [],
       cashierPointRecord: cashierPointRecord?.recordset ?? [],
     });
   } catch (error) {
-    console.error("Error loading dashboard:", error);
-    res.status(500).json({ message: "Failed to load company dashboard data" });
+    console.error("❌ Error loading dashboard:", error);
+    return res.status(500).json({
+      message: "Failed to load company dashboard data",
+      error: error.message,
+    });
   }
+
 };
 
 //department dashboard
 exports.departmentDashboard = async (req, res) => {
   try {
+    // 🔹 1. Token validation
     const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      return res
-        .status(403)
-        .json({ message: "No authorization token provided" });
-    }
+    if (!authHeader)
+      return res.status(403).json({ message: "No authorization token provided" });
 
     const token = authHeader.split(" ")[1];
-    if (!token) {
-      return res.status(403).json({ message: "Token is missing" });
+    if (!token) return res.status(403).json({ message: "Token is missing" });
+
+    // ✅ Use promise-based verify to avoid nested callbacks
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const username = decoded.username;
+
+    // 🔹 2. Parse query parameters
+    let { currentDate, fromDate, toDate, selectedOptions } = req.query;
+
+    if (typeof selectedOptions === "string") {
+      selectedOptions = selectedOptions.split(",").map((code) => code.trim());
     }
 
-    jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
-      if (err) {
-        return res.status(403).json({ message: "Invalid or expired token" });
-      }
+    if (
+      !Array.isArray(selectedOptions) ||
+      selectedOptions.length === 0 ||
+      selectedOptions[0] === ""
+    ) {
+      return res.status(400).json({ message: "No company codes provided" });
+    }
 
-      const username = decoded.username;
-      let { currentDate, fromDate, toDate, selectedOptions } = req.query;
+    // 🔹 3. Establish connection
+    if (mssql.connected) {
+      await mssql.close();
+      console.log("✅ Closed previous connection");
+    }
 
-      if (typeof selectedOptions === "string") {
-        selectedOptions = selectedOptions.split(",").map((code) => code.trim());
-      }
+    const user_ip = String(req.user.ip).trim();
+    const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+    if (!pool || !pool.connected)
+      return res.status(500).json({ message: "Database connection failed" });
 
-      if (
-        !Array.isArray(selectedOptions) ||
-        selectedOptions.length === 0 ||
-        selectedOptions[0] === ""
-      ) {
-        return res.status(400).json({ message: "No company codes provided" });
-      }
+    console.log("✅ Connected to user database");
 
-    //   if (!mssql.connected) {
-    //   console.log('no connection')
-    //   const user_ip = String(req.user.ip).trim();
-    // await mssql.connect(dbConnection(user_ip, req.user.port));
-    // }
+    const rtweb = "RT_WEB";
+    const formattedCurrentDate = formatDate(currentDate);
+    const formattedFromDate = formatDate(fromDate);
+    const formattedToDate = formatDate(toDate);
+    const reportType = "SALESDET";
 
-    const user_ip = String(req.user.ip).trim(); 
-      await connectToUserDatabase(user_ip, req.user.port.trim());
-      
-
-      const formattedCurrentDate = formatDate(currentDate);
-      const formattedFromDate = formatDate(fromDate);
-      const formattedToDate = formatDate(toDate);
-      const reportType = "SALESDET";
-
-      // Helper function: retry mechanism
-      const executeWithRetry = async (queryFunc, retries = 3) => {
-        for (let i = 0; i < retries; i++) {
-          try {
-            return await queryFunc();
-          } catch (err) {
-            if (err.originalError?.number === 1205 && i < retries - 1) {
-              console.warn(`Deadlock occurred. Retrying attempt ${i + 1}...`);
-              await new Promise((resolve) => setTimeout(resolve, 1000));
-            } else {
-              throw err;
-            }
+    // 🔹 4. Helper: retry on deadlock
+    const executeWithRetry = async (queryFn, retries = 3) => {
+      for (let i = 0; i < retries; i++) {
+        try {
+          return await queryFn();
+        } catch (err) {
+          if (err.originalError?.number === 1205 && i < retries - 1) {
+            console.warn(`⚠️ Deadlock. Retrying attempt ${i + 1}...`);
+            await new Promise((r) => setTimeout(r, 1000));
+          } else {
+            throw err;
           }
         }
-      };
+      }
+    };
 
-      // Step 1: Clear previous user records
+    // 🔹 5. Clear previous records
+    try {
+      await pool
+        .request()
+        .input("username", mssql.VarChar, username)
+        .query(`USE ${rtweb}; DELETE FROM tb_SALESVIEW WHERE REPUSER = @username;`);
+      console.log("✅ Cleared previous records");
+    } catch (deleteErr) {
+      console.error("⚠️ Error deleting previous records:", deleteErr);
+    }
+
+    // 🔹 6. Run stored procedures for each company
+    for (const companyCode of selectedOptions) {
       try {
-        const request = new mssql.Request();
-        request.input("username", mssql.VarChar, username);
+        const queryFn =
+          fromDate && toDate
+            ? async () => {
+                await pool
+                  .request()
+                  .input("COMPANY_CODE", mssql.VarChar, companyCode)
+                  .input("DATE1", mssql.Char(10), formattedFromDate)
+                  .input("DATE2", mssql.Char(10), formattedToDate)
+                  .input("REPUSER", mssql.VarChar, username)
+                  .input("REPORT_TYPE", mssql.VarChar, reportType)
+                  .query(`EXEC ${rtweb}.dbo.Sp_SalesView 
+                          @COMPANY_CODE, @DATE1, @DATE2, @REPUSER, @REPORT_TYPE;`);
+              }
+            : async () => {
+                await pool
+                  .request()
+                  .input("COMPANY_CODE", mssql.VarChar, companyCode)
+                  .input("DATE", mssql.Char(10), formattedCurrentDate)
+                  .input("REPUSER", mssql.VarChar, username)
+                  .input("REPORT_TYPE", mssql.VarChar, reportType)
+                  .query(`EXEC ${rtweb}.dbo.Sp_SalesCurView 
+                          @COMPANY_CODE, @DATE, @REPUSER, @REPORT_TYPE;`);
+              };
 
-        await request.query(`
-  DELETE FROM tb_SALESVIEW WHERE REPUSER = @username;
-`);
-      } catch (deleteErr) {
-        console.error("Error deleting previous records:", deleteErr);
+        await executeWithRetry(queryFn);
+        console.log(`✅ Stored procedure executed for company: ${companyCode}`);
+      } catch (spErr) {
+        console.error(`⚠️ Error executing SP for ${companyCode}:`, spErr.message);
       }
+    }
 
-      // Step 2: Run stored procedures for each company
-      for (const companyCode of selectedOptions) {
-        try {
-          const queryFn =
-            fromDate && toDate
-              ? () => mssql.query`
-                EXEC Sp_SalesView @COMPANY_CODE = ${companyCode}, 
-                                  @DATE1 = ${formattedFromDate}, 
-                                  @DATE2 = ${formattedToDate}, 
-                                  @REPUSER = ${username}, 
-                                  @REPORT_TYPE = ${reportType}`
-              : () => mssql.query`
-                EXEC Sp_SalesCurView @COMPANY_CODE = ${companyCode}, 
-                                     @DATE = ${formattedCurrentDate}, 
-                                     @REPUSER = ${username}, 
-                                     @REPORT_TYPE = ${reportType}`;
+    // 🔹 7. Fetch department data
+    const companyCodesList = selectedOptions.map((c) => `'${c}'`).join(",");
 
-          await executeWithRetry(queryFn);
-        } catch (spErr) {
-          console.error(
-            `Error executing stored procedure for ${companyCode}:`,
-            spErr
-          );
-        }
-      }
+    const [tableRecords, amountBarChart, quantityBarChart] = await Promise.all([
+      pool
+        .request()
+        .input("username", mssql.VarChar, username)
+        .query(`
+          USE [${rtweb}];
+          SELECT   
+            LTRIM(RTRIM(COMPANY_CODE)) AS COMPANY_CODE,
+            LTRIM(RTRIM(DEPTCODE)) AS DEPARTMENT_CODE,
+            DEPTNAME AS DEPARTMENT_NAME,
+            SUM(QTY) AS QUANTITY,
+            SUM(AMOUNT) AS AMOUNT
+          FROM tb_SALESVIEW
+          WHERE REPUSER = @username AND COMPANY_CODE IN (${companyCodesList})
+          GROUP BY COMPANY_CODE, DEPTCODE, DEPTNAME;
+        `),
 
-      // Step 3: Fetch department data
-      const inClause = selectedOptions.map((code) => `'${code}'`).join(","); // safe, string literals
+      pool
+        .request()
+        .input("username", mssql.VarChar, username)
+        .query(`
+          USE [${rtweb}];
+          SELECT DEPTNAME, SUM(AMOUNT) AS AMOUNT
+          FROM tb_SALESVIEW
+          WHERE REPUSER = @username AND COMPANY_CODE IN (${companyCodesList})
+          GROUP BY DEPTNAME;
+        `),
 
-      try {
-        const [tableRecords, amountBarChart, quantityBarChart] =
-          await Promise.all([
-            mssql.query(`
-            USE [${rtweb}];
-            SELECT   
-              LTRIM(RTRIM(COMPANY_CODE)) AS COMPANY_CODE,
-              LTRIM(RTRIM(DEPTCODE)) AS DEPARTMENT_CODE,
-              DEPTNAME AS DEPARTMENT_NAME,
-              SUM(QTY) AS QUANTITY,
-              SUM(AMOUNT) AS AMOUNT
-            FROM tb_SALESVIEW
-            WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause})
-            GROUP BY COMPANY_CODE, DEPTCODE, DEPTNAME`),
+      pool
+        .request()
+        .input("username", mssql.VarChar, username)
+        .query(`
+          USE [${rtweb}];
+          SELECT DEPTNAME, SUM(QTY) AS QUANTITY
+          FROM tb_SALESVIEW
+          WHERE REPUSER = @username AND COMPANY_CODE IN (${companyCodesList})
+          GROUP BY DEPTNAME;
+        `),
+    ]);
 
-            mssql.query(`
-            USE [${rtweb}];
-            SELECT DEPTNAME, SUM(AMOUNT) AS AMOUNT
-            FROM tb_SALESVIEW
-            WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause})
-            GROUP BY DEPTNAME`),
+    console.log("✅ Department data fetched successfully");
 
-            mssql.query(`
-            USE [${rtweb}];
-            SELECT DEPTNAME, SUM(QTY) AS QUANTITY
-            FROM tb_SALESVIEW
-            WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause})
-            GROUP BY DEPTNAME`),
-          ]);
-
-        return res.status(200).json({
-          message: "Processed parameters for company codes",
-          success: true,
-          tableRecords: tableRecords.recordset || [],
-          amountBarChart: amountBarChart.recordset || [],
-          quantityBarChart: quantityBarChart.recordset || [],
-        });
-      } catch (fetchErr) {
-        console.error("Error fetching department data:", fetchErr);
-        return res
-          .status(500)
-          .json({ message: "Failed to fetch department data" });
-      }
+    // 🔹 8. Return response
+    return res.status(200).json({
+      message: "Processed parameters for company codes",
+      success: true,
+      tableRecords: tableRecords.recordset || [],
+      amountBarChart: amountBarChart.recordset || [],
+      quantityBarChart: quantityBarChart.recordset || [],
     });
   } catch (error) {
-    console.error("Unhandled error in departmentDashboard:", error);
+    console.error("❌ Unhandled error in departmentDashboard:", error);
     return res
       .status(500)
-      .json({ message: "Failed to load department dashboard" });
+      .json({ message: "Failed to load department dashboard", error: error.message });
   }
 };
 
 //category dashboard
 exports.categoryDashboard = async (req, res) => {
   try {
+    // 🔹 1. Auth validation
     const authHeader = req.headers.authorization;
     if (!authHeader)
-      return res
-        .status(403)
-        .json({ message: "No authorization token provided" });
+      return res.status(403).json({ message: "No authorization token provided" });
 
     const token = authHeader.split(" ")[1];
-    if (!token) return res.status(403).json({ message: "Token is missing" });
+    if (!token)
+      return res.status(403).json({ message: "Token is missing" });
 
-    jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
-      if (err)
-        return res.status(403).json({ message: "Invalid or expired token" });
+    // ✅ Use async verify instead of callback
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const username = decoded.username;
 
-      const username = decoded.username;
-      let { currentDate, fromDate, toDate, selectedOptions } = req.query;
+    // 🔹 2. Parse query params
+    let { currentDate, fromDate, toDate, selectedOptions } = req.query;
 
-      // Ensure selectedOptions is always an array
-      if (typeof selectedOptions === "string") {
-        selectedOptions = selectedOptions.split(",").map((code) => code.trim());
-      }
+    if (typeof selectedOptions === "string") {
+      selectedOptions = selectedOptions.split(",").map((code) => code.trim());
+    }
 
-      if (
-        !Array.isArray(selectedOptions) ||
-        selectedOptions.length === 0 ||
-        selectedOptions[0] === ""
-      ) {
-        return res.status(400).json({ message: "No company codes provided" });
-      }
+    if (
+      !Array.isArray(selectedOptions) ||
+      selectedOptions.length === 0 ||
+      selectedOptions[0] === ""
+    ) {
+      return res.status(400).json({ message: "No company codes provided" });
+    }
 
-    //   if (!mssql.connected) {
-    //   console.log('no connection')
-    //   const user_ip = String(req.user.ip).trim();
-    // await mssql.connect(dbConnection(user_ip, req.user.port));
-    // }
+    // 🔹 3. Reconnect to the user DB safely
+    if (mssql.connected) {
+      await mssql.close();
+      console.log("✅ Closed previous MSSQL connection");
+    }
 
-    const user_ip = String(req.user.ip).trim(); 
-    await connectToUserDatabase(user_ip, req.user.port.trim());
-      
+    const user_ip = String(req.user.ip).trim();
+    const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+    if (!pool || !pool.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
+    console.log("✅ Connected to user database");
 
-      const formattedCurrentDate = formatDate(currentDate);
-      const formattedFromDate = formatDate(fromDate);
-      const formattedToDate = formatDate(toDate);
-      const reportType = "SALESDET";
+    const rtweb = "RT_WEB"; // ✅ explicitly define
+    const formattedCurrentDate = formatDate(currentDate);
+    const formattedFromDate = formatDate(fromDate);
+    const formattedToDate = formatDate(toDate);
+    const reportType = "SALESDET";
 
-      // Clear previous report data
+    // 🔹 4. Clear previous report data for this user
+    try {
+      await pool
+        .request()
+        .input("username", mssql.VarChar, username)
+        .query(`USE [${rtweb}]; DELETE FROM tb_SALESVIEW WHERE REPUSER = @username;`);
+      console.log("✅ Cleared previous report data");
+    } catch (err) {
+      console.error("⚠️ Error clearing tb_SALESVIEW:", err);
+    }
+
+    // 🔹 5. Run stored procedures for each company code
+    for (const companyCode of selectedOptions) {
       try {
-        const query = `
-  USE [${rtweb}];
-  DELETE FROM tb_SALESVIEW WHERE REPUSER = @username;
-`;
+        const request = pool.request()
+          .input("COMPANY_CODE", mssql.VarChar, companyCode)
+          .input("REPUSER", mssql.VarChar, username)
+          .input("REPORT_TYPE", mssql.VarChar, reportType);
 
-        const request = new mssql.Request();
-        request.input("username", mssql.VarChar, username);
-
-        await request.query(query);
-      } catch (err) {
-        console.error("Error clearing tb_SALESVIEW:", err);
-      }
-
-      // Run stored procedures for each company code
-      for (const companyCode of selectedOptions) {
-        try {
-          if (fromDate && toDate) {
-            await mssql.query`
-              EXEC Sp_SalesView 
-                @COMPANY_CODE = ${companyCode}, 
-                @DATE1 = ${formattedFromDate}, 
-                @DATE2 = ${formattedToDate}, 
-                @REPUSER = ${username}, 
-                @REPORT_TYPE = ${reportType}`;
-          } else {
-            await mssql.query`
-              EXEC Sp_SalesCurView 
-                @COMPANY_CODE = ${companyCode}, 
-                @DATE = ${formattedCurrentDate}, 
-                @REPUSER = ${username}, 
-                @REPORT_TYPE = ${reportType}`;
-          }
-        } catch (err) {
-          console.error(`Error running SP for company ${companyCode}:`, err);
+        if (fromDate && toDate) {
+          request
+            .input("DATE1", mssql.Char(10), formattedFromDate)
+            .input("DATE2", mssql.Char(10), formattedToDate);
+          await request.query(`
+            EXEC ${rtweb}.dbo.Sp_SalesView 
+              @COMPANY_CODE, @DATE1, @DATE2, @REPUSER, @REPORT_TYPE;
+          `);
+        } else {
+          request.input("DATE", mssql.Char(10), formattedCurrentDate);
+          await request.query(`
+            EXEC ${rtweb}.dbo.Sp_SalesCurView 
+              @COMPANY_CODE, @DATE, @REPUSER, @REPORT_TYPE;
+          `);
         }
+        console.log(`✅ Stored procedure executed for company: ${companyCode}`);
+      } catch (err) {
+        console.error(`⚠️ Error executing SP for ${companyCode}:`, err.message);
       }
+    }
 
-      // Safely construct SQL IN clause
-      const inClause = selectedOptions.map((code) => `'${code}'`).join(", ");
+    // 🔹 6. Prepare IN clause (safe — we validated earlier)
+    const companyCodesList = selectedOptions.map((c) => `'${c}'`).join(",");
 
-      // Run summary queries
-      const [
-        categoryTableRecords,
-        categoryAmountBarChart,
-        categoryQuantityBarChart,
-      ] = await Promise.all([
-        mssql.query(`
-          USE [${rtweb}];
-          SELECT
-            LTRIM(RTRIM(COMPANY_CODE)) AS COMPANY_CODE,
-            LTRIM(RTRIM(CATCODE)) AS CATEGORY_CODE,
-            CATNAME AS CATEGORY_NAME,
-            SUM(QTY) AS QUANTITY,
-            SUM(AMOUNT) AS AMOUNT
-          FROM tb_SALESVIEW
-          WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause})
-          GROUP BY COMPANY_CODE, CATCODE, CATNAME`),
+    // 🔹 7. Run summary queries
+    const [categoryTableRecords, categoryAmountBarChart, categoryQuantityBarChart] =
+      await Promise.all([
+        pool.request()
+          .input("username", mssql.VarChar, username)
+          .query(`
+            USE [${rtweb}];
+            SELECT
+              LTRIM(RTRIM(COMPANY_CODE)) AS COMPANY_CODE,
+              LTRIM(RTRIM(CATCODE)) AS CATEGORY_CODE,
+              CATNAME AS CATEGORY_NAME,
+              SUM(QTY) AS QUANTITY,
+              SUM(AMOUNT) AS AMOUNT
+            FROM tb_SALESVIEW
+            WHERE REPUSER = @username AND COMPANY_CODE IN (${companyCodesList})
+            GROUP BY COMPANY_CODE, CATCODE, CATNAME;
+          `),
 
-        mssql.query(`
-          USE [${rtweb}];
-          SELECT CATNAME, SUM(AMOUNT) AS AMOUNT
-          FROM tb_SALESVIEW
-          WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause})
-          GROUP BY CATNAME`),
+        pool.request()
+          .input("username", mssql.VarChar, username)
+          .query(`
+            USE [${rtweb}];
+            SELECT CATNAME, SUM(AMOUNT) AS AMOUNT
+            FROM tb_SALESVIEW
+            WHERE REPUSER = @username AND COMPANY_CODE IN (${companyCodesList})
+            GROUP BY CATNAME;
+          `),
 
-        mssql.query(`
-          USE [${rtweb}];
-          SELECT CATNAME, SUM(QTY) AS QUANTITY
-          FROM tb_SALESVIEW
-          WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause})
-          GROUP BY CATNAME`),
+        pool.request()
+          .input("username", mssql.VarChar, username)
+          .query(`
+            USE [${rtweb}];
+            SELECT CATNAME, SUM(QTY) AS QUANTITY
+            FROM tb_SALESVIEW
+            WHERE REPUSER = @username AND COMPANY_CODE IN (${companyCodesList})
+            GROUP BY CATNAME;
+          `),
       ]);
 
-      return res.status(200).json({
-        message: "Processed parameters for company codes",
-        success: true,
-        categoryTableRecords: categoryTableRecords.recordset || [],
-        categoryAmountBarChart: categoryAmountBarChart.recordset || [],
-        categoryQuantityBarChart: categoryQuantityBarChart.recordset || [],
-      });
+    console.log("✅ Category data fetched successfully");
+
+    // 🔹 8. Send response
+    return res.status(200).json({
+      message: "Processed parameters for company codes",
+      success: true,
+      categoryTableRecords: categoryTableRecords.recordset || [],
+      categoryAmountBarChart: categoryAmountBarChart.recordset || [],
+      categoryQuantityBarChart: categoryQuantityBarChart.recordset || [],
     });
   } catch (error) {
-    console.error("Unhandled error in categoryDashboard:", error);
-    res.status(500).json({ message: "Failed to load category dashboard" });
+    console.error("❌ Unhandled error in categoryDashboard:", error);
+    return res
+      .status(500)
+      .json({
+        message: "Failed to load category dashboard",
+        error: error.message,
+      });
   }
 };
 
 //sub category dashboard
 exports.subCategoryDashboard = async (req, res) => {
+ if (mssql.connected) {
+      await mssql.close();
+      console.log("✅ Closed previous MSSQL connection");
+    }
+  let pool;
+
   try {
+    // === 1. Verify Authorization ===
     const authHeader = req.headers.authorization;
     if (!authHeader)
       return res
@@ -2731,270 +2788,243 @@ exports.subCategoryDashboard = async (req, res) => {
     const token = authHeader.split(" ")[1];
     if (!token) return res.status(403).json({ message: "Token is missing" });
 
-    jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
-      if (err)
-        return res.status(403).json({ message: "Invalid or expired token" });
+    // === 2. Decode JWT ===
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const username = decoded.username;
 
-      const username = decoded.username;
-      let { currentDate, fromDate, toDate, selectedOptions } = req.query;
+    // === 3. Extract Query Params ===
+    let { currentDate, fromDate, toDate, selectedOptions } = req.query;
 
-      // Ensure selectedOptions is parsed to an array
-      if (typeof selectedOptions === "string") {
-        selectedOptions = selectedOptions.split(",").map((code) => code.trim());
-      }
+    if (typeof selectedOptions === "string") {
+      selectedOptions = selectedOptions.split(",").map((c) => c.trim());
+    }
 
-      if (
-        !Array.isArray(selectedOptions) ||
-        selectedOptions.length === 0 ||
-        selectedOptions[0] === ""
-      ) {
-        return res.status(400).json({ message: "No company codes provided" });
-      }
+    if (!Array.isArray(selectedOptions) || selectedOptions.length === 0) {
+      return res.status(400).json({ message: "No company codes provided" });
+    }
 
-    //   if (!mssql.connected) {
-    //   console.log('no connection')
-    //   const user_ip = String(req.user.ip).trim();
-    // await mssql.connect(dbConnection(user_ip, req.user.port));
-    // }
+    // === 4. Connect to Database (as Pool) ===
+    const user_ip = String(req.user.ip).trim();
+    const user_port = req.user.port.trim();
+    pool = await connectToUserDatabase(user_ip, user_port);
 
-    const user_ip = String(req.user.ip).trim(); 
-      await connectToUserDatabase(user_ip, req.user.port.trim());
-     
+    if (!pool.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
 
-      const formattedCurrentDate = formatDate(currentDate);
-      const formattedFromDate = formatDate(fromDate);
-      const formattedToDate = formatDate(toDate);
-      const reportType = "SALESDET";
+    const request = pool.request();
 
-      // Clear previous data
-      try {
-        const query = `
-    USE [${rtweb}];
-    DELETE FROM tb_SALESVIEW WHERE REPUSER = @username;
-  `;
-        const request = new mssql.Request();
-        request.input("username", mssql.VarChar, username);
-        await request.query(query);
-      } catch (error) {
-        console.error("Error clearing tb_SALESVIEW:", error);
-      }
+    const formattedCurrentDate = formatDate(currentDate);
+    const formattedFromDate = formatDate(fromDate);
+    const formattedToDate = formatDate(toDate);
+    const reportType = "SALESDET";
 
-      // Execute SP for each company code
-      for (const companyCode of selectedOptions) {
-        try {
-          if (fromDate && toDate) {
-            await mssql.query`
-              EXEC Sp_SalesView 
-                @COMPANY_CODE = ${companyCode}, 
-                @DATE1 = ${formattedFromDate}, 
-                @DATE2 = ${formattedToDate}, 
-                @REPUSER = ${username}, 
-                @REPORT_TYPE = ${reportType}`;
-          } else {
-            await mssql.query`
-              EXEC Sp_SalesCurView 
-                @COMPANY_CODE = ${companyCode}, 
-                @DATE = ${formattedCurrentDate}, 
-                @REPUSER = ${username}, 
-                @REPORT_TYPE = ${reportType}`;
-          }
-        } catch (error) {
-          console.error(`Error running SP for company ${companyCode}:`, error);
-        }
-      }
-
-      // Safely construct IN clause
-      const inClause = selectedOptions.map((code) => `'${code}'`).join(", ");
-
-      // Perform summary queries
-      const [
-        subCategoryTableRecords,
-        subCategoryAmountBarChart,
-        subCategoryQuantityBarChart,
-      ] = await Promise.all([
-        new mssql.Request().input("username", mssql.VarChar, username).query(`
+    // === 5. Clear existing data ===
+    await request.input("username", mssql.VarChar, username).query(`
       USE [${rtweb}];
-      SELECT
-        LTRIM(RTRIM(COMPANY_CODE)) AS COMPANY_CODE,
-        LTRIM(RTRIM(SCATCODE)) AS SUBCATEGORY_CODE,
-        SCATNAME AS SUBCATEGORY_NAME,
-        SUM(QTY) AS QUANTITY,
-        SUM(AMOUNT) AS AMOUNT
-      FROM tb_SALESVIEW
-      WHERE REPUSER = @username AND COMPANY_CODE IN (${inClause})
-      GROUP BY COMPANY_CODE, SCATCODE, SCATNAME`),
+      DELETE FROM tb_SALESVIEW WHERE REPUSER = @username;
+    `);
+    console.log("✅ Cleared tb_SALESVIEW");
 
-        new mssql.Request().input("username", mssql.VarChar, username).query(`
-      USE [${rtweb}];
-      SELECT SCATNAME, SUM(AMOUNT) AS AMOUNT
-      FROM tb_SALESVIEW
-      WHERE REPUSER = @username AND COMPANY_CODE IN (${inClause})
-      GROUP BY SCATNAME`),
+    // === 6. Execute Stored Procedures ===
+    for (const companyCode of selectedOptions) {
+      const spRequest = pool.request();
+      spRequest.input("COMPANY_CODE", mssql.VarChar, companyCode);
+      spRequest.input("REPUSER", mssql.VarChar, username);
+      spRequest.input("REPORT_TYPE", mssql.VarChar, reportType);
 
-        new mssql.Request().input("username", mssql.VarChar, username).query(`
-      USE [${rtweb}];
-      SELECT SCATNAME, SUM(QTY) AS QUANTITY
-      FROM tb_SALESVIEW
-      WHERE REPUSER = @username AND COMPANY_CODE IN (${inClause})
-      GROUP BY SCATNAME`),
+      if (fromDate && toDate) {
+        spRequest.input("DATE1", mssql.VarChar, formattedFromDate);
+        spRequest.input("DATE2", mssql.VarChar, formattedToDate);
+        await spRequest.execute("Sp_SalesView");
+      } else {
+        spRequest.input("DATE", mssql.VarChar, formattedCurrentDate);
+        await spRequest.execute("Sp_SalesCurView");
+      }
+      console.log(`✅ Stored procedure executed for company: ${companyCode}`);
+    }
+
+    // === 7. Build IN clause ===
+    const inClause = selectedOptions.map((c) => `'${c}'`).join(", ");
+
+    // === 8. Run Summary Queries ===
+    const [subCategoryTableRecords, subCategoryAmountBarChart, subCategoryQuantityBarChart] =
+      await Promise.all([
+        pool.request().input("username", mssql.VarChar, username).query(`
+          USE [${rtweb}];
+          SELECT
+            LTRIM(RTRIM(COMPANY_CODE)) AS COMPANY_CODE,
+            LTRIM(RTRIM(SCATCODE)) AS SUBCATEGORY_CODE,
+            SCATNAME AS SUBCATEGORY_NAME,
+            SUM(QTY) AS QUANTITY,
+            SUM(AMOUNT) AS AMOUNT
+          FROM tb_SALESVIEW
+          WHERE REPUSER = @username AND COMPANY_CODE IN (${inClause})
+          GROUP BY COMPANY_CODE, SCATCODE, SCATNAME;
+        `),
+
+        pool.request().input("username", mssql.VarChar, username).query(`
+          USE [${rtweb}];
+          SELECT SCATNAME, SUM(AMOUNT) AS AMOUNT
+          FROM tb_SALESVIEW
+          WHERE REPUSER = @username AND COMPANY_CODE IN (${inClause})
+          GROUP BY SCATNAME;
+        `),
+
+        pool.request().input("username", mssql.VarChar, username).query(`
+          USE [${rtweb}];
+          SELECT SCATNAME, SUM(QTY) AS QUANTITY
+          FROM tb_SALESVIEW
+          WHERE REPUSER = @username AND COMPANY_CODE IN (${inClause})
+          GROUP BY SCATNAME;
+        `),
       ]);
 
-      return res.status(200).json({
-        message: "Processed parameters for company codes",
-        success: true,
-        subCategoryTableRecords: subCategoryTableRecords.recordset || [],
-        subCategoryAmountBarChart: subCategoryAmountBarChart.recordset || [],
-        subCategoryQuantityBarChart:
-          subCategoryQuantityBarChart.recordset || [],
-      });
+    console.log("✅ Dashboard queries executed successfully");
+
+    // === 9. Send Response ===
+    return res.status(200).json({
+      success: true,
+      message: "Processed parameters for company codes",
+      subCategoryTableRecords: subCategoryTableRecords.recordset,
+      subCategoryAmountBarChart: subCategoryAmountBarChart.recordset,
+      subCategoryQuantityBarChart: subCategoryQuantityBarChart.recordset,
     });
   } catch (error) {
-    console.error("Unhandled error in subCategoryDashboard:", error);
-    res.status(500).json({ message: "Failed to load subcategory dashboard" });
+    console.error("❌ Error in subCategoryDashboard:", error);
+    return res.status(500).json({
+      message: "Failed to load subcategory dashboard",
+      error: error.message,
+    });
+  } finally {
+    // === 10. Close the pool safely ===
+    if (pool && pool.connected) {
+      await pool.close();
+      console.log("🔒 Database pool connection closed");
+    }
   }
 };
 
 //vendor dashboard
 exports.vendorDashboard = async (req, res) => {
+  if (mssql.connected) {
+      await mssql.close();
+      console.log("✅ Closed previous MSSQL connection");
+    }
+  let pool;
+
   try {
+    // 1. Verify Authorization
     const authHeader = req.headers.authorization;
     if (!authHeader)
-      return res
-        .status(403)
-        .json({ message: "No authorization token provided" });
+      return res.status(403).json({ message: "No authorization token provided" });
 
     const token = authHeader.split(" ")[1];
     if (!token) return res.status(403).json({ message: "Token is missing" });
 
-    jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
-      if (err)
-        return res.status(403).json({ message: "Invalid or expired token" });
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const username = decoded.username;
 
-      const username = decoded.username;
-      let { currentDate, fromDate, toDate, selectedOptions } = req.query;
+    // 2. Extract Query Params
+    let { currentDate, fromDate, toDate, selectedOptions } = req.query;
+    if (typeof selectedOptions === "string") {
+      selectedOptions = selectedOptions.split(",").map((c) => c.trim());
+    }
+    if (!Array.isArray(selectedOptions) || selectedOptions.length === 0) {
+      return res.status(400).json({ message: "No company codes provided" });
+    }
 
-      if (typeof selectedOptions === "string") {
-        selectedOptions = selectedOptions.split(",").map((code) => code.trim());
+    // 3. Connect to Database Pool
+    const user_ip = String(req.user.ip).trim();
+    const user_port = req.user.port.trim();
+    pool = await connectToUserDatabase(user_ip, user_port);
+    if (!pool.connected)
+      return res.status(500).json({ message: "Database connection failed" });
+
+    const formattedCurrentDate = formatDate(currentDate);
+    const formattedFromDate = formatDate(fromDate);
+    const formattedToDate = formatDate(toDate);
+    const reportType = "SALESDET";
+
+    // 4. Clear previous data
+    await pool.request().input("username", mssql.VarChar, username).query(`
+      DELETE FROM [${rtweb}].dbo.tb_SALESVIEW WHERE REPUSER = @username;
+    `);
+    console.log("✅ Cleared tb_SALESVIEW");
+
+    // 5. Execute Stored Procedures for each company
+    for (const companyCode of selectedOptions) {
+      const spRequest = pool.request();
+      spRequest.input("COMPANY_CODE", mssql.VarChar, companyCode);
+      spRequest.input("REPUSER", mssql.VarChar, username);
+      spRequest.input("REPORT_TYPE", mssql.VarChar, reportType);
+
+      if (fromDate && toDate) {
+        spRequest.input("DATE1", mssql.VarChar, formattedFromDate);
+        spRequest.input("DATE2", mssql.VarChar, formattedToDate);
+        await spRequest.execute("Sp_SalesView");
+      } else {
+        spRequest.input("DATE", mssql.VarChar, formattedCurrentDate);
+        await spRequest.execute("Sp_SalesCurView");
       }
+      console.log(`✅ Stored procedure executed for company: ${companyCode}`);
+    }
 
-      if (
-        !Array.isArray(selectedOptions) ||
-        selectedOptions.length === 0 ||
-        selectedOptions[0] === ""
-      ) {
-        return res.status(400).json({ message: "No company codes provided" });
-      }
+    // 6. Build safe IN clause (alphanumeric validated)
+    const inClause = selectedOptions.map((c) => `'${c}'`).join(",");
 
-    //   if (!mssql.connected) {
-    //   console.log('no connection')
-    //   const user_ip = String(req.user.ip).trim();
-    // await mssql.connect(dbConnection(user_ip, req.user.port));
-    // }
+    // 7. Run summary queries
+    const dbTable = `[${rtweb}].dbo.tb_SALESVIEW`;
 
-    const user_ip = String(req.user.ip).trim(); 
-       await connectToUserDatabase(user_ip, req.user.port.trim());
-     
+    const [vendorTableRecords, vendorAmountBarChart, vendorQuantityBarChart] =
+      await Promise.all([
+        pool.request().input("username", mssql.VarChar, username).query(`
+          SELECT
+            LTRIM(RTRIM(COMPANY_CODE)) AS COMPANY_CODE,
+            LTRIM(RTRIM(VENDORCODE)) AS VENDOR_CODE,
+            VENDORNAME AS VENDOR_NAME,
+            SUM(QTY) AS QUANTITY,
+            SUM(AMOUNT) AS AMOUNT
+          FROM ${dbTable}
+          WHERE REPUSER = @username AND COMPANY_CODE IN (${inClause})
+          GROUP BY COMPANY_CODE, VENDORCODE, VENDORNAME;
+        `),
 
-      const formattedCurrentDate = formatDate(currentDate);
-      const formattedFromDate = formatDate(fromDate);
-      const formattedToDate = formatDate(toDate);
-      const reportType = "SALESDET";
+        pool.request().input("username", mssql.VarChar, username).query(`
+          SELECT VENDORNAME, SUM(AMOUNT) AS AMOUNT
+          FROM ${dbTable}
+          WHERE REPUSER = @username AND COMPANY_CODE IN (${inClause})
+          GROUP BY VENDORNAME;
+        `),
 
-      try {
-        const query = `
-          DELETE FROM [${rtweb}].dbo.tb_SALESVIEW WHERE REPUSER = @username;
-        `;
-        const request = new mssql.Request();
-        request.input("username", mssql.VarChar, username);
-        await request.query(query);
-      } catch (error) {
-        console.error("Error deleting tb_SALESVIEW records:", error);
-      }
+        pool.request().input("username", mssql.VarChar, username).query(`
+          SELECT VENDORNAME, SUM(QTY) AS QUANTITY
+          FROM ${dbTable}
+          WHERE REPUSER = @username AND COMPANY_CODE IN (${inClause})
+          GROUP BY VENDORNAME;
+        `),
+      ]);
 
-      for (const companyCode of selectedOptions) {
-        try {
-          if (fromDate && toDate) {
-            await mssql.query`
-              EXEC Sp_SalesView 
-                @COMPANY_CODE = ${companyCode},
-                @DATE1 = ${formattedFromDate},
-                @DATE2 = ${formattedToDate},
-                @REPUSER = ${username},
-                @REPORT_TYPE = ${reportType}`;
-          } else {
-            await mssql.query`
-              EXEC Sp_SalesCurView 
-                @COMPANY_CODE = ${companyCode},
-                @DATE = ${formattedCurrentDate},
-                @REPUSER = ${username},
-                @REPORT_TYPE = ${reportType}`;
-          }
-        } catch (error) {
-          console.error(`Error running SP for company ${companyCode}:`, error);
-        }
-      }
-
-      const dbTable = `[${rtweb}].dbo.tb_SALESVIEW`;
-
-      // Use parameterized IN clause
-      const companyParams = selectedOptions
-        .map((_, i) => `@code${i}`)
-        .join(", ");
-      const companyRequest1 = new mssql.Request();
-      const companyRequest2 = new mssql.Request();
-      const companyRequest3 = new mssql.Request();
-
-      companyRequest1.input("username", mssql.VarChar, username);
-      companyRequest2.input("username", mssql.VarChar, username);
-      companyRequest3.input("username", mssql.VarChar, username);
-
-      selectedOptions.forEach((code, index) => {
-        const paramName = `code${index}`;
-        companyRequest1.input(paramName, mssql.VarChar, code);
-        companyRequest2.input(paramName, mssql.VarChar, code);
-        companyRequest3.input(paramName, mssql.VarChar, code);
-      });
-
-      const [vendorTableRecords, vendorAmountBarChart, vendorQuantityBarChart] =
-        await Promise.all([
-          companyRequest1.query(`
-            SELECT
-              LTRIM(RTRIM(COMPANY_CODE)) AS COMPANY_CODE,
-              LTRIM(RTRIM(VENDORCODE)) AS VENDOR_CODE,
-              VENDORNAME AS VENDOR_NAME,
-              SUM(QTY) AS QUANTITY,
-              SUM(AMOUNT) AS AMOUNT
-            FROM ${dbTable}
-            WHERE REPUSER = @username AND COMPANY_CODE IN (${companyParams})
-            GROUP BY COMPANY_CODE, VENDORCODE, VENDORNAME
-          `),
-
-          companyRequest2.query(`
-            SELECT VENDORNAME, SUM(AMOUNT) AS AMOUNT
-            FROM ${dbTable}
-            WHERE REPUSER = @username AND COMPANY_CODE IN (${companyParams})
-            GROUP BY VENDORNAME
-          `),
-
-          companyRequest3.query(`
-            SELECT VENDORNAME, SUM(QTY) AS QUANTITY
-            FROM ${dbTable}
-            WHERE REPUSER = @username AND COMPANY_CODE IN (${companyParams})
-            GROUP BY VENDORNAME
-          `),
-        ]);
-
-      return res.status(200).json({
-        message: "Processed parameters for company codes",
-        success: true,
-        vendorTableRecords: vendorTableRecords.recordset || [],
-        vendorAmountBarChart: vendorAmountBarChart.recordset || [],
-        vendorQuantityBarChart: vendorQuantityBarChart.recordset || [],
-      });
+    // 8. Send Response
+    return res.status(200).json({
+      success: true,
+      message: "Processed parameters for company codes",
+      vendorTableRecords: vendorTableRecords.recordset,
+      vendorAmountBarChart: vendorAmountBarChart.recordset,
+      vendorQuantityBarChart: vendorQuantityBarChart.recordset,
     });
   } catch (error) {
-    console.error("Unhandled error in vendorDashboard:", error);
-    res.status(500).json({ message: "Failed to load vendor dashboard" });
+    console.error("❌ Error in vendorDashboard:", error);
+    return res.status(500).json({
+      message: "Failed to load vendor dashboard",
+      error: error.message,
+    });
+  } finally {
+    // 9. Close the pool safely
+    if (pool && pool.connected) {
+      await pool.close();
+      console.log("🔒 Database pool connection closed");
+    }
   }
 };
 
@@ -3002,21 +3032,16 @@ exports.vendorDashboard = async (req, res) => {
 exports.colorSizeSalesProductDashboard = async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      return res
-        .status(403)
-        .json({ message: "No authorization token provided" });
-    }
+    if (!authHeader)
+      return res.status(403).json({ message: "No authorization token provided" });
 
     const token = authHeader.split(" ")[1];
-    if (!token) {
+    if (!token)
       return res.status(403).json({ message: "Token is missing" });
-    }
 
     jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
-      if (err) {
+      if (err)
         return res.status(403).json({ message: "Invalid or expired token" });
-      }
 
       const username = decoded.username;
       let { currentDate, fromDate, toDate, selectedOptions } = req.query;
@@ -3025,28 +3050,28 @@ exports.colorSizeSalesProductDashboard = async (req, res) => {
         selectedOptions = selectedOptions.split(",").map((code) => code.trim());
       }
 
-      if (
-        !Array.isArray(selectedOptions) ||
-        selectedOptions.length === 0 ||
-        selectedOptions[0] === ""
-      ) {
+      if (!Array.isArray(selectedOptions) || selectedOptions.length === 0 || selectedOptions[0] === "") {
         return res.status(400).json({ message: "No company codes provided" });
       }
 
-    //   if (!mssql.connected) {
-    //   console.log('no connection')
-    //   const user_ip = String(req.user.ip).trim();
-    // await mssql.connect(dbConnection(user_ip, req.user.port));
-    // }
-const user_ip = String(req.user.ip).trim(); 
-      await connectToUserDatabase(user_ip, req.user.port.trim());
-      
+      const user_ip = String(req.user.ip).trim();
+
+      if (mssql.connected) {
+        await mssql.close();
+        console.log("✅ Closed previous MSSQL connection");
+      }
+
+      const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+
+      if (!pool?.connected)
+        return res.status(500).json({ message: "Database connection failed" });
+
       const formattedCurrentDate = formatDate(currentDate);
       const formattedFromDate = formatDate(fromDate);
       const formattedToDate = formatDate(toDate);
       const reportType = "SALESDET";
 
-      // Helper function: retry mechanism
+      // Helper: retry mechanism for deadlocks
       const executeWithRetry = async (queryFunc, retries = 3) => {
         for (let i = 0; i < retries; i++) {
           try {
@@ -3064,77 +3089,67 @@ const user_ip = String(req.user.ip).trim();
 
       // Step 1: Clear previous user records
       try {
-        const request = new mssql.Request();
+        const request = pool.request();
         request.input("username", mssql.VarChar, username);
-
-        await request.query(`
-  DELETE FROM tb_SALESVIEW WHERE REPUSER = @username;
-`);
+        await request.query(`DELETE FROM tb_SALESVIEW WHERE REPUSER = @username;`);
       } catch (deleteErr) {
         console.error("Error deleting previous records:", deleteErr);
       }
 
-      // Step 2: Run stored procedures for each company
+      // Step 2: Execute SP for each company
       for (const companyCode of selectedOptions) {
         try {
-          const queryFn =
-            fromDate && toDate
-              ? () => mssql.query`
-                EXEC Sp_SalesView @COMPANY_CODE = ${companyCode}, 
-                                  @DATE1 = ${formattedFromDate}, 
-                                  @DATE2 = ${formattedToDate}, 
-                                  @REPUSER = ${username}, 
-                                  @REPORT_TYPE = ${reportType}`
-              : () => mssql.query`
-                EXEC Sp_SalesCurView @COMPANY_CODE = ${companyCode}, 
-                                     @DATE = ${formattedCurrentDate}, 
-                                     @REPUSER = ${username}, 
-                                     @REPORT_TYPE = ${reportType}`;
+          await executeWithRetry(async () => {
+            const spRequest = pool.request();
+            spRequest.input("COMPANY_CODE", mssql.VarChar, companyCode);
+            spRequest.input("REPUSER", mssql.VarChar, username);
+            spRequest.input("REPORT_TYPE", mssql.VarChar, reportType);
 
-          await executeWithRetry(queryFn);
+            if (fromDate && toDate) {
+              spRequest.input("DATE1", mssql.VarChar, formattedFromDate);
+              spRequest.input("DATE2", mssql.VarChar, formattedToDate);
+              await spRequest.execute("Sp_SalesView");
+            } else {
+              spRequest.input("DATE", mssql.VarChar, formattedCurrentDate);
+              await spRequest.execute("Sp_SalesCurView");
+            }
+          });
         } catch (spErr) {
-          console.error(
-            `Error executing stored procedure for ${companyCode}:`,
-            spErr
-          );
+          console.error(`Error executing stored procedure for ${companyCode}:`, spErr);
         }
       }
 
       // Step 3: Fetch product data
-      const inClause = selectedOptions.map((code) => `'${code}'`).join(","); // safe, string literals
+      const inClause = selectedOptions.map((code) => `'${code}'`).join(",");
 
       try {
-        const [tableRecords] = await Promise.all([
-          mssql.query(`
-            USE [${rtweb}];
-            SELECT   
-              LTRIM(RTRIM(COMPANY_CODE)) AS COMPANY_CODE,
-              LTRIM(RTRIM(PRODUCT_CODE)) AS PRODUCT_CODE,
-              PRODUCT_NAME AS PRODUCT_NAME,
-              SUM(QTY) AS QUANTITY,
-              SUM(AMOUNT) AS AMOUNT
-            FROM tb_SALESVIEW
-            WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause})
-            GROUP BY COMPANY_CODE, PRODUCT_NAME, PRODUCT_CODE`),
-        ]);
+        const fetchRequest = pool.request();
+        const result = await fetchRequest.query(`
+          USE ${rtweb};
+          SELECT   
+            LTRIM(RTRIM(COMPANY_CODE)) AS COMPANY_CODE,
+            LTRIM(RTRIM(PRODUCT_CODE)) AS PRODUCT_CODE,
+            PRODUCT_NAME AS PRODUCT_NAME,
+            SUM(QTY) AS QUANTITY,
+            SUM(AMOUNT) AS AMOUNT
+          FROM tb_SALESVIEW
+          WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause})
+          GROUP BY COMPANY_CODE, PRODUCT_NAME, PRODUCT_CODE
+        `);
 
         return res.status(200).json({
           message: "Processed parameters for company codes",
           success: true,
-          tableRecords: tableRecords.recordset || [],
+          tableRecords: result.recordset || [],
         });
       } catch (fetchErr) {
         console.error("Error fetching product data:", fetchErr);
-        return res
-          .status(500)
-          .json({ message: "Failed to fetch product data" });
+        return res.status(500).json({ message: "Failed to fetch product data" });
       }
     });
   } catch (error) {
     console.error("Unhandled error in productDashboard:", error);
-    return res
-      .status(500)
-      .json({ message: "Failed to load product dashboard" });
+    return res.status(500).json({ message: "Failed to load product dashboard" });
   }
 };
 
@@ -3142,75 +3157,81 @@ const user_ip = String(req.user.ip).trim();
 exports.colorSizeSalesProduct = async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      return res
-        .status(403)
-        .json({ message: "No authorization token provided" });
-    }
+    if (!authHeader)
+      return res.status(403).json({ message: "No authorization token provided" });
 
     const token = authHeader.split(" ")[1];
-    if (!token) {
+    if (!token)
       return res.status(403).json({ message: "Token is missing" });
-    }
 
     jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
-      if (err) {
+      if (err)
         return res.status(403).json({ message: "Invalid or expired token" });
-      }
 
       const username = decoded.username;
       let { code, selectedOptions } = req.query;
 
       if (typeof selectedOptions === "string") {
-        selectedOptions = selectedOptions.split(",");
+        selectedOptions = selectedOptions.split(",").map((v) => v.trim());
       }
 
-      const inClause = selectedOptions
-        .map((code) => `'${code.trim()}'`)
-        .join(",");
+      if (!selectedOptions || selectedOptions.length === 0) {
+        return res.status(400).json({ message: "No company codes provided" });
+      }
 
+      const inClause = selectedOptions.map((c) => `'${c}'`).join(",");
+
+      // ---- CONNECT TO USER DATABASE ----
+      const user_ip = String(req.user.ip).trim();
+      if (mssql.connected) {
+        await mssql.close();
+        console.log("✅ Closed previous MSSQL connection");
+      }
+
+      const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+      if (!pool?.connected)
+        return res.status(500).json({ message: "Database connection failed" });
+
+      // ---- FETCH DATA ----
       try {
-    //     if (!mssql.connected) {
-    //   console.log('no connection')
-    //   const user_ip = String(req.user.ip).trim();
-    // await mssql.connect(dbConnection(user_ip, req.user.port));
-    // }
+        const request = pool.request();
+        request.input("username", mssql.VarChar, username);
+        request.input("code", mssql.VarChar, code);
 
-    const user_ip = String(req.user.ip).trim(); 
-     await connectToUserDatabase(user_ip, req.user.port.trim());
-      
-
-        const [tableRecords] = await Promise.all([
-          mssql.query(`
-            USE [${rtweb}];
-            SELECT   
+        const query = `
+          USE ${rtweb};
+          SELECT   
             LTRIM(RTRIM(SERIALNO)) AS SERIALNO,
-              PRODUCT_CODE,
-              PRODUCT_NAME,
-              SUM(COSTPRICE) AS COSTPRICE,
-              SUM(UNITPRICE) AS UNITPRICE,
-              SUM(DISCOUNT) AS DISCOUNT,
-              SUM(AMOUNT) AS AMOUNT
-            FROM tb_SALESVIEW
-            WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause}) AND PRODUCT_CODE = '${code}'
-            GROUP BY PRODUCT_CODE,
-              PRODUCT_NAME, SERIALNO`),
-        ]);
+            PRODUCT_CODE,
+            PRODUCT_NAME,
+            SUM(COSTPRICE) AS COSTPRICE,
+            SUM(UNITPRICE) AS UNITPRICE,
+            SUM(DISCOUNT) AS DISCOUNT,
+            SUM(AMOUNT) AS AMOUNT
+          FROM tb_SALESVIEW
+          WHERE REPUSER = @username 
+            AND COMPANY_CODE IN (${inClause})
+            AND PRODUCT_CODE = @code
+          GROUP BY PRODUCT_CODE, PRODUCT_NAME, SERIALNO
+        `;
+
+        const result = await request.query(query);
 
         return res.status(200).json({
           message: "Processed parameters for company codes",
           success: true,
-          records: tableRecords.recordset || [],
+          records: result.recordset || [],
         });
       } catch (fetchErr) {
         console.error("Error fetching product data:", fetchErr);
-        return res
-          .status(500)
-          .json({ message: "Failed to fetch product data" });
+        return res.status(500).json({
+          message: "Failed to fetch product data",
+          error: fetchErr.message,
+        });
       }
     });
   } catch (error) {
-    console.error("Unhandled error in productDashboard:", error);
+    console.error("Unhandled error in colorSizeSalesProduct:", error);
     return res
       .status(500)
       .json({ message: "Failed to load product dashboard" });
@@ -3221,75 +3242,80 @@ exports.colorSizeSalesProduct = async (req, res) => {
 exports.colorSizeSalesDepartment = async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      return res
-        .status(403)
-        .json({ message: "No authorization token provided" });
-    }
+    if (!authHeader)
+      return res.status(403).json({ message: "No authorization token provided" });
 
     const token = authHeader.split(" ")[1];
-    if (!token) {
+    if (!token)
       return res.status(403).json({ message: "Token is missing" });
-    }
 
     jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
-      if (err) {
+      if (err)
         return res.status(403).json({ message: "Invalid or expired token" });
-      }
 
       const username = decoded.username;
       let { code, selectedOptions } = req.query;
 
       if (typeof selectedOptions === "string") {
-        selectedOptions = selectedOptions.split(",");
+        selectedOptions = selectedOptions.split(",").map((v) => v.trim());
       }
 
-      const inClause = selectedOptions
-        .map((code) => `'${code.trim()}'`)
-        .join(",");
+      if (!selectedOptions || selectedOptions.length === 0) {
+        return res.status(400).json({ message: "No company codes provided" });
+      }
+
+      const inClause = selectedOptions.map((c) => `'${c}'`).join(",");
+
+      const user_ip = String(req.user.ip).trim();
+
+      if (mssql.connected) {
+        await mssql.close();
+        console.log("✅ Closed previous MSSQL connection");
+      }
+
+      const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+      if (!pool?.connected)
+        return res.status(500).json({ message: "Database connection failed" });
 
       try {
-    //     if (!mssql.connected) {
-    //   console.log('no connection')
-    //   const user_ip = String(req.user.ip).trim();
-    // await mssql.connect(dbConnection(user_ip, req.user.port));
-    // }
+        const request = pool.request();
+        request.input("username", mssql.VarChar, username);
+        request.input("code", mssql.VarChar, code);
 
-    const user_ip = String(req.user.ip).trim(); 
-      await connectToUserDatabase(user_ip, req.user.port.trim());
-      
-
-        const [tableRecords] = await Promise.all([
-          mssql.query(`
-            USE [${rtweb}];
-            SELECT   
+        const query = `
+          USE ${rtweb};
+          SELECT   
             LTRIM(RTRIM(SERIALNO)) AS SERIALNO,
-              PRODUCT_CODE,
-              PRODUCT_NAME,
-              SUM(COSTPRICE) AS COSTPRICE,
-              SUM(UNITPRICE) AS UNITPRICE,
-              SUM(DISCOUNT) AS DISCOUNT,
-              SUM(AMOUNT) AS AMOUNT
-            FROM tb_SALESVIEW
-            WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause}) AND DEPTCODE = '${code}'
-            GROUP BY PRODUCT_CODE,
-              PRODUCT_NAME, SERIALNO`),
-        ]);
+            PRODUCT_CODE,
+            PRODUCT_NAME,
+            SUM(COSTPRICE) AS COSTPRICE,
+            SUM(UNITPRICE) AS UNITPRICE,
+            SUM(DISCOUNT) AS DISCOUNT,
+            SUM(AMOUNT) AS AMOUNT
+          FROM tb_SALESVIEW
+          WHERE REPUSER = @username 
+            AND COMPANY_CODE IN (${inClause})
+            AND DEPTCODE = @code
+          GROUP BY PRODUCT_CODE, PRODUCT_NAME, SERIALNO;
+        `;
+
+        const result = await request.query(query);
 
         return res.status(200).json({
           message: "Processed parameters for company codes",
           success: true,
-          records: tableRecords.recordset || [],
+          records: result.recordset || [],
         });
       } catch (fetchErr) {
-        console.error("Error fetching department data:", fetchErr);
-        return res
-          .status(500)
-          .json({ message: "Failed to fetch department data" });
+        console.error("❌ Error fetching department data:", fetchErr);
+        return res.status(500).json({
+          message: "Failed to fetch department data",
+          error: fetchErr.message,
+        });
       }
     });
   } catch (error) {
-    console.error("Unhandled error in departmentDashboard:", error);
+    console.error("❌ Unhandled error in colorSizeSalesDepartment:", error);
     return res
       .status(500)
       .json({ message: "Failed to load department dashboard" });
@@ -3300,75 +3326,81 @@ exports.colorSizeSalesDepartment = async (req, res) => {
 exports.colorSizeSalesCategory = async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      return res
-        .status(403)
-        .json({ message: "No authorization token provided" });
-    }
+    if (!authHeader)
+      return res.status(403).json({ message: "No authorization token provided" });
 
     const token = authHeader.split(" ")[1];
-    if (!token) {
+    if (!token)
       return res.status(403).json({ message: "Token is missing" });
-    }
 
     jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
-      if (err) {
+      if (err)
         return res.status(403).json({ message: "Invalid or expired token" });
-      }
 
       const username = decoded.username;
       let { code, selectedOptions } = req.query;
 
       if (typeof selectedOptions === "string") {
-        selectedOptions = selectedOptions.split(",");
+        selectedOptions = selectedOptions.split(",").map((v) => v.trim());
       }
 
-      const inClause = selectedOptions
-        .map((code) => `'${code.trim()}'`)
-        .join(",");
+      if (!selectedOptions || selectedOptions.length === 0) {
+        return res.status(400).json({ message: "No company codes provided" });
+      }
+
+      const inClause = selectedOptions.map((c) => `'${c}'`).join(",");
+
+      const user_ip = String(req.user.ip).trim();
+
+      // Close any existing connections before opening a new one
+      if (mssql.connected) {
+        await mssql.close();
+        console.log("✅ Closed previous MSSQL connection");
+      }
+
+      const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+      if (!pool?.connected)
+        return res.status(500).json({ message: "Database connection failed" });
 
       try {
-    //     if (!mssql.connected) {
-    //   console.log('no connection')
-    //   const user_ip = String(req.user.ip).trim();
-    // await mssql.connect(dbConnection(user_ip, req.user.port));
-    // }
+        const request = pool.request();
+        request.input("username", mssql.VarChar, username);
+        request.input("code", mssql.VarChar, code);
 
-    const user_ip = String(req.user.ip).trim(); 
-    await connectToUserDatabase(user_ip, req.user.port.trim());
-      
-
-        const [tableRecords] = await Promise.all([
-          mssql.query(`
-            USE [${rtweb}];
-            SELECT   
+        const query = `
+          USE ${rtweb};
+          SELECT   
             LTRIM(RTRIM(SERIALNO)) AS SERIALNO,
-              PRODUCT_CODE,
-              PRODUCT_NAME,
-              SUM(COSTPRICE) AS COSTPRICE,
-              SUM(UNITPRICE) AS UNITPRICE,
-              SUM(DISCOUNT) AS DISCOUNT,
-              SUM(AMOUNT) AS AMOUNT
-            FROM tb_SALESVIEW
-            WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause}) AND CATCODE = '${code}'
-            GROUP BY PRODUCT_CODE,
-              PRODUCT_NAME, SERIALNO`),
-        ]);
+            PRODUCT_CODE,
+            PRODUCT_NAME,
+            SUM(COSTPRICE) AS COSTPRICE,
+            SUM(UNITPRICE) AS UNITPRICE,
+            SUM(DISCOUNT) AS DISCOUNT,
+            SUM(AMOUNT) AS AMOUNT
+          FROM tb_SALESVIEW
+          WHERE REPUSER = @username 
+            AND COMPANY_CODE IN (${inClause})
+            AND CATCODE = @code
+          GROUP BY PRODUCT_CODE, PRODUCT_NAME, SERIALNO;
+        `;
+
+        const result = await request.query(query);
 
         return res.status(200).json({
           message: "Processed parameters for company codes",
           success: true,
-          records: tableRecords.recordset || [],
+          records: result.recordset || [],
         });
       } catch (fetchErr) {
-        console.error("Error fetching category data:", fetchErr);
-        return res
-          .status(500)
-          .json({ message: "Failed to fetch category data" });
+        console.error("❌ Error fetching category data:", fetchErr);
+        return res.status(500).json({
+          message: "Failed to fetch category data",
+          error: fetchErr.message,
+        });
       }
     });
   } catch (error) {
-    console.error("Unhandled error in categoryDashboard:", error);
+    console.error("❌ Unhandled error in colorSizeSalesCategory:", error);
     return res
       .status(500)
       .json({ message: "Failed to load category dashboard" });
@@ -3379,157 +3411,166 @@ exports.colorSizeSalesCategory = async (req, res) => {
 exports.colorSizeSalesSubCategory = async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      return res
-        .status(403)
-        .json({ message: "No authorization token provided" });
-    }
+    if (!authHeader)
+      return res.status(403).json({ message: "No authorization token provided" });
 
     const token = authHeader.split(" ")[1];
-    if (!token) {
+    if (!token)
       return res.status(403).json({ message: "Token is missing" });
-    }
 
     jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
-      if (err) {
+      if (err)
         return res.status(403).json({ message: "Invalid or expired token" });
-      }
 
       const username = decoded.username;
       let { code, selectedOptions } = req.query;
 
       if (typeof selectedOptions === "string") {
-        selectedOptions = selectedOptions.split(",");
+        selectedOptions = selectedOptions.split(",").map((v) => v.trim());
       }
 
-      const inClause = selectedOptions
-        .map((code) => `'${code.trim()}'`)
-        .join(",");
+      if (!selectedOptions || selectedOptions.length === 0) {
+        return res.status(400).json({ message: "No company codes provided" });
+      }
+
+      const inClause = selectedOptions.map((c) => `'${c}'`).join(",");
+
+      const user_ip = String(req.user.ip).trim();
+
+      // 🔒 Ensure old connections are closed before reconnecting
+      if (mssql.connected) {
+        await mssql.close();
+        console.log("✅ Closed previous MSSQL connection");
+      }
+
+      console.log('Connecting to user database at IP:', user_ip, 'Port:', req.user.port.trim());
+      // 🔌 Connect dynamically to user's database
+      const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+      if (!pool?.connected)
+        return res.status(500).json({ message: "Database connection failed" });
 
       try {
-    //     if (!mssql.connected) {
-    //   console.log('no connection')
-    //   const user_ip = String(req.user.ip).trim();
-    // await mssql.connect(dbConnection(user_ip, req.user.port));
-    // }
+        const request = pool.request();
+        request.input("username", mssql.VarChar, username);
+        request.input("code", mssql.VarChar, code);
 
-    const user_ip = String(req.user.ip).trim(); 
-     await connectToUserDatabase(user_ip, req.user.port.trim());
-     
-
-        const [tableRecords] = await Promise.all([
-          mssql.query(`
-            USE [${rtweb}];
-            SELECT   
+        const query = `
+          USE ${rtweb};
+          SELECT   
             LTRIM(RTRIM(SERIALNO)) AS SERIALNO,
-              PRODUCT_CODE,
-              PRODUCT_NAME,
-              SUM(COSTPRICE) AS COSTPRICE,
-              SUM(UNITPRICE) AS UNITPRICE,
-              SUM(DISCOUNT) AS DISCOUNT,
-              SUM(AMOUNT) AS AMOUNT
-            FROM tb_SALESVIEW
-            WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause}) AND SCATCODE = '${code}'
-            GROUP BY PRODUCT_CODE,
-              PRODUCT_NAME, SERIALNO`),
-        ]);
+            PRODUCT_CODE,
+            PRODUCT_NAME,
+            SUM(COSTPRICE) AS COSTPRICE,
+            SUM(UNITPRICE) AS UNITPRICE,
+            SUM(DISCOUNT) AS DISCOUNT,
+            SUM(AMOUNT) AS AMOUNT
+          FROM tb_SALESVIEW
+          WHERE REPUSER = @username 
+            AND COMPANY_CODE IN (${inClause})
+            AND SCATCODE = @code
+          GROUP BY PRODUCT_CODE, PRODUCT_NAME, SERIALNO;
+        `;
+
+        const result = await request.query(query);
 
         return res.status(200).json({
           message: "Processed parameters for company codes",
           success: true,
-          records: tableRecords.recordset || [],
+          records: result.recordset || [],
         });
       } catch (fetchErr) {
-        console.error("Error fetching sub category data:", fetchErr);
-        return res
-          .status(500)
-          .json({ message: "Failed to fetch sub category data" });
+        console.error("❌ Error fetching sub-category data:", fetchErr);
+        return res.status(500).json({
+          message: "Failed to fetch sub-category data",
+          error: fetchErr.message,
+        });
       }
     });
   } catch (error) {
-    console.error("Unhandled error in sub category Dashboard:", error);
+    console.error("❌ Unhandled error in colorSizeSalesSubCategory:", error);
     return res
       .status(500)
-      .json({ message: "Failed to load sub category dashboard" });
+      .json({ message: "Failed to load sub-category dashboard" });
   }
 };
 
 //color size sales vendor dashboard
 exports.colorSizeSalesVendor = async (req, res) => {
   try {
+    // Step 1: Validate token
     const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      return res
-        .status(403)
-        .json({ message: "No authorization token provided" });
-    }
+    if (!authHeader)
+      return res.status(403).json({ message: "No authorization token provided" });
 
     const token = authHeader.split(" ")[1];
-    if (!token) {
-      return res.status(403).json({ message: "Token is missing" });
-    }
+    if (!token) return res.status(403).json({ message: "Token is missing" });
 
+    // Step 2: Verify token
     jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
-      if (err) {
+      if (err)
         return res.status(403).json({ message: "Invalid or expired token" });
-      }
 
       const username = decoded.username;
       let { code, selectedOptions } = req.query;
 
+      // Step 3: Normalize selectedOptions input
       if (typeof selectedOptions === "string") {
         selectedOptions = selectedOptions.split(",");
       }
 
       const inClause = selectedOptions
-        .map((code) => `'${code.trim()}'`)
+        .map((c) => `'${c.trim()}'`)
         .join(",");
 
       try {
-    //     if (!mssql.connected) {
-    //   console.log('no connection')
-    //   const user_ip = String(req.user.ip).trim();
-    // await mssql.connect(dbConnection(user_ip, req.user.port));
-    // }
+        // Step 4: Connect using connection pool
+        const user_ip = String(req.user.ip).trim();
+        const user_port = String(req.user.port).trim();
 
-    const user_ip = String(req.user.ip).trim(); 
-    await connectToUserDatabase(user_ip, req.user.port.trim());
-      
+        if (mssql.connected) {
+      await mssql.close();
+      console.log("✅ Closed previous MSSQL connection");
+    }
+        const pool = await connectToUserDatabase(user_ip, user_port);
+        if (!pool.connected)
+          return res.status(500).json({ message: "Database connection failed" });
 
-        const [tableRecords] = await Promise.all([
-          mssql.query(`
-            USE [${rtweb}];
-            SELECT   
+        // Step 5: Execute query with USE [rtweb]
+        const result = await pool.request().query(`
+          USE ${rtweb};
+          SELECT 
             LTRIM(RTRIM(SERIALNO)) AS SERIALNO,
-              PRODUCT_CODE,
-              PRODUCT_NAME,
-              SUM(COSTPRICE) AS COSTPRICE,
-              SUM(UNITPRICE) AS UNITPRICE,
-              SUM(DISCOUNT) AS DISCOUNT,
-              SUM(AMOUNT) AS AMOUNT
-            FROM tb_SALESVIEW
-            WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${inClause}) AND VENDORCODE = '${code}'
-            GROUP BY PRODUCT_CODE,
-              PRODUCT_NAME, SERIALNO`),
-        ]);
+            PRODUCT_CODE,
+            PRODUCT_NAME,
+            SUM(COSTPRICE) AS COSTPRICE,
+            SUM(UNITPRICE) AS UNITPRICE,
+            SUM(DISCOUNT) AS DISCOUNT,
+            SUM(AMOUNT) AS AMOUNT
+          FROM tb_SALESVIEW
+          WHERE REPUSER = '${username}'
+            AND COMPANY_CODE IN (${inClause})
+            AND VENDORCODE = '${code}'
+          GROUP BY PRODUCT_CODE, PRODUCT_NAME, SERIALNO;
+        `);
 
+        // Step 6: Return results
         return res.status(200).json({
-          message: "Processed parameters for company codes",
           success: true,
-          records: tableRecords.recordset || [],
+          message: "Processed parameters for company codes",
+          records: result.recordset || [],
         });
       } catch (fetchErr) {
-        console.error("Error fetching sub category data:", fetchErr);
+        console.error("❌ Error fetching vendor sales data:", fetchErr);
         return res
           .status(500)
-          .json({ message: "Failed to fetch sub category data" });
+          .json({ message: "Failed to fetch vendor sales data" });
       }
     });
   } catch (error) {
-    console.error("Unhandled error in sub category Dashboard:", error);
+    console.error("❌ Unhandled error in vendor dashboard:", error);
     return res
       .status(500)
-      .json({ message: "Failed to load sub category dashboard" });
+      .json({ message: "Failed to load vendor sales dashboard" });
   }
 };
 
@@ -3540,24 +3581,19 @@ exports.colorSizeStockProductDashboard = async (req, res) => {
     // 1️⃣ Authorization Check
     // -------------------------
     const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      return res
-        .status(403)
-        .json({ message: "No authorization token provided" });
-    }
+    if (!authHeader)
+      return res.status(403).json({ message: "No authorization token provided" });
 
     const token = authHeader.split(" ")[1];
-    if (!token) {
+    if (!token)
       return res.status(403).json({ message: "Token is missing" });
-    }
 
     // -------------------------
     // 2️⃣ Verify Token
     // -------------------------
     jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
-      if (err) {
+      if (err)
         return res.status(403).json({ message: "Invalid or expired token" });
-      }
 
       let {
         currentDate,
@@ -3581,31 +3617,33 @@ exports.colorSizeStockProductDashboard = async (req, res) => {
         return res.status(400).json({ message: "No company codes provided" });
       }
 
-    //    if (!mssql.connected) {
-    //   console.log('no connection')
-    //   const user_ip = String(req.user.ip).trim();
-    // await mssql.connect(dbConnection(user_ip, req.user.port));
-    // }
+      // -------------------------
+      // 3️⃣ Establish Connection (pooled)
+      // -------------------------
+      const user_ip = String(req.user.ip).trim();
+      const user_port = String(req.user.port).trim();
 
-    const user_ip = String(req.user.ip).trim(); 
-      await connectToUserDatabase(user_ip, req.user.port.trim());
-      
+      if (mssql.connected) {
+      await mssql.close();
+      console.log("✅ Closed previous MSSQL connection");
+    }
+
+      const pool = await connectToUserDatabase(user_ip, user_port);
+      if (!pool.connected)
+        return res.status(500).json({ message: "Database connection failed" });
 
       // Format dates
       const formattedCurrentDate = formatDate(currentDate);
       const formattedDate = formatDate(date);
 
-      // Create request instance
-      const request = new mssql.Request();
-
       // -------------------------
-      // 3️⃣ Build Query to Create View
+      // 4️⃣ Build Query to Create/Update View
       // -------------------------
       let query;
 
       if (formattedCurrentDate === formattedDate) {
         query = `
-          USE ${rtweb};
+          USE [${rtweb}];
           IF OBJECT_ID('dbo.vw_STOCK_BALANCE', 'V') IS NOT NULL
               DROP VIEW dbo.vw_STOCK_BALANCE;
           EXEC('CREATE VIEW dbo.vw_STOCK_BALANCE AS
@@ -3627,10 +3665,11 @@ exports.colorSizeStockProductDashboard = async (req, res) => {
                 LTRIM(RTRIM(S.SERIALNO)),
                 P.COSTPRICE, 
                 P.SCALEPRICE,
-                P.PRODUCT_NAMELONG');`;
+                P.PRODUCT_NAMELONG');
+        `;
       } else {
         query = `
-          USE ${rtweb};
+          USE [${rtweb}];
           IF OBJECT_ID('dbo.vw_STOCK_BALANCE', 'V') IS NOT NULL
               DROP VIEW dbo.vw_STOCK_BALANCE;
           EXEC('CREATE VIEW dbo.vw_STOCK_BALANCE AS
@@ -3658,124 +3697,124 @@ exports.colorSizeStockProductDashboard = async (req, res) => {
       }
 
       // -------------------------
-      // 4️⃣ Execute View Update
+      // 5️⃣ Execute View Update
       // -------------------------
-      let result;
       try {
-        result = await request.query(query);
+        await pool.request().query(query);
       } catch (error) {
-        console.error("Error updating view:", error);
+        console.error("❌ Error updating stock view:", error);
         return res.status(500).json({ message: "Error updating stock view" });
       }
 
-      if (!result) {
-        return res
-          .status(403)
-          .json({ message: "Error occurred in view updating" });
-      }
-
       // -------------------------
-      // 5️⃣ Fetch Table Records
+      // 6️⃣ Fetch Table Records
       // -------------------------
       const inClause = selectedOptions.map((code) => `'${code}'`).join(",");
-
       let tableRecords;
-      let rowRecords;
+      let rowRecords = [];
       let rowDataStatus = false;
+
       try {
+        const useDb = `USE [${rtweb}];`;
+
         if (state === true || String(state).toLowerCase() === "true") {
-          if (
-            rowSelect === true ||
-            String(rowSelect).toLowerCase() === "true"
-          ) {
-            rowRecords = await mssql.query(`
-                           USE [${rtweb}];
-                            SELECT   
-                              LTRIM(RTRIM(COMPANY_CODE)) AS COMPANY_CODE,
-                              LTRIM(RTRIM(PRODUCT_CODE)) AS PRODUCT_CODE,
-                              SERIALNO,
-                              SUM(QTY) AS QUANTITY,
-                              SUM(QTY * COSTPRICE) AS COST_VALUE,
-                              SUM(QTY * SCALEPRICE) AS SALES_VALUE,
-                              COSTPRICE,
-                              SCALEPRICE
-                            FROM [${rtweb}].dbo.vw_STOCK_BALANCE
-                            WHERE COMPANY_CODE IN (${inClause}) AND PRODUCT_CODE = '${productCode}'
-                            GROUP BY COMPANY_CODE, PRODUCT_CODE, COSTPRICE, SCALEPRICE, SERIALNO
-                          `);
+          // State = true (with cost/sales values)
+          if (rowSelect === true || String(rowSelect).toLowerCase() === "true") {
+            const rowQuery = `
+              ${useDb}
+              SELECT   
+                LTRIM(RTRIM(COMPANY_CODE)) AS COMPANY_CODE,
+                LTRIM(RTRIM(PRODUCT_CODE)) AS PRODUCT_CODE,
+                SERIALNO,
+                SUM(QTY) AS QUANTITY,
+                SUM(QTY * COSTPRICE) AS COST_VALUE,
+                SUM(QTY * SCALEPRICE) AS SALES_VALUE,
+                COSTPRICE,
+                SCALEPRICE
+              FROM dbo.vw_STOCK_BALANCE
+              WHERE COMPANY_CODE IN (${inClause}) AND PRODUCT_CODE = '${productCode}'
+              GROUP BY COMPANY_CODE, PRODUCT_CODE, COSTPRICE, SCALEPRICE, SERIALNO;
+            `;
+            const result = await pool.request().query(rowQuery);
+            rowRecords = result.recordset || [];
             rowDataStatus = true;
           }
-          tableRecords = await mssql.query(`
-                           USE [${rtweb}];
-                            SELECT   
-                              LTRIM(RTRIM(COMPANY_CODE)) AS COMPANY_CODE,
-                              LTRIM(RTRIM(PRODUCT_CODE)) AS PRODUCT_CODE,
-                              PRODUCT_NAMELONG AS PRODUCT_NAME,
-                              SERIALNO,
-                              SUM(QTY) AS QUANTITY,
-                              SUM(QTY * COSTPRICE) AS COST_VALUE,
-                              SUM(QTY * SCALEPRICE) AS SALES_VALUE,
-                              COSTPRICE,
-                              SCALEPRICE
-                            FROM [${rtweb}].dbo.vw_STOCK_BALANCE
-                            WHERE COMPANY_CODE IN (${inClause})
-                            GROUP BY COMPANY_CODE, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE, SERIALNO
-                          `);
+
+          const tableQuery = `
+            ${useDb}
+            SELECT   
+              LTRIM(RTRIM(COMPANY_CODE)) AS COMPANY_CODE,
+              LTRIM(RTRIM(PRODUCT_CODE)) AS PRODUCT_CODE,
+              PRODUCT_NAMELONG AS PRODUCT_NAME,
+              SERIALNO,
+              SUM(QTY) AS QUANTITY,
+              SUM(QTY * COSTPRICE) AS COST_VALUE,
+              SUM(QTY * SCALEPRICE) AS SALES_VALUE,
+              COSTPRICE,
+              SCALEPRICE
+            FROM dbo.vw_STOCK_BALANCE
+            WHERE COMPANY_CODE IN (${inClause})
+            GROUP BY COMPANY_CODE, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE, SERIALNO;
+          `;
+          const result = await pool.request().query(tableQuery);
+          tableRecords = result.recordset || [];
         } else {
-          if (
-            rowSelect === true ||
-            String(rowSelect).toLowerCase() === "true"
-          ) {
-            rowRecords = await mssql.query(`
-                            USE [${rtweb}];
-                            SELECT   
-                              LTRIM(RTRIM(COMPANY_CODE)) AS COMPANY_CODE,
-                              LTRIM(RTRIM(PRODUCT_CODE)) AS PRODUCT_CODE,
-                              SERIALNO,
-                              SUM(QTY) AS QUANTITY,
-                              COSTPRICE,
-                              SCALEPRICE
-                            FROM [${rtweb}].dbo.vw_STOCK_BALANCE
-                            WHERE COMPANY_CODE IN (${inClause}) AND PRODUCT_CODE = '${productCode}'
-                            GROUP BY COMPANY_CODE, PRODUCT_CODE, COSTPRICE, SCALEPRICE, SERIALNO
-                          `);
+          // State = false (without cost/sales values)
+          if (rowSelect === true || String(rowSelect).toLowerCase() === "true") {
+            const rowQuery = `
+              ${useDb}
+              SELECT   
+                LTRIM(RTRIM(COMPANY_CODE)) AS COMPANY_CODE,
+                LTRIM(RTRIM(PRODUCT_CODE)) AS PRODUCT_CODE,
+                SERIALNO,
+                SUM(QTY) AS QUANTITY,
+                COSTPRICE,
+                SCALEPRICE
+              FROM dbo.vw_STOCK_BALANCE
+              WHERE COMPANY_CODE IN (${inClause}) AND PRODUCT_CODE = '${productCode}'
+              GROUP BY COMPANY_CODE, PRODUCT_CODE, COSTPRICE, SCALEPRICE, SERIALNO;
+            `;
+            const result = await pool.request().query(rowQuery);
+            rowRecords = result.recordset || [];
             rowDataStatus = true;
           }
-          tableRecords = await mssql.query(`
-                            USE [${rtweb}];
-                            SELECT   
-                              LTRIM(RTRIM(COMPANY_CODE)) AS COMPANY_CODE,
-                              LTRIM(RTRIM(PRODUCT_CODE)) AS PRODUCT_CODE,
-                              PRODUCT_NAMELONG AS PRODUCT_NAME,
-                              SERIALNO,
-                              SUM(QTY) AS QUANTITY,
-                              COSTPRICE,
-                              SCALEPRICE
-                            FROM [${rtweb}].dbo.vw_STOCK_BALANCE
-                            WHERE COMPANY_CODE IN (${inClause})
-                            GROUP BY COMPANY_CODE, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE, SERIALNO
-                          `);
+
+          const tableQuery = `
+            ${useDb}
+            SELECT   
+              LTRIM(RTRIM(COMPANY_CODE)) AS COMPANY_CODE,
+              LTRIM(RTRIM(PRODUCT_CODE)) AS PRODUCT_CODE,
+              PRODUCT_NAMELONG AS PRODUCT_NAME,
+              SERIALNO,
+              SUM(QTY) AS QUANTITY,
+              COSTPRICE,
+              SCALEPRICE
+            FROM dbo.vw_STOCK_BALANCE
+            WHERE COMPANY_CODE IN (${inClause})
+            GROUP BY COMPANY_CODE, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE, SERIALNO;
+          `;
+          const result = await pool.request().query(tableQuery);
+          tableRecords = result.recordset || [];
         }
 
+        // -------------------------
+        // ✅ Success Response
+        // -------------------------
         return res.status(200).json({
-          message: "Processed parameters for company codes",
           success: true,
-          tableRecords: tableRecords.recordset || [],
-          rowRecords: rowRecords ? rowRecords.recordset || [] : [],
-          rowDataStatus: rowDataStatus,
+          message: "Processed parameters for company codes",
+          tableRecords,
+          rowRecords,
+          rowDataStatus,
         });
       } catch (fetchErr) {
-        console.error("Error fetching product data:", fetchErr);
-        return res
-          .status(500)
-          .json({ message: "Failed to fetch product data" });
+        console.error("❌ Error fetching product data:", fetchErr);
+        return res.status(500).json({ message: "Failed to fetch product data" });
       }
     });
   } catch (error) {
-    console.error("Unhandled error in productDashboard:", error);
-    return res
-      .status(500)
-      .json({ message: "Failed to load product dashboard" });
+    console.error("❌ Unhandled error in productDashboard:", error);
+    return res.status(500).json({ message: "Failed to load product dashboard" });
   }
 };
 
@@ -3787,9 +3826,7 @@ exports.colorSizeStockDepartmentDashboard = async (req, res) => {
     // -------------------------
     const authHeader = req.headers.authorization;
     if (!authHeader) {
-      return res
-        .status(403)
-        .json({ message: "No authorization token provided" });
+      return res.status(403).json({ message: "No authorization token provided" });
     }
 
     const token = authHeader.split(" ")[1];
@@ -3827,31 +3864,36 @@ exports.colorSizeStockDepartmentDashboard = async (req, res) => {
         return res.status(400).json({ message: "No company codes provided" });
       }
 
-    //    if (!mssql.connected) {
-    //   console.log('no connection')
-    //   const user_ip = String(req.user.ip).trim();
-    // await mssql.connect(dbConnection(user_ip, req.user.port));
-    // }
+      // -------------------------
+      // 3️⃣ Establish MSSQL Connection
+      // -------------------------
+      const user_ip = String(req.user.ip).trim();
+      const user_port = req.user.port.trim();
 
-    const user_ip = String(req.user.ip).trim(); 
-    await connectToUserDatabase(user_ip, req.user.port.trim());
-      
+      // Always close any previous connection
+      if (mssql.connected) {
+        await mssql.close();
+        console.log("✅ Closed previous MSSQL connection");
+      }
 
-      // Format dates
+      const pool = await connectToUserDatabase(user_ip, user_port);
+
+      if (!pool.connected) {
+        return res.status(500).json({ message: "Database connection failed" });
+      }
+
+      // -------------------------
+      // 4️⃣ Prepare Query Context
+      // -------------------------
       const formattedCurrentDate = formatDate(currentDate);
       const formattedDate = formatDate(date);
-
-      // Create request instance
-      const request = new mssql.Request();
-
       // -------------------------
-      // 3️⃣ Build Query to Create View
+      // 5️⃣ Create/Update View
       // -------------------------
-      let query;
-
+      let viewQuery;
       if (formattedCurrentDate === formattedDate) {
-        query = `
-          USE ${rtweb};
+        viewQuery = `
+          USE [${rtweb}];
           IF OBJECT_ID('dbo.vw_STOCK_BALANCE', 'V') IS NOT NULL
               DROP VIEW dbo.vw_STOCK_BALANCE;
           EXEC('CREATE VIEW dbo.vw_STOCK_BALANCE AS
@@ -3877,8 +3919,8 @@ exports.colorSizeStockDepartmentDashboard = async (req, res) => {
                 P.SCALEPRICE,
                 P.PRODUCT_NAMELONG');`;
       } else {
-        query = `
-          USE ${rtweb};
+        viewQuery = `
+          USE [${rtweb}];
           IF OBJECT_ID('dbo.vw_STOCK_BALANCE', 'V') IS NOT NULL
               DROP VIEW dbo.vw_STOCK_BALANCE;
           EXEC('CREATE VIEW dbo.vw_STOCK_BALANCE AS
@@ -3907,206 +3949,164 @@ exports.colorSizeStockDepartmentDashboard = async (req, res) => {
         `;
       }
 
-      // -------------------------
-      // 4️⃣ Execute View Update
-      // -------------------------
-      let result;
       try {
-        result = await request.query(query);
+        await pool.request().query(viewQuery);
+        console.log("✅ Stock balance view updated successfully");
       } catch (error) {
-        console.error("Error updating view:", error);
+        console.error("❌ Error updating view:", error);
         return res.status(500).json({ message: "Error updating stock view" });
       }
 
-      if (!result) {
-        return res
-          .status(403)
-          .json({ message: "Error occurred in view updating" });
-      }
-
       // -------------------------
-      // 5️⃣ Fetch Table Records
+      // 6️⃣ Fetch Table & Row Records
       // -------------------------
       const inClause = selectedOptions.map((code) => `'${code}'`).join(",");
-
-      let tableRecords;
-      let rowRecords;
+      let tableRecords = [];
+      let rowRecords = [];
       let rowDataStatus = false;
+
       try {
         if (state === true || String(state).toLowerCase() === "true") {
-          if (
-            rowSelect === true ||
-            String(rowSelect).toLowerCase() === "true"
-          ) {
-            rowRecords = await mssql.query(`
-    USE [${rtweb}];
-    SELECT   
-        LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
-        LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
-        LTRIM(RTRIM(s.DEPTCODE)) AS DEPARTMENT_CODE,
-        d.DEPTNAME AS DEPARTMENT_NAME,
-        LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
-        s.PRODUCT_NAMELONG AS PRODUCT_NAME,
-        SUM(s.QTY) AS QUANTITY,
-        SUM(s.QTY * s.COSTPRICE) AS COST_VALUE,
-        SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,
-        s.COSTPRICE,
-        s.SCALEPRICE
-    FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
-    LEFT JOIN [${posback}].dbo.tb_DEPARTMENT d
-        ON LTRIM(RTRIM(s.DEPTCODE)) = LTRIM(RTRIM(d.DEPTCODE))
-    WHERE s.COMPANY_CODE IN (${inClause}) AND s.DEPTCODE = '${departmentCode}'
-    GROUP BY 
-        s.COMPANY_CODE, 
-        s.PRODUCT_CODE, 
-        s.DEPTCODE, 
-       LTRIM(RTRIM(s.SERIALNO)),
-        d.DEPTNAME,
-        s.PRODUCT_NAMELONG,
-        s.COSTPRICE, 
-        s.SCALEPRICE;
-  `);
+          // Include cost/sales value
+          if (rowSelect === true || String(rowSelect).toLowerCase() === "true") {
+            rowRecords = await pool.request().query(`
+              USE [${rtweb}];
+              SELECT   
+                  LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
+                  LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
+                  LTRIM(RTRIM(s.DEPTCODE)) AS DEPARTMENT_CODE,
+                  d.DEPTNAME AS DEPARTMENT_NAME,
+                  LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
+                  s.PRODUCT_NAMELONG AS PRODUCT_NAME,
+                  SUM(s.QTY) AS QUANTITY,
+                  SUM(s.QTY * s.COSTPRICE) AS COST_VALUE,
+                  SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,
+                  s.COSTPRICE,
+                  s.SCALEPRICE
+              FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
+              LEFT JOIN [${posback}].dbo.tb_DEPARTMENT d
+                  ON LTRIM(RTRIM(s.DEPTCODE)) = LTRIM(RTRIM(d.DEPTCODE))
+              WHERE s.COMPANY_CODE IN (${inClause}) 
+                AND s.DEPTCODE = '${departmentCode}'
+              GROUP BY 
+                  s.COMPANY_CODE, s.PRODUCT_CODE, s.DEPTCODE, 
+                  LTRIM(RTRIM(s.SERIALNO)), d.DEPTNAME, 
+                  s.PRODUCT_NAMELONG, s.COSTPRICE, s.SCALEPRICE;
+            `);
             rowDataStatus = true;
           }
 
-          tableRecords = await mssql.query(`
-    USE [${rtweb}];
-    SELECT   
-        LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
-        LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
-        LTRIM(RTRIM(s.DEPTCODE)) AS DEPARTMENT_CODE,
-        d.DEPTNAME AS DEPARTMENT_NAME,
-        s.PRODUCT_NAMELONG AS PRODUCT_NAME,
-        LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
-        SUM(s.QTY) AS QUANTITY,
-        SUM(s.QTY * s.COSTPRICE) AS COST_VALUE,
-        SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,
-        s.COSTPRICE,
-        s.SCALEPRICE
-    FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
-    LEFT JOIN [${posback}].dbo.tb_DEPARTMENT d
-        ON LTRIM(RTRIM(s.DEPTCODE)) = LTRIM(RTRIM(d.DEPTCODE))
-    WHERE s.COMPANY_CODE IN (${inClause})
-    GROUP BY 
-        s.COMPANY_CODE, 
-        s.PRODUCT_CODE, 
-        s.DEPTCODE, 
-        LTRIM(RTRIM(s.SERIALNO)),
-        d.DEPTNAME,
-        s.PRODUCT_NAMELONG, 
-        s.COSTPRICE, 
-        s.SCALEPRICE;
-  `);
+          tableRecords = await pool.request().query(`
+            USE [${rtweb}];
+            SELECT   
+                LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
+                LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
+                LTRIM(RTRIM(s.DEPTCODE)) AS DEPARTMENT_CODE,
+                d.DEPTNAME AS DEPARTMENT_NAME,
+                s.PRODUCT_NAMELONG AS PRODUCT_NAME,
+                LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
+                SUM(s.QTY) AS QUANTITY,
+                SUM(s.QTY * s.COSTPRICE) AS COST_VALUE,
+                SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,
+                s.COSTPRICE,
+                s.SCALEPRICE
+            FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
+            LEFT JOIN [${posback}].dbo.tb_DEPARTMENT d
+                ON LTRIM(RTRIM(s.DEPTCODE)) = LTRIM(RTRIM(d.DEPTCODE))
+            WHERE s.COMPANY_CODE IN (${inClause})
+            GROUP BY 
+                s.COMPANY_CODE, s.PRODUCT_CODE, s.DEPTCODE, 
+                LTRIM(RTRIM(s.SERIALNO)), d.DEPTNAME, 
+                s.PRODUCT_NAMELONG, s.COSTPRICE, s.SCALEPRICE;
+          `);
         } else {
-          if (
-            rowSelect === true ||
-            String(rowSelect).toLowerCase() === "true"
-          ) {
-            rowRecords = await mssql.query(`
-    USE [${rtweb}];
-    SELECT   
-        LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
-        LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
-        LTRIM(RTRIM(s.DEPTCODE)) AS DEPARTMENT_CODE,
-        d.DEPTNAME AS DEPARTMENT_NAME,
-        s.PRODUCT_NAMELONG AS PRODUCT_NAME,
-        LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
-        SUM(s.QTY) AS QUANTITY,
-        s.COSTPRICE,
-        s.SCALEPRICE
-    FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
-    LEFT JOIN [${posback}].dbo.tb_DEPARTMENT d
-        ON LTRIM(RTRIM(s.DEPTCODE)) = LTRIM(RTRIM(d.DEPTCODE))
-    WHERE s.COMPANY_CODE IN (${inClause}) AND s.DEPTCODE = '${departmentCode}'
-    GROUP BY 
-        s.COMPANY_CODE, 
-        s.PRODUCT_CODE, 
-        s.DEPTCODE, 
-        LTRIM(RTRIM(s.SERIALNO)),
-        d.DEPTNAME,
-        s.PRODUCT_NAMELONG, 
-        s.COSTPRICE, 
-        s.SCALEPRICE;
-  `);
+          // Without cost/sales value
+          if (rowSelect === true || String(rowSelect).toLowerCase() === "true") {
+            rowRecords = await pool.request().query(`
+              USE [${rtweb}];
+              SELECT   
+                  LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
+                  LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
+                  LTRIM(RTRIM(s.DEPTCODE)) AS DEPARTMENT_CODE,
+                  d.DEPTNAME AS DEPARTMENT_NAME,
+                  s.PRODUCT_NAMELONG AS PRODUCT_NAME,
+                  LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
+                  SUM(s.QTY) AS QUANTITY,
+                  s.COSTPRICE,
+                  s.SCALEPRICE
+              FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
+              LEFT JOIN [${posback}].dbo.tb_DEPARTMENT d
+                  ON LTRIM(RTRIM(s.DEPTCODE)) = LTRIM(RTRIM(d.DEPTCODE))
+              WHERE s.COMPANY_CODE IN (${inClause}) 
+                AND s.DEPTCODE = '${departmentCode}'
+              GROUP BY 
+                  s.COMPANY_CODE, s.PRODUCT_CODE, s.DEPTCODE, 
+                  LTRIM(RTRIM(s.SERIALNO)), d.DEPTNAME, 
+                  s.PRODUCT_NAMELONG, s.COSTPRICE, s.SCALEPRICE;
+            `);
             rowDataStatus = true;
           }
 
-          tableRecords = await mssql.query(`
-    USE [${rtweb}];
-    SELECT   
-        LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
-        LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
-        LTRIM(RTRIM(s.DEPTCODE)) AS DEPARTMENT_CODE,
-        d.DEPTNAME AS DEPARTMENT_NAME,
-        s.PRODUCT_NAMELONG AS PRODUCT_NAME,
-        LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
-        SUM(s.QTY) AS QUANTITY,
-        s.COSTPRICE,
-        s.SCALEPRICE
-    FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
-    LEFT JOIN [${posback}].dbo.tb_DEPARTMENT d
-        ON LTRIM(RTRIM(s.DEPTCODE)) = LTRIM(RTRIM(d.DEPTCODE))
-    WHERE s.COMPANY_CODE IN (${inClause})
-    GROUP BY 
-        s.COMPANY_CODE, 
-        s.PRODUCT_CODE, 
-        s.DEPTCODE, 
-        LTRIM(RTRIM(s.SERIALNO)),
-        d.DEPTNAME,
-        s.PRODUCT_NAMELONG, 
-        s.COSTPRICE, 
-        s.SCALEPRICE;
-  `);
+          tableRecords = await pool.request().query(`
+            USE [${rtweb}];
+            SELECT   
+                LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
+                LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
+                LTRIM(RTRIM(s.DEPTCODE)) AS DEPARTMENT_CODE,
+                d.DEPTNAME AS DEPARTMENT_NAME,
+                s.PRODUCT_NAMELONG AS PRODUCT_NAME,
+                LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
+                SUM(s.QTY) AS QUANTITY,
+                s.COSTPRICE,
+                s.SCALEPRICE
+            FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
+            LEFT JOIN [${posback}].dbo.tb_DEPARTMENT d
+                ON LTRIM(RTRIM(s.DEPTCODE)) = LTRIM(RTRIM(d.DEPTCODE))
+            WHERE s.COMPANY_CODE IN (${inClause})
+            GROUP BY 
+                s.COMPANY_CODE, s.PRODUCT_CODE, s.DEPTCODE, 
+                LTRIM(RTRIM(s.SERIALNO)), d.DEPTNAME, 
+                s.PRODUCT_NAMELONG, s.COSTPRICE, s.SCALEPRICE;
+          `);
         }
 
         return res.status(200).json({
-          message: "Processed parameters for company codes",
           success: true,
+          message: "Processed parameters for company codes",
           tableRecords: tableRecords.recordset || [],
-          rowRecords: rowRecords ? rowRecords.recordset || [] : [],
-          rowDataStatus: rowDataStatus,
+          rowRecords: rowRecords.recordset || [],
+          rowDataStatus,
         });
       } catch (fetchErr) {
-        console.error("Error fetching product data:", fetchErr);
-        return res
-          .status(500)
-          .json({ message: "Failed to fetch product data" });
+        console.error("❌ Error fetching product data:", fetchErr);
+        return res.status(500).json({ message: "Failed to fetch product data" });
+      } finally {
+        await pool.close();
+        console.log("✅ MSSQL pool closed successfully");
       }
     });
   } catch (error) {
-    console.error("Unhandled error in productDashboard:", error);
-    return res
-      .status(500)
-      .json({ message: "Failed to load product dashboard" });
+    console.error("🔥 Unhandled error in colorSizeStockDepartmentDashboard:", error);
+    return res.status(500).json({ message: "Failed to load product dashboard" });
   }
 };
 
 //color size stock category dashboard data
 exports.colorSizeStockCategoryDashboard = async (req, res) => {
   try {
-    // -------------------------
-    // 1️⃣ Authorization Check
-    // -------------------------
+    // 1️⃣ Authorization
     const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      return res
-        .status(403)
-        .json({ message: "No authorization token provided" });
-    }
+    if (!authHeader)
+      return res.status(403).json({ message: "No authorization token provided" });
 
     const token = authHeader.split(" ")[1];
-    if (!token) {
-      return res.status(403).json({ message: "Token is missing" });
-    }
+    if (!token) return res.status(403).json({ message: "Token is missing" });
 
-    // -------------------------
-    // 2️⃣ Verify Token
-    // -------------------------
+    // 2️⃣ Verify JWT
     jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
-      if (err) {
-        return res.status(403).json({ message: "Invalid or expired token" });
-      }
+      if (err) return res.status(403).json({ message: "Invalid or expired token" });
 
+      // Extract query params
       let {
         currentDate,
         date,
@@ -4116,14 +4116,11 @@ exports.colorSizeStockCategoryDashboard = async (req, res) => {
         selectedOptions,
       } = req.query;
 
-      // Convert booleans
-      rowSelect =
-        rowSelect === true ||
-        String(rowSelect).toLowerCase() === "true";
-      state =
-        state === true || String(state).toLowerCase() === "true";
+      // Normalize boolean flags
+      rowSelect = rowSelect === true || String(rowSelect).toLowerCase() === "true";
+      state = state === true || String(state).toLowerCase() === "true";
 
-      // Convert selectedOptions to array
+      // Convert and sanitize selectedOptions
       if (typeof selectedOptions === "string") {
         selectedOptions = selectedOptions
           .split(",")
@@ -4131,30 +4128,30 @@ exports.colorSizeStockCategoryDashboard = async (req, res) => {
           .filter((x) => x);
       }
 
-      if (!Array.isArray(selectedOptions) || selectedOptions.length === 0) {
+      if (!Array.isArray(selectedOptions) || selectedOptions.length === 0)
         return res.status(400).json({ message: "No company codes provided" });
+
+      // 3️⃣ Database connection
+      const user_ip = String(req.user.ip).trim();
+      if (mssql.connected) {
+        await mssql.close();
+        console.log("✅ Closed previous MSSQL connection");
       }
 
-      // -------------------------
-      // 3️⃣ Connect to DB
-      // -------------------------
-      const user_ip = String(req.user.ip).trim();
-      const pool = await connectToUserDatabase(user_ip, req.user.port);
-      const request = pool.request();
-      if (!pool.connected) {
+      const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+      if (!pool || !pool.connected)
         return res.status(500).json({ message: "Database connection failed" });
-      }
-      // Format dates
+
+      const request = pool.request();
+
+      // 4️⃣ Build stock view
       const formattedCurrentDate = formatDate(currentDate);
       const formattedDate = formatDate(date);
 
-      // -------------------------
-      // 4️⃣ Build Query to Create View
-      // -------------------------
-      let viewQuery;
-      if (formattedCurrentDate === formattedDate) {
-        viewQuery = `
-          USE ${rtweb};
+      const viewQuery =
+        formattedCurrentDate === formattedDate
+          ? `
+          USE [${rtweb}];
           IF OBJECT_ID('dbo.vw_STOCK_BALANCE', 'V') IS NOT NULL
               DROP VIEW dbo.vw_STOCK_BALANCE;
           EXEC('CREATE VIEW dbo.vw_STOCK_BALANCE AS
@@ -4171,7 +4168,7 @@ exports.colorSizeStockCategoryDashboard = async (req, res) => {
             FROM ${posback}.dbo.tb_STOCK S
             INNER JOIN ${posback}.dbo.tb_PRODUCT P
                 ON P.PRODUCT_CODE = S.PRODUCT_CODE
-            WHERE (BIN = ''F'') OR (BIN IS NULL)
+            WHERE (BIN = ''F'' OR BIN IS NULL)
             GROUP BY 
                 S.PRODUCT_CODE, 
                 S.COMPANY_CODE,
@@ -4180,10 +4177,9 @@ exports.colorSizeStockCategoryDashboard = async (req, res) => {
                 P.CATCODE,
                 P.COSTPRICE, 
                 P.SCALEPRICE,
-                P.PRODUCT_NAMELONG');`;
-      } else {
-        viewQuery = `
-          USE ${rtweb};
+                P.PRODUCT_NAMELONG');`
+          : `
+          USE [${rtweb}];
           IF OBJECT_ID('dbo.vw_STOCK_BALANCE', 'V') IS NOT NULL
               DROP VIEW dbo.vw_STOCK_BALANCE;
           EXEC('CREATE VIEW dbo.vw_STOCK_BALANCE AS
@@ -4210,154 +4206,115 @@ exports.colorSizeStockCategoryDashboard = async (req, res) => {
                 P.CATCODE,
                 P.COSTPRICE, 
                 P.SCALEPRICE,
-                P.PRODUCT_NAMELONG');
-        `;
-      }
+                P.PRODUCT_NAMELONG');`;
 
       try {
         await request.query(viewQuery);
+        console.log("✅ vw_STOCK_BALANCE view refreshed successfully");
       } catch (error) {
-        console.error("Error updating view:", error);
+        console.error("❌ Error creating stock view:", error);
         return res.status(500).json({ message: "Error updating stock view" });
       }
 
-
-      // -------------------------
-      // 5️⃣ Fetch Table Records
-      // -------------------------
+      // 5️⃣ Fetch records
       const inClause = selectedOptions.map((code) => `'${code}'`).join(",");
-
-      let tableRecords;
-      let rowRecords;
-      let rowDataStatus = false;
+      let tableRecords, rowRecords, rowDataStatus = false;
 
       try {
         if (state) {
           if (rowSelect) {
-            rowRecords = await pool
-              .request()
-              .query(`
-                USE [${rtweb}];
-                SELECT   
-                    LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
-                    LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
-                    LTRIM(RTRIM(s.CATCODE)) AS CATEGORY_CODE,
-                    c.CATNAME AS CATEGORY_NAME,
-                    LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
-                    s.PRODUCT_NAMELONG AS PRODUCT_NAME,
-                    SUM(s.QTY) AS QUANTITY,
-                    SUM(s.QTY * s.COSTPRICE) AS COST_VALUE,
-                    SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,
-                    s.COSTPRICE,
-                    s.SCALEPRICE
-                FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
-                LEFT JOIN [${posback}].dbo.tb_CATEGORY c
-                    ON LTRIM(RTRIM(s.CATCODE)) = LTRIM(RTRIM(c.CATCODE))
-                WHERE s.COMPANY_CODE IN (${inClause}) AND s.CATCODE = '${categoryCode}'
-                GROUP BY 
-                    s.COMPANY_CODE, 
-                    s.PRODUCT_CODE, 
-                    s.CATCODE, 
-                    c.CATNAME,
-                    LTRIM(RTRIM(s.SERIALNO)),
-                    s.PRODUCT_NAMELONG, 
-                    s.COSTPRICE, 
-                    s.SCALEPRICE;
-              `);
+            rowRecords = await pool.request().query(`
+              USE [${rtweb}];
+              SELECT   
+                LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
+                LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
+                LTRIM(RTRIM(s.CATCODE)) AS CATEGORY_CODE,
+                c.CATNAME AS CATEGORY_NAME,
+                LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
+                s.PRODUCT_NAMELONG AS PRODUCT_NAME,
+                SUM(s.QTY) AS QUANTITY,
+                SUM(s.QTY * s.COSTPRICE) AS COST_VALUE,
+                SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,
+                s.COSTPRICE, s.SCALEPRICE
+              FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
+              LEFT JOIN [${posback}].dbo.tb_CATEGORY c
+                ON LTRIM(RTRIM(s.CATCODE)) = LTRIM(RTRIM(c.CATCODE))
+              WHERE s.COMPANY_CODE IN (${inClause}) AND s.CATCODE = '${categoryCode}'
+              GROUP BY 
+                s.COMPANY_CODE, s.PRODUCT_CODE, s.CATCODE, c.CATNAME,
+                LTRIM(RTRIM(s.SERIALNO)), s.PRODUCT_NAMELONG,
+                s.COSTPRICE, s.SCALEPRICE;
+            `);
             rowDataStatus = true;
           }
 
-          tableRecords = await pool
-            .request()
-            .query(`
-              USE [${rtweb}];
-              SELECT   
-                  LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
-                  LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
-                  LTRIM(RTRIM(s.CATCODE)) AS CATEGORY_CODE,
-                  c.CATNAME AS CATEGORY_NAME,
-                  s.PRODUCT_NAMELONG AS PRODUCT_NAME,
-                  LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
-                  SUM(s.QTY) AS QUANTITY,
-                  SUM(s.QTY * s.COSTPRICE) AS COST_VALUE,
-                  SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,
-                  s.COSTPRICE,
-                  s.SCALEPRICE
-              FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
-              LEFT JOIN [${posback}].dbo.tb_CATEGORY c
-                  ON LTRIM(RTRIM(s.CATCODE)) = LTRIM(RTRIM(c.CATCODE))
-              WHERE s.COMPANY_CODE IN (${inClause})
-              GROUP BY 
-                  s.COMPANY_CODE, 
-                  s.PRODUCT_CODE, 
-                  s.CATCODE, 
-                  c.CATNAME,
-                  LTRIM(RTRIM(s.SERIALNO)),
-                  s.PRODUCT_NAMELONG, 
-                  s.COSTPRICE, 
-                  s.SCALEPRICE;
-            `);
+          tableRecords = await pool.request().query(`
+            USE [${rtweb}];
+            SELECT   
+              LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
+              LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
+              LTRIM(RTRIM(s.CATCODE)) AS CATEGORY_CODE,
+              c.CATNAME AS CATEGORY_NAME,
+              s.PRODUCT_NAMELONG AS PRODUCT_NAME,
+              LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
+              SUM(s.QTY) AS QUANTITY,
+              SUM(s.QTY * s.COSTPRICE) AS COST_VALUE,
+              SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,
+              s.COSTPRICE, s.SCALEPRICE
+            FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
+            LEFT JOIN [${posback}].dbo.tb_CATEGORY c
+              ON LTRIM(RTRIM(s.CATCODE)) = LTRIM(RTRIM(c.CATCODE))
+            WHERE s.COMPANY_CODE IN (${inClause})
+            GROUP BY 
+              s.COMPANY_CODE, s.PRODUCT_CODE, s.CATCODE, c.CATNAME,
+              LTRIM(RTRIM(s.SERIALNO)), s.PRODUCT_NAMELONG,
+              s.COSTPRICE, s.SCALEPRICE;
+          `);
         } else {
           if (rowSelect) {
-            rowRecords = await pool
-              .request()
-              .query(`
-                USE [${rtweb}];
-                SELECT   
-                    LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
-                    LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
-                    LTRIM(RTRIM(s.CATCODE)) AS CATEGORY_CODE,
-                    c.CATNAME AS CATEGORY_NAME,
-                    s.PRODUCT_NAMELONG AS PRODUCT_NAME,
-                    LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
-                    SUM(s.QTY) AS QUANTITY,
-                    s.COSTPRICE,
-                    s.SCALEPRICE
-                FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
-                LEFT JOIN [${posback}].dbo.tb_CATEGORY c
-                    ON LTRIM(RTRIM(s.DEPTCODE)) = LTRIM(RTRIM(c.DEPTCODE))
-                WHERE s.COMPANY_CODE IN (${inClause}) AND s.CATCODE = '${categoryCode}'
-                GROUP BY 
-                    s.COMPANY_CODE, 
-                    s.PRODUCT_CODE, 
-                    s.CATCODE, 
-                    LTRIM(RTRIM(s.SERIALNO)),
-                    c.CATNAME,
-                    s.PRODUCT_NAMELONG, 
-                    s.COSTPRICE, 
-                    s.SCALEPRICE;
-              `);
+            rowRecords = await pool.request().query(`
+              USE [${rtweb}];
+              SELECT   
+                LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
+                LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
+                LTRIM(RTRIM(s.CATCODE)) AS CATEGORY_CODE,
+                c.CATNAME AS CATEGORY_NAME,
+                s.PRODUCT_NAMELONG AS PRODUCT_NAME,
+                LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
+                SUM(s.QTY) AS QUANTITY,
+                s.COSTPRICE, s.SCALEPRICE
+              FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
+              LEFT JOIN [${posback}].dbo.tb_CATEGORY c
+                ON LTRIM(RTRIM(s.CATCODE)) = LTRIM(RTRIM(c.CATCODE))
+              WHERE s.COMPANY_CODE IN (${inClause}) AND s.CATCODE = '${categoryCode}'
+              GROUP BY 
+                s.COMPANY_CODE, s.PRODUCT_CODE, s.CATCODE, c.CATNAME,
+                LTRIM(RTRIM(s.SERIALNO)), s.PRODUCT_NAMELONG,
+                s.COSTPRICE, s.SCALEPRICE;
+            `);
             rowDataStatus = true;
           }
 
-          tableRecords = await pool
-            .request()
-            .query(`
-              USE [${rtweb}];
-              SELECT   
-                  LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
-                  LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
-                  LTRIM(RTRIM(s.CATCODE)) AS CATEGORY_CODE,
-                  c.CATNAME AS CATEGORY_NAME,
-                  s.PRODUCT_NAMELONG AS PRODUCT_NAME,
-                  LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
-                  SUM(s.QTY) AS QUANTITY,
-                  s.COSTPRICE,
-                  s.SCALEPRICE
-              FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
-              LEFT JOIN [${posback}].dbo.tb_CATEGORY c
-                  ON LTRIM(RTRIM(s.DEPTCODE)) = LTRIM(RTRIM(c.DEPTCODE))
-              WHERE s.COMPANY_CODE IN (${inClause})
-              GROUP BY 
-                  s.COMPANY_CODE, 
-                  s.PRODUCT_CODE, 
-                  s.CATCODE, 
-                  LTRIM(RTRIM(s.SERIALNO)),
-                  c.CATNAME,
-                  s.PRODUCT_NAMELONG, 
-                  s.COSTPRICE, 
-                  s.SCALEPRICE;
-            `);
+          tableRecords = await pool.request().query(`
+            USE [${rtweb}];
+            SELECT   
+              LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
+              LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
+              LTRIM(RTRIM(s.CATCODE)) AS CATEGORY_CODE,
+              c.CATNAME AS CATEGORY_NAME,
+              s.PRODUCT_NAMELONG AS PRODUCT_NAME,
+              LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
+              SUM(s.QTY) AS QUANTITY,
+              s.COSTPRICE, s.SCALEPRICE
+            FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
+            LEFT JOIN [${posback}].dbo.tb_CATEGORY c
+              ON LTRIM(RTRIM(s.CATCODE)) = LTRIM(RTRIM(c.CATCODE))
+            WHERE s.COMPANY_CODE IN (${inClause})
+            GROUP BY 
+              s.COMPANY_CODE, s.PRODUCT_CODE, s.CATCODE, c.CATNAME,
+              LTRIM(RTRIM(s.SERIALNO)), s.PRODUCT_NAMELONG,
+              s.COSTPRICE, s.SCALEPRICE;
+          `);
         }
 
         return res.status(200).json({
@@ -4368,17 +4325,13 @@ exports.colorSizeStockCategoryDashboard = async (req, res) => {
           rowDataStatus,
         });
       } catch (fetchErr) {
-        console.error("Error fetching product data:", fetchErr);
-        return res
-          .status(500)
-          .json({ message: "Failed to fetch product data" });
+        console.error("❌ Error fetching product data:", fetchErr);
+        return res.status(500).json({ message: "Failed to fetch product data" });
       }
     });
   } catch (error) {
-    console.error("Unhandled error in productDashboard:", error);
-    return res
-      .status(500)
-      .json({ message: "Failed to load product dashboard" });
+    console.error("❌ Unhandled error in colorSizeStockCategoryDashboard:", error);
+    return res.status(500).json({ message: "Failed to load product dashboard" });
   }
 };
 
@@ -4390,9 +4343,7 @@ exports.colorSizeStockSubCategoryDashboard = async (req, res) => {
     // -------------------------
     const authHeader = req.headers.authorization;
     if (!authHeader) {
-      return res
-        .status(403)
-        .json({ message: "No authorization token provided" });
+      return res.status(403).json({ message: "No authorization token provided" });
     }
 
     const token = authHeader.split(" ")[1];
@@ -4408,52 +4359,48 @@ exports.colorSizeStockSubCategoryDashboard = async (req, res) => {
         return res.status(403).json({ message: "Invalid or expired token" });
       }
 
-      let {
-        currentDate,
-        date,
-        rowSelect,
-        subCategoryCode,
-        state,
-        selectedOptions,
-      } = req.query;
+      // Extract query params
+      let { currentDate, date, rowSelect, subCategoryCode, state, selectedOptions } = req.query;
 
-      // Convert selectedOptions to array if it's a string
+      // Convert boolean-like strings
+      rowSelect = rowSelect === true || String(rowSelect).toLowerCase() === "true";
+      state = state === true || String(state).toLowerCase() === "true";
+
+      // Parse selectedOptions
       if (typeof selectedOptions === "string") {
         selectedOptions = selectedOptions.split(",").map((code) => code.trim());
       }
 
-      if (
-        !Array.isArray(selectedOptions) ||
-        selectedOptions.length === 0 ||
-        selectedOptions[0] === ""
-      ) {
+      if (!Array.isArray(selectedOptions) || selectedOptions.length === 0 || !selectedOptions[0]) {
         return res.status(400).json({ message: "No company codes provided" });
       }
 
-    //    if (!mssql.connected) {
-    //   console.log('no connection')
-    //   const user_ip = String(req.user.ip).trim();
-    // await mssql.connect(dbConnection(user_ip, req.user.port));
-    // }
+      // -------------------------
+      // 3️⃣ Connect to DB
+      // -------------------------
+      const user_ip = String(req.user.ip).trim();
+      if (mssql.connected) {
+        await mssql.close();
+        console.log("✅ Closed previous MSSQL connection");
+      }
 
-    const user_ip = String(req.user.ip).trim(); 
-    await connectToUserDatabase(user_ip, req.user.port.trim());
-      
-      // Format dates
+      const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+      if (!pool.connected) {
+        return res.status(500).json({ message: "Database connection failed" });
+      }
+      const request = pool.request();
+
+      // -------------------------
+      // 4️⃣ Build & Execute View Creation Query
+      // -------------------------
       const formattedCurrentDate = formatDate(currentDate);
       const formattedDate = formatDate(date);
 
-      // Create request instance
-      const request = new mssql.Request();
-
-      // -------------------------
-      // 3️⃣ Build Query to Create View
-      // -------------------------
-      let query;
+      let viewQuery;
 
       if (formattedCurrentDate === formattedDate) {
-        query = `
-          USE ${rtweb};
+        viewQuery = `
+          USE [${rtweb}];
           IF OBJECT_ID('dbo.vw_STOCK_BALANCE', 'V') IS NOT NULL
               DROP VIEW dbo.vw_STOCK_BALANCE;
           EXEC('CREATE VIEW dbo.vw_STOCK_BALANCE AS
@@ -4481,10 +4428,11 @@ exports.colorSizeStockSubCategoryDashboard = async (req, res) => {
                 P.SCATCODE,
                 P.COSTPRICE, 
                 P.SCALEPRICE,
-                P.PRODUCT_NAMELONG');`;
+                P.PRODUCT_NAMELONG');
+        `;
       } else {
-        query = `
-          USE ${rtweb};
+        viewQuery = `
+          USE [${rtweb}];
           IF OBJECT_ID('dbo.vw_STOCK_BALANCE', 'V') IS NOT NULL
               DROP VIEW dbo.vw_STOCK_BALANCE;
           EXEC('CREATE VIEW dbo.vw_STOCK_BALANCE AS
@@ -4517,152 +4465,138 @@ exports.colorSizeStockSubCategoryDashboard = async (req, res) => {
         `;
       }
 
-      // -------------------------
-      // 4️⃣ Execute View Update
-      // -------------------------
-      let result;
       try {
-        result = await request.query(query);
+        await request.query(viewQuery);
       } catch (error) {
-        console.error("Error updating view:", error);
+        console.error("❌ Error updating stock view:", error);
         return res.status(500).json({ message: "Error updating stock view" });
       }
 
-      if (!result) {
-        return res
-          .status(403)
-          .json({ message: "Error occurred in view updating" });
-      }
-
       // -------------------------
-      // 5️⃣ Fetch Table Records
+      // 5️⃣ Fetch Data
       // -------------------------
       const inClause = selectedOptions.map((code) => `'${code}'`).join(",");
+      let tableRecords, rowRecords, rowDataStatus = false;
 
-      let tableRecords;
-      let rowRecords;
-      let rowDataStatus = false;
       try {
-        if (state === true || String(state).toLowerCase() === "true") {
-          if (
-            rowSelect === true ||
-            String(rowSelect).toLowerCase() === "true"
-          ) {
-            rowRecords = await mssql.query(`
-    USE [${rtweb}];
-    SELECT   
-        LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
-        LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
-        LTRIM(RTRIM(s.SCATCODE)) AS SUBCATEGORY_CODE,
-        c.SCATNAME AS SUBCATEGORY_NAME,
-        s.PRODUCT_NAMELONG AS PRODUCT_NAME,
-        LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
-        SUM(s.QTY) AS QUANTITY,
-        SUM(s.QTY * s.COSTPRICE) AS COST_VALUE,
-        SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,
-        s.COSTPRICE,
-        s.SCALEPRICE
-    FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
-    LEFT JOIN [${posback}].dbo.tb_SUBCATEGORY c
-        ON LTRIM(RTRIM(s.SCATCODE)) = LTRIM(RTRIM(c.SCATCODE))
-    WHERE s.COMPANY_CODE IN (${inClause}) AND s.SCATCODE = '${subCategoryCode}'
-    GROUP BY 
-        s.COMPANY_CODE, 
-        s.PRODUCT_CODE, 
-        s.SCATCODE, 
-        LTRIM(RTRIM(s.SERIALNO)),
-        c.SCATNAME,
-        s.PRODUCT_NAMELONG, 
-        s.COSTPRICE, 
-        s.SCALEPRICE;
-  `);
+        if (state) {
+          if (rowSelect) {
+            rowRecords = await pool.request().query(`
+              USE [${rtweb}];
+              SELECT   
+                  LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
+                  LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
+                  LTRIM(RTRIM(s.SCATCODE)) AS SUBCATEGORY_CODE,
+                  c.SCATNAME AS SUBCATEGORY_NAME,
+                  s.PRODUCT_NAMELONG AS PRODUCT_NAME,
+                  LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
+                  SUM(s.QTY) AS QUANTITY,
+                  SUM(s.QTY * s.COSTPRICE) AS COST_VALUE,
+                  SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,
+                  s.COSTPRICE,
+                  s.SCALEPRICE
+              FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
+              LEFT JOIN [${posback}].dbo.tb_SUBCATEGORY c
+                  ON LTRIM(RTRIM(s.SCATCODE)) = LTRIM(RTRIM(c.SCATCODE))
+              WHERE s.COMPANY_CODE IN (${inClause}) 
+                AND s.SCATCODE = '${subCategoryCode}'
+              GROUP BY 
+                  s.COMPANY_CODE, 
+                  s.PRODUCT_CODE, 
+                  s.SCATCODE, 
+                  LTRIM(RTRIM(s.SERIALNO)),
+                  c.SCATNAME,
+                  s.PRODUCT_NAMELONG, 
+                  s.COSTPRICE, 
+                  s.SCALEPRICE;
+            `);
             rowDataStatus = true;
           }
-          tableRecords = await mssql.query(`
-    USE [${rtweb}];
-    SELECT   
-        LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
-        LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
-        LTRIM(RTRIM(s.SCATCODE)) AS SUBCATEGORY_CODE,
-        c.SCATNAME AS SUBCATEGORY_NAME,
-        s.PRODUCT_NAMELONG AS PRODUCT_NAME,
-        SUM(s.QTY) AS QUANTITY,
-        SUM(s.QTY * s.COSTPRICE) AS COST_VALUE,
-        SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,
-        s.COSTPRICE,
-        s.SCALEPRICE
-    FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
-    LEFT JOIN [${posback}].dbo.tb_SUBCATEGORY c
-        ON LTRIM(RTRIM(s.SCATCODE)) = LTRIM(RTRIM(c.SCATCODE))
-    WHERE s.COMPANY_CODE IN (${inClause})
-    GROUP BY 
-        s.COMPANY_CODE, 
-        s.PRODUCT_CODE, 
-        s.SCATCODE, 
-        c.SCATNAME,
-        s.PRODUCT_NAMELONG, 
-        s.COSTPRICE, 
-        s.SCALEPRICE;
-  `);
+
+          tableRecords = await pool.request().query(`
+            USE [${rtweb}];
+            SELECT   
+                LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
+                LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
+                LTRIM(RTRIM(s.SCATCODE)) AS SUBCATEGORY_CODE,
+                c.SCATNAME AS SUBCATEGORY_NAME,
+                s.PRODUCT_NAMELONG AS PRODUCT_NAME,
+                SUM(s.QTY) AS QUANTITY,
+                SUM(s.QTY * s.COSTPRICE) AS COST_VALUE,
+                SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,
+                s.COSTPRICE,
+                s.SCALEPRICE
+            FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
+            LEFT JOIN [${posback}].dbo.tb_SUBCATEGORY c
+                ON LTRIM(RTRIM(s.SCATCODE)) = LTRIM(RTRIM(c.SCATCODE))
+            WHERE s.COMPANY_CODE IN (${inClause})
+            GROUP BY 
+                s.COMPANY_CODE, 
+                s.PRODUCT_CODE, 
+                s.SCATCODE, 
+                c.SCATNAME,
+                s.PRODUCT_NAMELONG, 
+                s.COSTPRICE, 
+                s.SCALEPRICE;
+          `);
         } else {
-          if (
-            rowSelect === true ||
-            String(rowSelect).toLowerCase() === "true"
-          ) {
-            rowRecords = await mssql.query(`
-    USE [${rtweb}];
-    SELECT   
-        LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
-        LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
-        LTRIM(RTRIM(s.SCATCODE)) AS SUBCATEGORY_CODE,
-        c.SCATNAME AS SUBCATEGORY_NAME,
-        s.PRODUCT_NAMELONG AS PRODUCT_NAME,
-        LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
-        SUM(s.QTY) AS QUANTITY,
-        s.COSTPRICE,
-        s.SCALEPRICE
-    FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
-    LEFT JOIN [${posback}].dbo.tb_SUBCATEGORY c
-        ON LTRIM(RTRIM(s.SCATCODE)) = LTRIM(RTRIM(c.SCATCODE))
-    WHERE s.COMPANY_CODE IN (${inClause}) AND s.SCATCODE = '${subCategoryCode}'
-    GROUP BY 
-        s.COMPANY_CODE, 
-        s.PRODUCT_CODE, 
-        s.SCATCODE, 
-        LTRIM(RTRIM(s.SERIALNO)),
-        c.SCATNAME,
-        s.PRODUCT_NAMELONG, 
-        s.COSTPRICE, 
-        s.SCALEPRICE;
-  `);
+          if (rowSelect) {
+            rowRecords = await pool.request().query(`
+              USE [${rtweb}];
+              SELECT   
+                  LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
+                  LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
+                  LTRIM(RTRIM(s.SCATCODE)) AS SUBCATEGORY_CODE,
+                  c.SCATNAME AS SUBCATEGORY_NAME,
+                  s.PRODUCT_NAMELONG AS PRODUCT_NAME,
+                  LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
+                  SUM(s.QTY) AS QUANTITY,
+                  s.COSTPRICE,
+                  s.SCALEPRICE
+              FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
+              LEFT JOIN [${posback}].dbo.tb_SUBCATEGORY c
+                  ON LTRIM(RTRIM(s.SCATCODE)) = LTRIM(RTRIM(c.SCATCODE))
+              WHERE s.COMPANY_CODE IN (${inClause}) 
+                AND s.SCATCODE = '${subCategoryCode}'
+              GROUP BY 
+                  s.COMPANY_CODE, 
+                  s.PRODUCT_CODE, 
+                  s.SCATCODE, 
+                  LTRIM(RTRIM(s.SERIALNO)),
+                  c.SCATNAME,
+                  s.PRODUCT_NAMELONG, 
+                  s.COSTPRICE, 
+                  s.SCALEPRICE;
+            `);
             rowDataStatus = true;
           }
-          tableRecords = await mssql.query(`
-    USE [${rtweb}];
-    SELECT   
-        LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
-        LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
-        LTRIM(RTRIM(s.SCATCODE)) AS SUBCATEGORY_CODE,
-        c.SCATNAME AS SUBCATEGORY_NAME,
-        s.PRODUCT_NAMELONG AS PRODUCT_NAME,
-        LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
-        SUM(s.QTY) AS QUANTITY,
-        s.COSTPRICE,
-        s.SCALEPRICE
-    FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
-    LEFT JOIN [${posback}].dbo.tb_SUBCATEGORY c
-        ON LTRIM(RTRIM(s.SCATCODE)) = LTRIM(RTRIM(c.SCATCODE))
-    WHERE s.COMPANY_CODE IN (${inClause})
-    GROUP BY 
-        s.COMPANY_CODE, 
-        s.PRODUCT_CODE, 
-        s.SCATCODE, 
-        LTRIM(RTRIM(s.SERIALNO)),
-        c.SCATNAME,
-        s.PRODUCT_NAMELONG, 
-        s.COSTPRICE, 
-        s.SCALEPRICE;
-  `);
+
+          tableRecords = await pool.request().query(`
+            USE [${rtweb}];
+            SELECT   
+                LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
+                LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
+                LTRIM(RTRIM(s.SCATCODE)) AS SUBCATEGORY_CODE,
+                c.SCATNAME AS SUBCATEGORY_NAME,
+                s.PRODUCT_NAMELONG AS PRODUCT_NAME,
+                LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
+                SUM(s.QTY) AS QUANTITY,
+                s.COSTPRICE,
+                s.SCALEPRICE
+            FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
+            LEFT JOIN [${posback}].dbo.tb_SUBCATEGORY c
+                ON LTRIM(RTRIM(s.SCATCODE)) = LTRIM(RTRIM(c.SCATCODE))
+            WHERE s.COMPANY_CODE IN (${inClause})
+            GROUP BY 
+                s.COMPANY_CODE, 
+                s.PRODUCT_CODE, 
+                s.SCATCODE, 
+                LTRIM(RTRIM(s.SERIALNO)),
+                c.SCATNAME,
+                s.PRODUCT_NAMELONG, 
+                s.COSTPRICE, 
+                s.SCALEPRICE;
+          `);
         }
 
         return res.status(200).json({
@@ -4670,293 +4604,178 @@ exports.colorSizeStockSubCategoryDashboard = async (req, res) => {
           success: true,
           tableRecords: tableRecords.recordset || [],
           rowRecords: rowRecords ? rowRecords.recordset || [] : [],
-          rowDataStatus: rowDataStatus,
+          rowDataStatus,
         });
       } catch (fetchErr) {
-        console.error("Error fetching product data:", fetchErr);
-        return res
-          .status(500)
-          .json({ message: "Failed to fetch product data" });
+        console.error("❌ Error fetching product data:", fetchErr);
+        return res.status(500).json({ message: "Failed to fetch product data" });
       }
     });
   } catch (error) {
-    console.error("Unhandled error in productDashboard:", error);
-    return res
-      .status(500)
-      .json({ message: "Failed to load product dashboard" });
+    console.error("❌ Unhandled error in subCategoryDashboard:", error);
+    return res.status(500).json({ message: "Failed to load sub category dashboard" });
   }
 };
 
 //color size stock vendor dashboard data
 exports.colorSizeStockVendorDashboard = async (req, res) => {
   try {
-    // -------------------------
-    // 1️⃣ Authorization Check
-    // -------------------------
+    // 1️⃣ Authorization
     const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      return res
-        .status(403)
-        .json({ message: "No authorization token provided" });
-    }
-
+    if (!authHeader) return res.status(403).json({ message: "No authorization token provided" });
     const token = authHeader.split(" ")[1];
-    if (!token) {
-      return res.status(403).json({ message: "Token is missing" });
-    }
+    if (!token) return res.status(403).json({ message: "Token is missing" });
 
-    // -------------------------
     // 2️⃣ Verify Token
-    // -------------------------
     jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
-      if (err) {
-        return res.status(403).json({ message: "Invalid or expired token" });
-      }
+      if (err) return res.status(403).json({ message: "Invalid or expired token" });
 
-      let { currentDate, date, rowSelect, vendorCode, state, selectedOptions } =
-        req.query;
+      let { currentDate, date, rowSelect, vendorCode, state, selectedOptions } = req.query;
 
-      // Convert selectedOptions to array if it's a string
-      if (typeof selectedOptions === "string") {
-        selectedOptions = selectedOptions.split(",").map((code) => code.trim());
-      }
+      rowSelect = rowSelect === true || String(rowSelect).toLowerCase() === "true";
+      state = state === true || String(state).toLowerCase() === "true";
 
-      if (
-        !Array.isArray(selectedOptions) ||
-        selectedOptions.length === 0 ||
-        selectedOptions[0] === ""
-      ) {
+      if (typeof selectedOptions === "string") selectedOptions = selectedOptions.split(",").map(c => c.trim());
+      if (!Array.isArray(selectedOptions) || selectedOptions.length === 0 || !selectedOptions[0]) {
         return res.status(400).json({ message: "No company codes provided" });
       }
 
-    //    if (!mssql.connected) {
-    //   console.log('no connection')
-    //   const user_ip = String(req.user.ip).trim();
-    // await mssql.connect(dbConnection(user_ip, req.user.port));
-    // }
-const user_ip = String(req.user.ip).trim(); 
-  await connectToUserDatabase(user_ip, req.user.port.trim());
-      
-      // Format dates
+      // 3️⃣ DB Connection
+      const user_ip = String(req.user.ip).trim();
+      if (mssql.connected) await mssql.close();
+
+      const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+      if (!pool.connected) return res.status(500).json({ message: "Database connection failed" });
+
+      const request = pool.request();
+
       const formattedCurrentDate = formatDate(currentDate);
       const formattedDate = formatDate(date);
 
-      // Create request instance
-      const request = new mssql.Request();
+      // 4️⃣ Build View Query
+      const viewQuery = `
+        USE [${rtweb}];
+        IF OBJECT_ID('dbo.vw_STOCK_BALANCE', 'V') IS NOT NULL DROP VIEW dbo.vw_STOCK_BALANCE;
+        EXEC('CREATE VIEW dbo.vw_STOCK_BALANCE AS
+          SELECT 
+            S.PRODUCT_CODE,
+            S.COMPANY_CODE,
+            LTRIM(RTRIM(S.SERIALNO)) AS SERIALNO,
+            ISNULL(SUM(S.STOCK),0) AS QTY,
+            P.PRODUCT_NAMELONG,
+            P.VENDORCODE,
+            P.COSTPRICE,
+            P.SCALEPRICE
+          FROM ${posback}.dbo.tb_STOCK S
+          INNER JOIN ${posback}.dbo.tb_PRODUCT P ON P.PRODUCT_CODE = S.PRODUCT_CODE
+          WHERE ((BIN = ''F'') OR (BIN IS NULL)) 
+            ${formattedCurrentDate !== formattedDate ? `AND CONVERT(date, S.DATE) <= CONVERT(date, ''${formattedDate}'', 103)` : ""}
+          GROUP BY 
+            S.PRODUCT_CODE,
+            S.COMPANY_CODE,
+            LTRIM(RTRIM(S.SERIALNO)),
+            P.VENDORCODE,
+            P.COSTPRICE,
+            P.SCALEPRICE,
+            P.PRODUCT_NAMELONG');
+      `;
 
-      // -------------------------
-      // 3️⃣ Build Query to Create View
-      // -------------------------
-      let query;
+      try { await request.query(viewQuery); } 
+      catch (err) { console.error("Error updating view:", err); return res.status(500).json({ message: "Error updating stock view" }); }
 
-      if (formattedCurrentDate === formattedDate) {
-        query = `
-          USE ${rtweb};
-          IF OBJECT_ID('dbo.vw_STOCK_BALANCE', 'V') IS NOT NULL
-              DROP VIEW dbo.vw_STOCK_BALANCE;
-          EXEC('CREATE VIEW dbo.vw_STOCK_BALANCE AS
-            SELECT 
-                S.PRODUCT_CODE, 
-                S.COMPANY_CODE, 
-                LTRIM(RTRIM(S.SERIALNO)) AS SERIALNO,
-                ISNULL(SUM(S.STOCK), 0) AS QTY, 
-                P.PRODUCT_NAMELONG,
-                P.VENDORCODE,
-                P.COSTPRICE, 
-                P.SCALEPRICE 
-            FROM ${posback}.dbo.tb_STOCK S
-            INNER JOIN ${posback}.dbo.tb_PRODUCT P
-                ON P.PRODUCT_CODE = S.PRODUCT_CODE
-            WHERE (BIN = ''F'') OR (BIN IS NULL)
-            GROUP BY 
-                S.PRODUCT_CODE, 
-                S.COMPANY_CODE,
-                LTRIM(RTRIM(S.SERIALNO)),
-                P.VENDORCODE,
-                P.COSTPRICE, 
-                P.SCALEPRICE,
-                P.PRODUCT_NAMELONG');`;
-      } else {
-        query = `
-          USE ${rtweb};
-          IF OBJECT_ID('dbo.vw_STOCK_BALANCE', 'V') IS NOT NULL
-              DROP VIEW dbo.vw_STOCK_BALANCE;
-          EXEC('CREATE VIEW dbo.vw_STOCK_BALANCE AS
-            SELECT 
-                S.PRODUCT_CODE, 
-                S.COMPANY_CODE, 
-                LTRIM(RTRIM(S.SERIALNO)) AS SERIALNO,
-                ISNULL(SUM(S.STOCK), 0) AS QTY, 
-                P.PRODUCT_NAMELONG,
-                P.VENDORCODE,
-                P.COSTPRICE, 
-                P.SCALEPRICE 
-            FROM ${posback}.dbo.tb_STOCK S
-            INNER JOIN ${posback}.dbo.tb_PRODUCT P
-                ON P.PRODUCT_CODE = S.PRODUCT_CODE
-            WHERE ((BIN = ''F'') OR (BIN IS NULL))
-              AND CONVERT(date, S.DATE) <= CONVERT(date, ''${formattedDate}'', 103)
-            GROUP BY 
-                S.PRODUCT_CODE, 
-                S.COMPANY_CODE,
-                LTRIM(RTRIM(S.SERIALNO)),
-                P.VENDORCODE,
-                P.COSTPRICE, 
-                P.SCALEPRICE,
-                P.PRODUCT_NAMELONG');
-        `;
-      }
-
-      // -------------------------
-      // 4️⃣ Execute View Update
-      // -------------------------
-      let result;
-      try {
-        result = await request.query(query);
-      } catch (error) {
-        console.error("Error updating view:", error);
-        return res.status(500).json({ message: "Error updating stock view" });
-      }
-
-      if (!result) {
-        return res
-          .status(403)
-          .json({ message: "Error occurred in view updating" });
-      }
-
-      // -------------------------
-      // 5️⃣ Fetch Table Records
-      // -------------------------
-      const inClause = selectedOptions.map((code) => `'${code}'`).join(",");
-
-      let tableRecords;
-      let rowRecords;
-      let rowDataStatus = false;
+      // 5️⃣ Fetch Data
+      const inClause = selectedOptions.map(c => `'${c}'`).join(",");
+      let tableRecords, rowRecords, rowDataStatus = false;
 
       try {
-        if (state === true || String(state).toLowerCase() === "true") {
-          if (
-            rowSelect === true ||
-            String(rowSelect).toLowerCase() === "true"
-          ) {
-            rowRecords = await mssql.query(`
-    USE [${rtweb}];
-    SELECT   
-        LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
-        LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
-        LTRIM(RTRIM(s.VENDORCODE)) AS VENDOR_CODE,
-        LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
-        v.VENDORNAME AS VENDOR_NAME,
-        s.PRODUCT_NAMELONG AS PRODUCT_NAME,
-        SUM(s.QTY) AS QUANTITY,
-        SUM(s.QTY * s.COSTPRICE) AS COST_VALUE,
-        SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,
-        s.COSTPRICE,
-        s.SCALEPRICE
-    FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
-    LEFT JOIN [${posback}].dbo.tb_VENDOR v
-        ON LTRIM(RTRIM(s.VENDORCODE)) = LTRIM(RTRIM(v.VENDORCODE))
-    WHERE s.COMPANY_CODE IN (${inClause}) AND s.VENDORCODE = '${vendorCode}'
-    GROUP BY 
-        s.COMPANY_CODE, 
-        s.PRODUCT_CODE, 
-        s.VENDORCODE, 
-        v.VENDORNAME,
-        LTRIM(RTRIM(s.SERIALNO)),
-        s.PRODUCT_NAMELONG, 
-        s.COSTPRICE, 
-        s.SCALEPRICE;
-  `);
+        if (state) {
+          if (rowSelect) {
+            rowRecords = await pool.request().query(`
+              USE [${rtweb}];
+              SELECT 
+                LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
+                LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
+                LTRIM(RTRIM(s.VENDORCODE)) AS VENDOR_CODE,
+                LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
+                v.VENDORNAME AS VENDOR_NAME,
+                s.PRODUCT_NAMELONG AS PRODUCT_NAME,
+                SUM(s.QTY) AS QUANTITY,
+                SUM(s.QTY * s.COSTPRICE) AS COST_VALUE,
+                SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,
+                s.COSTPRICE,
+                s.SCALEPRICE
+              FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
+              LEFT JOIN [${posback}].dbo.tb_VENDOR v
+                ON LTRIM(RTRIM(s.VENDORCODE)) = LTRIM(RTRIM(v.VENDORCODE))
+              WHERE s.COMPANY_CODE IN (${inClause}) AND s.VENDORCODE = '${vendorCode}'
+              GROUP BY 
+                s.COMPANY_CODE, s.PRODUCT_CODE, s.VENDORCODE, v.VENDORNAME, 
+                LTRIM(RTRIM(s.SERIALNO)), s.PRODUCT_NAMELONG, s.COSTPRICE, s.SCALEPRICE;
+            `);
             rowDataStatus = true;
           }
-          tableRecords = await mssql.query(`
-    USE [${rtweb}];
-    SELECT   
-        LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
-        LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
-        LTRIM(RTRIM(s.VENDORCODE)) AS VENDOR_CODE,
-        v.VENDORNAME AS VENDOR_NAME,
-        LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
-        s.PRODUCT_NAMELONG AS PRODUCT_NAME,
-        SUM(s.QTY) AS QUANTITY,
-        SUM(s.QTY * s.COSTPRICE) AS COST_VALUE,
-        SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,
-        s.COSTPRICE,
-        s.SCALEPRICE
-    FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
-    LEFT JOIN [${posback}].dbo.tb_VENDOR v
-        ON LTRIM(RTRIM(s.VENDORCODE)) = LTRIM(RTRIM(v.VENDORCODE))
-    WHERE s.COMPANY_CODE IN (${inClause})
-    GROUP BY 
-        s.COMPANY_CODE, 
-        s.PRODUCT_CODE, 
-        s.VENDORCODE, 
-        LTRIM(RTRIM(s.SERIALNO)),
-        v.VENDORNAME,
-        s.PRODUCT_NAMELONG, 
-        s.COSTPRICE, 
-        s.SCALEPRICE;
-  `);
+
+          tableRecords = await pool.request().query(`
+            USE [${rtweb}];
+            SELECT 
+              LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
+              LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
+              LTRIM(RTRIM(s.VENDORCODE)) AS VENDOR_CODE,
+              v.VENDORNAME AS VENDOR_NAME,
+              LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
+              s.PRODUCT_NAMELONG AS PRODUCT_NAME,
+              SUM(s.QTY) AS QUANTITY,
+              SUM(s.QTY * s.COSTPRICE) AS COST_VALUE,
+              SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,
+              s.COSTPRICE,
+              s.SCALEPRICE
+            FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
+            LEFT JOIN [${posback}].dbo.tb_VENDOR v
+              ON LTRIM(RTRIM(s.VENDORCODE)) = LTRIM(RTRIM(v.VENDORCODE))
+            WHERE s.COMPANY_CODE IN (${inClause})
+            GROUP BY s.COMPANY_CODE, s.PRODUCT_CODE, s.VENDORCODE, LTRIM(RTRIM(s.SERIALNO)), v.VENDORNAME, s.PRODUCT_NAMELONG, s.COSTPRICE, s.SCALEPRICE;
+          `);
         } else {
-          if (
-            rowSelect === true ||
-            String(rowSelect).toLowerCase() === "true"
-          ) {
-            rowRecords = await mssql.query(`
-    USE [${rtweb}];
-    SELECT   
-        LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
-        LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
-        LTRIM(RTRIM(s.VENDORCODE)) AS VENDOR_CODE,
-        LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
-        v.VENDORNAME AS VENDOR_NAME,
-        s.PRODUCT_NAMELONG AS PRODUCT_NAME,
-        SUM(s.QTY) AS QUANTITY,
-        s.COSTPRICE,
-        s.SCALEPRICE
-    FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
-    LEFT JOIN [${posback}].dbo.tb_VENDOR v
-        ON LTRIM(RTRIM(s.VENDORCODE)) = LTRIM(RTRIM(v.VENDORCODE))
-    WHERE s.COMPANY_CODE IN (${inClause}) AND s.VENDORCODE = '${vendorCode}'
-    GROUP BY 
-        s.COMPANY_CODE, 
-        s.PRODUCT_CODE, 
-        LTRIM(RTRIM(s.SERIALNO)),
-        s.VENDORCODE, 
-        v.VENDORNAME,
-        s.PRODUCT_NAMELONG, 
-        s.COSTPRICE, 
-        s.SCALEPRICE;
-  `);
-
+          if (rowSelect) {
+            rowRecords = await pool.request().query(`
+              USE [${rtweb}];
+              SELECT 
+                LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
+                LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
+                LTRIM(RTRIM(s.VENDORCODE)) AS VENDOR_CODE,
+                LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
+                v.VENDORNAME AS VENDOR_NAME,
+                s.PRODUCT_NAMELONG AS PRODUCT_NAME,
+                SUM(s.QTY) AS QUANTITY,
+                s.COSTPRICE,
+                s.SCALEPRICE
+              FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
+              LEFT JOIN [${posback}].dbo.tb_VENDOR v
+                ON LTRIM(RTRIM(s.VENDORCODE)) = LTRIM(RTRIM(v.VENDORCODE))
+              WHERE s.COMPANY_CODE IN (${inClause}) AND s.VENDORCODE = '${vendorCode}'
+              GROUP BY s.COMPANY_CODE, s.PRODUCT_CODE, LTRIM(RTRIM(s.SERIALNO)), s.VENDORCODE, v.VENDORNAME, s.PRODUCT_NAMELONG, s.COSTPRICE, s.SCALEPRICE;
+            `);
             rowDataStatus = true;
           }
-          tableRecords = await mssql.query(`
-    USE [${rtweb}];
-    SELECT   
-        LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
-        LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
-        LTRIM(RTRIM(s.VENDORCODE)) AS VENDOR_CODE,
-        LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
-        v.VENDORNAME AS VENDOR_NAME,
-        s.PRODUCT_NAMELONG AS PRODUCT_NAME,
-        SUM(s.QTY) AS QUANTITY,
-        s.COSTPRICE,
-        s.SCALEPRICE
-    FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
-    LEFT JOIN [${posback}].dbo.tb_VENDOR v
-        ON LTRIM(RTRIM(s.VENDORCODE)) = LTRIM(RTRIM(v.VENDORCODE))
-    WHERE s.COMPANY_CODE IN (${inClause})
-    GROUP BY 
-        s.COMPANY_CODE, 
-        s.PRODUCT_CODE, 
-        LTRIM(RTRIM(s.SERIALNO)),
-        s.VENDORCODE, 
-        v.VENDORNAME,
-        s.PRODUCT_NAMELONG, 
-        s.COSTPRICE, 
-        s.SCALEPRICE;
-  `);
+
+          tableRecords = await pool.request().query(`
+            USE [${rtweb}];
+            SELECT 
+              LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
+              LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
+              LTRIM(RTRIM(s.VENDORCODE)) AS VENDOR_CODE,
+              LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
+              v.VENDORNAME AS VENDOR_NAME,
+              s.PRODUCT_NAMELONG AS PRODUCT_NAME,
+              SUM(s.QTY) AS QUANTITY,
+              s.COSTPRICE,
+              s.SCALEPRICE
+            FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
+            LEFT JOIN [${posback}].dbo.tb_VENDOR v
+              ON LTRIM(RTRIM(s.VENDORCODE)) = LTRIM(RTRIM(v.VENDORCODE))
+            WHERE s.COMPANY_CODE IN (${inClause})
+            GROUP BY s.COMPANY_CODE, s.PRODUCT_CODE, LTRIM(RTRIM(s.SERIALNO)), s.VENDORCODE, v.VENDORNAME, s.PRODUCT_NAMELONG, s.COSTPRICE, s.SCALEPRICE;
+          `);
         }
 
         return res.status(200).json({
@@ -4964,34 +4783,33 @@ const user_ip = String(req.user.ip).trim();
           success: true,
           tableRecords: tableRecords.recordset || [],
           rowRecords: rowRecords ? rowRecords.recordset || [] : [],
-          rowDataStatus: rowDataStatus,
+          rowDataStatus,
         });
       } catch (fetchErr) {
-        console.error("Error fetching product data:", fetchErr);
-        return res
-          .status(500)
-          .json({ message: "Failed to fetch product data" });
+        console.error("Error fetching vendor data:", fetchErr);
+        return res.status(500).json({ message: "Failed to fetch vendor data" });
       }
     });
   } catch (error) {
-    console.error("Unhandled error in productDashboard:", error);
-    return res
-      .status(500)
-      .json({ message: "Failed to load product dashboard" });
+    console.error("Unhandled error in vendorDashboard:", error);
+    return res.status(500).json({ message: "Failed to load vendor dashboard" });
   }
 };
 
 //stock product dashboard data
 exports.stockProductDashboard = async (req, res) => {
+  if (mssql.connected) {
+    await mssql.close();
+    console.log("✅ Database connection closed successfully");
+  }
+  let pool;
   try {
     // -------------------------
     // 1️⃣ Authorization Check
     // -------------------------
     const authHeader = req.headers.authorization;
     if (!authHeader) {
-      return res
-        .status(403)
-        .json({ message: "No authorization token provided" });
+      return res.status(403).json({ message: "No authorization token provided" });
     }
 
     const token = authHeader.split(" ")[1];
@@ -5014,34 +4832,37 @@ exports.stockProductDashboard = async (req, res) => {
         selectedOptions = selectedOptions.split(",").map((code) => code.trim());
       }
 
-      if (
-        !Array.isArray(selectedOptions) ||
-        selectedOptions.length === 0 ||
-        selectedOptions[0] === ""
-      ) {
+      if (!Array.isArray(selectedOptions) || selectedOptions.length === 0 || selectedOptions[0] === "") {
         return res.status(400).json({ message: "No company codes provided" });
       }
 
-      // Format dates
+      // -------------------------
+      // 3️⃣ Format Dates
+      // -------------------------
       const formattedCurrentDate = formatDate(currentDate);
       const formattedDate = formatDate(date);
 
-      // Create request instance
-      const request = new mssql.Request();
+      // -------------------------
+      // 4️⃣ Connect to User Database (Pool)
+      // -------------------------
+      const user_ip = String(req.user.ip).trim();
+      const user_port = req.user.port.trim();
+      pool = await connectToUserDatabase(user_ip, user_port);
+
+      if (!pool || !pool.connected) {
+        return res.status(500).json({ message: "Database connection failed" });
+      }
+
+      // Helper to execute queries safely via pool
+      const execQuery = async (query) => {
+        const request = pool.request();
+        return request.query(query);
+      };
 
       // -------------------------
-      // 3️⃣ Build Query to Create View
+      // 5️⃣ Build Query to Create View
       // -------------------------
       let query;
-
-    //    if (!mssql.connected) {
-    //   console.log('no connection')
-    //   const user_ip = String(req.user.ip).trim();
-    // await mssql.connect(dbConnection(user_ip, req.user.port));
-    // }
-    const user_ip = String(req.user.ip).trim(); 
-  await connectToUserDatabase(user_ip, req.user.port.trim());
-
       if (formattedCurrentDate === formattedDate) {
         query = `
           USE ${rtweb};
@@ -5064,7 +4885,8 @@ exports.stockProductDashboard = async (req, res) => {
                 S.COMPANY_CODE,
                 P.COSTPRICE, 
                 P.SCALEPRICE,
-                P.PRODUCT_NAMELONG');`;
+                P.PRODUCT_NAMELONG');
+        `;
       } else {
         query = `
           USE ${rtweb};
@@ -5093,78 +4915,73 @@ exports.stockProductDashboard = async (req, res) => {
       }
 
       // -------------------------
-      // 4️⃣ Execute View Update
+      // 6️⃣ Execute View Update
       // -------------------------
-      let result;
       try {
-        result = await request.query(query);
+        await execQuery(query);
+        console.log("✅ View vw_STOCK_BALANCE updated successfully");
       } catch (error) {
-        console.error("Error updating view:", error);
+        console.error("❌ Error updating view:", error);
         return res.status(500).json({ message: "Error updating stock view" });
       }
 
-      if (!result) {
-        return res
-          .status(403)
-          .json({ message: "Error occurred in view updating" });
-      }
-
       // -------------------------
-      // 5️⃣ Fetch Table Records
+      // 7️⃣ Fetch Table Records
       // -------------------------
       const inClause = selectedOptions.map((code) => `'${code}'`).join(",");
 
-      let tableRecords;
-      try {
-        if (state === true || String(state).toLowerCase() === "true") {
-          tableRecords = await mssql.query(`
-                           USE [${rtweb}];
-                            SELECT   
-                              LTRIM(RTRIM(COMPANY_CODE)) AS COMPANY_CODE,
-                              LTRIM(RTRIM(PRODUCT_CODE)) AS PRODUCT_CODE,
-                              PRODUCT_NAMELONG AS PRODUCT_NAME,
-                              SUM(QTY) AS QUANTITY,
-                              SUM(QTY * COSTPRICE) AS COST_VALUE,
-                              SUM(QTY * SCALEPRICE) AS SALES_VALUE,
-                              COSTPRICE,
-                              SCALEPRICE
-                            FROM [${rtweb}].dbo.vw_STOCK_BALANCE
-                            WHERE COMPANY_CODE IN (${inClause})
-                            GROUP BY COMPANY_CODE, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE
-                          `);
-        } else {
-          tableRecords = await mssql.query(`
-                            USE [${rtweb}];
-                            SELECT   
-                              LTRIM(RTRIM(COMPANY_CODE)) AS COMPANY_CODE,
-                              LTRIM(RTRIM(PRODUCT_CODE)) AS PRODUCT_CODE,
-                              PRODUCT_NAMELONG AS PRODUCT_NAME,
-                              SUM(QTY) AS QUANTITY,
-                              COSTPRICE,
-                              SCALEPRICE
-                            FROM [${rtweb}].dbo.vw_STOCK_BALANCE
-                            WHERE COMPANY_CODE IN (${inClause})
-                            GROUP BY COMPANY_CODE, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE
-                          `);
-        }
-
-        return res.status(200).json({
-          message: "Processed parameters for company codes",
-          success: true,
-          tableRecords: tableRecords.recordset || [],
-        });
-      } catch (fetchErr) {
-        console.error("Error fetching product data:", fetchErr);
-        return res
-          .status(500)
-          .json({ message: "Failed to fetch product data" });
+      let fetchQuery;
+      if (state === true || String(state).toLowerCase() === "true") {
+        fetchQuery = `
+          USE [${rtweb}];
+          SELECT   
+            LTRIM(RTRIM(COMPANY_CODE)) AS COMPANY_CODE,
+            LTRIM(RTRIM(PRODUCT_CODE)) AS PRODUCT_CODE,
+            PRODUCT_NAMELONG AS PRODUCT_NAME,
+            SUM(QTY) AS QUANTITY,
+            SUM(QTY * COSTPRICE) AS COST_VALUE,
+            SUM(QTY * SCALEPRICE) AS SALES_VALUE,
+            COSTPRICE,
+            SCALEPRICE
+          FROM [${rtweb}].dbo.vw_STOCK_BALANCE
+          WHERE COMPANY_CODE IN (${inClause})
+          GROUP BY COMPANY_CODE, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE
+        `;
+      } else {
+        fetchQuery = `
+          USE [${rtweb}];
+          SELECT   
+            LTRIM(RTRIM(COMPANY_CODE)) AS COMPANY_CODE,
+            LTRIM(RTRIM(PRODUCT_CODE)) AS PRODUCT_CODE,
+            PRODUCT_NAMELONG AS PRODUCT_NAME,
+            SUM(QTY) AS QUANTITY,
+            COSTPRICE,
+            SCALEPRICE
+          FROM [${rtweb}].dbo.vw_STOCK_BALANCE
+          WHERE COMPANY_CODE IN (${inClause})
+          GROUP BY COMPANY_CODE, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE
+        `;
       }
+
+      const tableRecords = await execQuery(fetchQuery);
+
+      // -------------------------
+      // 8️⃣ Response
+      // -------------------------
+      return res.status(200).json({
+        message: "Processed parameters for company codes",
+        success: true,
+        tableRecords: tableRecords.recordset || [],
+      });
     });
   } catch (error) {
-    console.error("Unhandled error in productDashboard:", error);
-    return res
-      .status(500)
-      .json({ message: "Failed to load product dashboard" });
+    console.error("❌ Unhandled error in stockProductDashboard:", error);
+    return res.status(500).json({ message: "Failed to load product dashboard" });
+  } finally {
+    if (pool && pool.connected) {
+      await pool.close();
+      console.log("🔒 Database pool connection closed");
+    }
   }
 };
 
@@ -5176,9 +4993,7 @@ exports.stockDepartmentDashboard = async (req, res) => {
     // -------------------------
     const authHeader = req.headers.authorization;
     if (!authHeader) {
-      return res
-        .status(403)
-        .json({ message: "No authorization token provided" });
+      return res.status(403).json({ message: "No authorization token provided" });
     }
 
     const token = authHeader.split(" ")[1];
@@ -5196,44 +5011,42 @@ exports.stockDepartmentDashboard = async (req, res) => {
 
       let { currentDate, date, state, selectedOptions } = req.query;
 
-      // Convert selectedOptions to array if it's a string
+      // Ensure selectedOptions is an array
       if (typeof selectedOptions === "string") {
         selectedOptions = selectedOptions.split(",").map((code) => code.trim());
       }
 
-      if (
-        !Array.isArray(selectedOptions) ||
-        selectedOptions.length === 0 ||
-        selectedOptions[0] === ""
-      ) {
+      if (!Array.isArray(selectedOptions) || selectedOptions.length === 0) {
         return res.status(400).json({ message: "No company codes provided" });
       }
 
-    //    if (!mssql.connected) {
-    //   console.log('no connection')
-    //   const user_ip = String(req.user.ip).trim();
-    // await mssql.connect(dbConnection(user_ip, req.user.port));
-    // }
-    const user_ip = String(req.user.ip).trim(); 
-  await connectToUserDatabase(user_ip, req.user.port.trim());
+      // -------------------------
+      // 3️⃣ Database Connection
+      // -------------------------
 
-      // Format dates
+      if (mssql.connected) {
+    await mssql.close();
+    console.log("✅ Database connection closed successfully");
+  }
+      const user_ip = String(req.user.ip).trim();
+      const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+
+      if (!pool || !pool.connected) {
+        return res.status(500).json({ message: "Database connection failed" });
+      }
+
+      // -------------------------
+      // 4️⃣ Prepare Query for View
+      // -------------------------
       const formattedCurrentDate = formatDate(currentDate);
       const formattedDate = formatDate(date);
+      const request = pool.request();
 
-      // Create request instance
-      const request = new mssql.Request();
-
-      // -------------------------
-      // 3️⃣ Build Query to Create View
-      // -------------------------
-      let query;
-
-      if (formattedCurrentDate === formattedDate) {
-        query = `
+      const viewQuery =
+        formattedCurrentDate === formattedDate
+          ? `
           USE ${rtweb};
-          IF OBJECT_ID('dbo.vw_STOCK_BALANCE', 'V') IS NOT NULL
-              DROP VIEW dbo.vw_STOCK_BALANCE;
+          IF OBJECT_ID('dbo.vw_STOCK_BALANCE', 'V') IS NOT NULL DROP VIEW dbo.vw_STOCK_BALANCE;
           EXEC('CREATE VIEW dbo.vw_STOCK_BALANCE AS
             SELECT 
                 S.PRODUCT_CODE, 
@@ -5253,12 +5066,10 @@ exports.stockDepartmentDashboard = async (req, res) => {
                 P.DEPTCODE,
                 P.COSTPRICE, 
                 P.SCALEPRICE,
-                P.PRODUCT_NAMELONG');`;
-      } else {
-        query = `
+                P.PRODUCT_NAMELONG');`
+          : `
           USE ${rtweb};
-          IF OBJECT_ID('dbo.vw_STOCK_BALANCE', 'V') IS NOT NULL
-              DROP VIEW dbo.vw_STOCK_BALANCE;
+          IF OBJECT_ID('dbo.vw_STOCK_BALANCE', 'V') IS NOT NULL DROP VIEW dbo.vw_STOCK_BALANCE;
           EXEC('CREATE VIEW dbo.vw_STOCK_BALANCE AS
             SELECT 
                 S.PRODUCT_CODE, 
@@ -5279,105 +5090,92 @@ exports.stockDepartmentDashboard = async (req, res) => {
                 P.DEPTCODE,
                 P.COSTPRICE, 
                 P.SCALEPRICE,
-                P.PRODUCT_NAMELONG');
-        `;
-      }
+                P.PRODUCT_NAMELONG');`;
 
-      // -------------------------
-      // 4️⃣ Execute View Update
-      // -------------------------
-      let result;
       try {
-        result = await request.query(query);
+        await request.query(viewQuery);
+        console.log("✅ Stock view updated successfully");
       } catch (error) {
-        console.error("Error updating view:", error);
+        console.error("❌ Error updating view:", error);
         return res.status(500).json({ message: "Error updating stock view" });
-      }
-
-      if (!result) {
-        return res
-          .status(403)
-          .json({ message: "Error occurred in view updating" });
       }
 
       // -------------------------
       // 5️⃣ Fetch Table Records
       // -------------------------
       const inClause = selectedOptions.map((code) => `'${code}'`).join(",");
+      const tableRequest = pool.request();
 
-      let tableRecords;
+      let query;
+      if (state === true || String(state).toLowerCase() === "true") {
+        query = `
+          USE [${rtweb}];
+          SELECT   
+              LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
+              LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
+              LTRIM(RTRIM(s.DEPTCODE)) AS DEPARTMENT_CODE,
+              d.DEPTNAME AS DEPARTMENT_NAME,
+              s.PRODUCT_NAMELONG AS PRODUCT_NAME,
+              SUM(s.QTY) AS QUANTITY,
+              SUM(s.QTY * s.COSTPRICE) AS COST_VALUE,
+              SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,
+              s.COSTPRICE,
+              s.SCALEPRICE
+          FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
+          LEFT JOIN [${posback}].dbo.tb_DEPARTMENT d
+              ON LTRIM(RTRIM(s.DEPTCODE)) = LTRIM(RTRIM(d.DEPTCODE))
+          WHERE s.COMPANY_CODE IN (${inClause})
+          GROUP BY 
+              s.COMPANY_CODE, 
+              s.PRODUCT_CODE, 
+              s.DEPTCODE, 
+              d.DEPTNAME,
+              s.PRODUCT_NAMELONG, 
+              s.COSTPRICE, 
+              s.SCALEPRICE;
+        `;
+      } else {
+        query = `
+          USE [${rtweb}];
+          SELECT   
+              LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
+              LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
+              LTRIM(RTRIM(s.DEPTCODE)) AS DEPARTMENT_CODE,
+              d.DEPTNAME AS DEPARTMENT_NAME,
+              s.PRODUCT_NAMELONG AS PRODUCT_NAME,
+              SUM(s.QTY) AS QUANTITY,
+              s.COSTPRICE,
+              s.SCALEPRICE
+          FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
+          LEFT JOIN [${posback}].dbo.tb_DEPARTMENT d
+              ON LTRIM(RTRIM(s.DEPTCODE)) = LTRIM(RTRIM(d.DEPTCODE))
+          WHERE s.COMPANY_CODE IN (${inClause})
+          GROUP BY 
+              s.COMPANY_CODE, 
+              s.PRODUCT_CODE, 
+              s.DEPTCODE, 
+              d.DEPTNAME,
+              s.PRODUCT_NAMELONG, 
+              s.COSTPRICE, 
+              s.SCALEPRICE;
+        `;
+      }
+
       try {
-        if (state === true || String(state).toLowerCase() === "true") {
-          tableRecords = await mssql.query(`
-    USE [${rtweb}];
-    SELECT   
-        LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
-        LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
-        LTRIM(RTRIM(s.DEPTCODE)) AS DEPARTMENT_CODE,
-        d.DEPTNAME AS DEPARTMENT_NAME,
-        s.PRODUCT_NAMELONG AS PRODUCT_NAME,
-        SUM(s.QTY) AS QUANTITY,
-        SUM(s.QTY * s.COSTPRICE) AS COST_VALUE,
-        SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,
-        s.COSTPRICE,
-        s.SCALEPRICE
-    FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
-    LEFT JOIN [${posback}].dbo.tb_DEPARTMENT d
-        ON LTRIM(RTRIM(s.DEPTCODE)) = LTRIM(RTRIM(d.DEPTCODE))
-    WHERE s.COMPANY_CODE IN (${inClause})
-    GROUP BY 
-        s.COMPANY_CODE, 
-        s.PRODUCT_CODE, 
-        s.DEPTCODE, 
-        d.DEPTNAME,
-        s.PRODUCT_NAMELONG, 
-        s.COSTPRICE, 
-        s.SCALEPRICE;
-  `);
-        } else {
-          tableRecords = await mssql.query(`
-    USE [${rtweb}];
-    SELECT   
-        LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
-        LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
-        LTRIM(RTRIM(s.DEPTCODE)) AS DEPARTMENT_CODE,
-        d.DEPTNAME AS DEPARTMENT_NAME,
-        s.PRODUCT_NAMELONG AS PRODUCT_NAME,
-        SUM(s.QTY) AS QUANTITY,
-        s.COSTPRICE,
-        s.SCALEPRICE
-    FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
-    LEFT JOIN [${posback}].dbo.tb_DEPARTMENT d
-        ON LTRIM(RTRIM(s.DEPTCODE)) = LTRIM(RTRIM(d.DEPTCODE))
-    WHERE s.COMPANY_CODE IN (${inClause})
-    GROUP BY 
-        s.COMPANY_CODE, 
-        s.PRODUCT_CODE, 
-        s.DEPTCODE, 
-        d.DEPTNAME,
-        s.PRODUCT_NAMELONG, 
-        s.COSTPRICE, 
-        s.SCALEPRICE;
-  `);
-        }
-
+        const tableRecords = await tableRequest.query(query);
         return res.status(200).json({
           message: "Processed parameters for company codes",
           success: true,
           tableRecords: tableRecords.recordset || [],
         });
       } catch (fetchErr) {
-        console.error("Error fetching product data:", fetchErr);
-        return res
-          .status(500)
-          .json({ message: "Failed to fetch product data" });
+        console.error("❌ Error fetching product data:", fetchErr);
+        return res.status(500).json({ message: "Failed to fetch product data" });
       }
     });
   } catch (error) {
-    console.error("Unhandled error in productDashboard:", error);
-    return res
-      .status(500)
-      .json({ message: "Failed to load product dashboard" });
+    console.error("❌ Unhandled error in stockDepartmentDashboard:", error);
+    return res.status(500).json({ message: "Failed to load stock department dashboard" });
   }
 };
 
@@ -5389,9 +5187,7 @@ exports.stockCategoryDashboard = async (req, res) => {
     // -------------------------
     const authHeader = req.headers.authorization;
     if (!authHeader) {
-      return res
-        .status(403)
-        .json({ message: "No authorization token provided" });
+      return res.status(403).json({ message: "No authorization token provided" });
     }
 
     const token = authHeader.split(" ")[1];
@@ -5414,40 +5210,39 @@ exports.stockCategoryDashboard = async (req, res) => {
         selectedOptions = selectedOptions.split(",").map((code) => code.trim());
       }
 
-      if (
-        !Array.isArray(selectedOptions) ||
-        selectedOptions.length === 0 ||
-        selectedOptions[0] === ""
-      ) {
+      if (!Array.isArray(selectedOptions) || selectedOptions.length === 0) {
         return res.status(400).json({ message: "No company codes provided" });
       }
 
-    //    if (!mssql.connected) {
-    //   console.log('no connection')
-    //   const user_ip = String(req.user.ip).trim();
-    // await mssql.connect(dbConnection(user_ip, req.user.port));
-    // }
+      // -------------------------
+      // 3️⃣ Database Connection
+      // -------------------------
+      const user_ip = String(req.user.ip).trim();
+      if (mssql.connected) {
+    await mssql.close();
+    console.log("✅ Database connection closed successfully");
+  }
+      const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
 
-    const user_ip = String(req.user.ip).trim(); 
-  await connectToUserDatabase(user_ip, req.user.port.trim());
+      if (!pool || !pool.connected) {
+        return res.status(500).json({ message: "Database connection failed" });
+      }
 
-      // Format dates
+      // -------------------------
+      // 4️⃣ Format Dates
+      // -------------------------
       const formattedCurrentDate = formatDate(currentDate);
       const formattedDate = formatDate(date);
-
-      // Create request instance
-      const request = new mssql.Request();
+      const request = pool.request();
 
       // -------------------------
-      // 3️⃣ Build Query to Create View
+      // 5️⃣ Create or Refresh View
       // -------------------------
-      let query;
-
-      if (formattedCurrentDate === formattedDate) {
-        query = `
+      const viewQuery =
+        formattedCurrentDate === formattedDate
+          ? `
           USE ${rtweb};
-          IF OBJECT_ID('dbo.vw_STOCK_BALANCE', 'V') IS NOT NULL
-              DROP VIEW dbo.vw_STOCK_BALANCE;
+          IF OBJECT_ID('dbo.vw_STOCK_BALANCE', 'V') IS NOT NULL DROP VIEW dbo.vw_STOCK_BALANCE;
           EXEC('CREATE VIEW dbo.vw_STOCK_BALANCE AS
             SELECT 
                 S.PRODUCT_CODE, 
@@ -5469,12 +5264,10 @@ exports.stockCategoryDashboard = async (req, res) => {
                 P.CATCODE,
                 P.COSTPRICE, 
                 P.SCALEPRICE,
-                P.PRODUCT_NAMELONG');`;
-      } else {
-        query = `
+                P.PRODUCT_NAMELONG');`
+          : `
           USE ${rtweb};
-          IF OBJECT_ID('dbo.vw_STOCK_BALANCE', 'V') IS NOT NULL
-              DROP VIEW dbo.vw_STOCK_BALANCE;
+          IF OBJECT_ID('dbo.vw_STOCK_BALANCE', 'V') IS NOT NULL DROP VIEW dbo.vw_STOCK_BALANCE;
           EXEC('CREATE VIEW dbo.vw_STOCK_BALANCE AS
             SELECT 
                 S.PRODUCT_CODE, 
@@ -5497,105 +5290,92 @@ exports.stockCategoryDashboard = async (req, res) => {
                 P.CATCODE,
                 P.COSTPRICE, 
                 P.SCALEPRICE,
-                P.PRODUCT_NAMELONG');
-        `;
-      }
+                P.PRODUCT_NAMELONG');`;
 
-      // -------------------------
-      // 4️⃣ Execute View Update
-      // -------------------------
-      let result;
       try {
-        result = await request.query(query);
+        await request.query(viewQuery);
+        console.log("✅ Stock view updated successfully (Category)");
       } catch (error) {
-        console.error("Error updating view:", error);
+        console.error("❌ Error updating view:", error);
         return res.status(500).json({ message: "Error updating stock view" });
       }
 
-      if (!result) {
-        return res
-          .status(403)
-          .json({ message: "Error occurred in view updating" });
-      }
-
       // -------------------------
-      // 5️⃣ Fetch Table Records
+      // 6️⃣ Fetch Table Records
       // -------------------------
       const inClause = selectedOptions.map((code) => `'${code}'`).join(",");
+      const tableRequest = pool.request();
 
-      let tableRecords;
+      let query;
+      if (state === true || String(state).toLowerCase() === "true") {
+        query = `
+          USE [${rtweb}];
+          SELECT   
+              LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
+              LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
+              LTRIM(RTRIM(s.CATCODE)) AS CATEGORY_CODE,
+              c.CATNAME AS CATEGORY_NAME,
+              s.PRODUCT_NAMELONG AS PRODUCT_NAME,
+              SUM(s.QTY) AS QUANTITY,
+              SUM(s.QTY * s.COSTPRICE) AS COST_VALUE,
+              SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,
+              s.COSTPRICE,
+              s.SCALEPRICE
+          FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
+          LEFT JOIN [${posback}].dbo.tb_CATEGORY c
+              ON LTRIM(RTRIM(s.CATCODE)) = LTRIM(RTRIM(c.CATCODE))
+          WHERE s.COMPANY_CODE IN (${inClause})
+          GROUP BY 
+              s.COMPANY_CODE, 
+              s.PRODUCT_CODE, 
+              s.CATCODE, 
+              c.CATNAME,
+              s.PRODUCT_NAMELONG, 
+              s.COSTPRICE, 
+              s.SCALEPRICE;
+        `;
+      } else {
+        query = `
+          USE [${rtweb}];
+          SELECT   
+              LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
+              LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
+              LTRIM(RTRIM(s.CATCODE)) AS CATEGORY_CODE,
+              c.CATNAME AS CATEGORY_NAME,
+              s.PRODUCT_NAMELONG AS PRODUCT_NAME,
+              SUM(s.QTY) AS QUANTITY,
+              s.COSTPRICE,
+              s.SCALEPRICE
+          FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
+          LEFT JOIN [${posback}].dbo.tb_CATEGORY c
+              ON LTRIM(RTRIM(s.CATCODE)) = LTRIM(RTRIM(c.CATCODE))
+          WHERE s.COMPANY_CODE IN (${inClause})
+          GROUP BY 
+              s.COMPANY_CODE, 
+              s.PRODUCT_CODE, 
+              s.CATCODE, 
+              c.CATNAME,
+              s.PRODUCT_NAMELONG, 
+              s.COSTPRICE, 
+              s.SCALEPRICE;
+        `;
+      }
+
       try {
-        if (state === true || String(state).toLowerCase() === "true") {
-          tableRecords = await mssql.query(`
-    USE [${rtweb}];
-    SELECT   
-        LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
-        LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
-        LTRIM(RTRIM(s.CATCODE)) AS CATEGORY_CODE,
-        c.CATNAME AS CATEGORY_NAME,
-        s.PRODUCT_NAMELONG AS PRODUCT_NAME,
-        SUM(s.QTY) AS QUANTITY,
-        SUM(s.QTY * s.COSTPRICE) AS COST_VALUE,
-        SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,
-        s.COSTPRICE,
-        s.SCALEPRICE
-    FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
-    LEFT JOIN [${posback}].dbo.tb_CATEGORY c
-        ON LTRIM(RTRIM(s.CATCODE)) = LTRIM(RTRIM(c.CATCODE))
-    WHERE s.COMPANY_CODE IN (${inClause})
-    GROUP BY 
-        s.COMPANY_CODE, 
-        s.PRODUCT_CODE, 
-        s.CATCODE, 
-        c.CATNAME,
-        s.PRODUCT_NAMELONG, 
-        s.COSTPRICE, 
-        s.SCALEPRICE;
-  `);
-        } else {
-          tableRecords = await mssql.query(`
-    USE [${rtweb}];
-    SELECT   
-        LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
-        LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
-        LTRIM(RTRIM(s.CATCODE)) AS CATEGORY_CODE,
-        c.CATNAME AS CATEGORY_NAME,
-        s.PRODUCT_NAMELONG AS PRODUCT_NAME,
-        SUM(s.QTY) AS QUANTITY,
-        s.COSTPRICE,
-        s.SCALEPRICE
-    FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
-    LEFT JOIN [${posback}].dbo.tb_CATEGORY c
-        ON LTRIM(RTRIM(s.DEPTCODE)) = LTRIM(RTRIM(c.DEPTCODE))
-    WHERE s.COMPANY_CODE IN (${inClause})
-    GROUP BY 
-        s.COMPANY_CODE, 
-        s.PRODUCT_CODE, 
-        s.CATCODE, 
-        c.CATNAME,
-        s.PRODUCT_NAMELONG, 
-        s.COSTPRICE, 
-        s.SCALEPRICE;
-  `);
-        }
-
+        const tableRecords = await tableRequest.query(query);
         return res.status(200).json({
           message: "Processed parameters for company codes",
           success: true,
           tableRecords: tableRecords.recordset || [],
         });
       } catch (fetchErr) {
-        console.error("Error fetching product data:", fetchErr);
-        return res
-          .status(500)
-          .json({ message: "Failed to fetch product data" });
+        console.error("❌ Error fetching product data:", fetchErr);
+        return res.status(500).json({ message: "Failed to fetch product data" });
       }
     });
   } catch (error) {
-    console.error("Unhandled error in productDashboard:", error);
-    return res
-      .status(500)
-      .json({ message: "Failed to load product dashboard" });
+    console.error("❌ Unhandled error in stockCategoryDashboard:", error);
+    return res.status(500).json({ message: "Failed to load category dashboard" });
   }
 };
 
@@ -5607,9 +5387,7 @@ exports.stockSubCategoryDashboard = async (req, res) => {
     // -------------------------
     const authHeader = req.headers.authorization;
     if (!authHeader) {
-      return res
-        .status(403)
-        .json({ message: "No authorization token provided" });
+      return res.status(403).json({ message: "No authorization token provided" });
     }
 
     const token = authHeader.split(" ")[1];
@@ -5627,37 +5405,39 @@ exports.stockSubCategoryDashboard = async (req, res) => {
 
       let { currentDate, date, state, selectedOptions } = req.query;
 
-      // Convert selectedOptions to array if it's a string
+      // Parse selected options
       if (typeof selectedOptions === "string") {
         selectedOptions = selectedOptions.split(",").map((code) => code.trim());
       }
 
-      if (
-        !Array.isArray(selectedOptions) ||
-        selectedOptions.length === 0 ||
-        selectedOptions[0] === ""
-      ) {
+      if (!Array.isArray(selectedOptions) || selectedOptions.length === 0 || selectedOptions[0] === "") {
         return res.status(400).json({ message: "No company codes provided" });
       }
 
-    //    if (!mssql.connected) {
-    //   console.log('no connection')
-    //   const user_ip = String(req.user.ip).trim();
-    // await mssql.connect(dbConnection(user_ip, req.user.port));
-    // }
+      // -------------------------
+      // 3️⃣ Connect to User Database
+      // -------------------------
+      const user_ip = String(req.user.ip).trim();
+      const user_port = req.user.port.trim();
+if (mssql.connected) {
+    await mssql.close();
+    console.log("✅ Database connection closed successfully");
+  }
+      const pool = await connectToUserDatabase(user_ip, user_port);
+      if (!pool || !pool.connected) {
+        return res.status(500).json({ message: "Database connection failed" });
+      }
 
-    const user_ip = String(req.user.ip).trim(); 
-  await connectToUserDatabase(user_ip, req.user.port.trim());
-
-      // Format dates
+      // -------------------------
+      // 4️⃣ Prepare Query Variables
+      // -------------------------
       const formattedCurrentDate = formatDate(currentDate);
       const formattedDate = formatDate(date);
 
-      // Create request instance
-      const request = new mssql.Request();
+      const request = pool.request();
 
       // -------------------------
-      // 3️⃣ Build Query to Create View
+      // 5️⃣ Build View Creation Query
       // -------------------------
       let query;
 
@@ -5724,100 +5504,61 @@ exports.stockSubCategoryDashboard = async (req, res) => {
       }
 
       // -------------------------
-      // 4️⃣ Execute View Update
+      // 6️⃣ Execute View Creation
       // -------------------------
-      let result;
       try {
-        result = await request.query(query);
+        await request.query(query);
       } catch (error) {
-        console.error("Error updating view:", error);
+        console.error("Error updating stock view:", error);
         return res.status(500).json({ message: "Error updating stock view" });
       }
 
-      if (!result) {
-        return res
-          .status(403)
-          .json({ message: "Error occurred in view updating" });
-      }
-
       // -------------------------
-      // 5️⃣ Fetch Table Records
+      // 7️⃣ Fetch Data
       // -------------------------
       const inClause = selectedOptions.map((code) => `'${code}'`).join(",");
+      const fetchRequest = pool.request();
 
-      let tableRecords;
-      try {
-        if (state === true || String(state).toLowerCase() === "true") {
-          tableRecords = await mssql.query(`
-    USE [${rtweb}];
-    SELECT   
-        LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
-        LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
-        LTRIM(RTRIM(s.SCATCODE)) AS SUBCATEGORY_CODE,
-        c.SCATNAME AS SUBCATEGORY_NAME,
-        s.PRODUCT_NAMELONG AS PRODUCT_NAME,
-        SUM(s.QTY) AS QUANTITY,
-        SUM(s.QTY * s.COSTPRICE) AS COST_VALUE,
-        SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,
-        s.COSTPRICE,
-        s.SCALEPRICE
-    FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
-    LEFT JOIN [${posback}].dbo.tb_SUBCATEGORY c
-        ON LTRIM(RTRIM(s.SCATCODE)) = LTRIM(RTRIM(c.SCATCODE))
-    WHERE s.COMPANY_CODE IN (${inClause})
-    GROUP BY 
-        s.COMPANY_CODE, 
-        s.PRODUCT_CODE, 
-        s.SCATCODE, 
-        c.SCATNAME,
-        s.PRODUCT_NAMELONG, 
-        s.COSTPRICE, 
-        s.SCALEPRICE;
-  `);
-        } else {
-          tableRecords = await mssql.query(`
-    USE [${rtweb}];
-    SELECT   
-        LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
-        LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
-        LTRIM(RTRIM(s.SCATCODE)) AS SUBCATEGORY_CODE,
-        c.SCATNAME AS SUBCATEGORY_NAME,
-        s.PRODUCT_NAMELONG AS PRODUCT_NAME,
-        SUM(s.QTY) AS QUANTITY,
-        s.COSTPRICE,
-        s.SCALEPRICE
-    FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
-    LEFT JOIN [${posback}].dbo.tb_SUBCATEGORY c
-        ON LTRIM(RTRIM(s.SCATCODE)) = LTRIM(RTRIM(c.SCATCODE))
-    WHERE s.COMPANY_CODE IN (${inClause})
-    GROUP BY 
-        s.COMPANY_CODE, 
-        s.PRODUCT_CODE, 
-        s.SCATCODE, 
-        c.SCATNAME,
-        s.PRODUCT_NAMELONG, 
-        s.COSTPRICE, 
-        s.SCALEPRICE;
-  `);
-        }
+      let fetchQuery = `
+        USE [${rtweb}];
+        SELECT   
+            LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
+            LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
+            LTRIM(RTRIM(s.SCATCODE)) AS SUBCATEGORY_CODE,
+            c.SCATNAME AS SUBCATEGORY_NAME,
+            s.PRODUCT_NAMELONG AS PRODUCT_NAME,
+            SUM(s.QTY) AS QUANTITY,
+            ${state === true || String(state).toLowerCase() === "true"
+              ? `SUM(s.QTY * s.COSTPRICE) AS COST_VALUE,
+                 SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,`
+              : ``}
+            s.COSTPRICE,
+            s.SCALEPRICE
+        FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
+        LEFT JOIN [${posback}].dbo.tb_SUBCATEGORY c
+            ON LTRIM(RTRIM(s.SCATCODE)) = LTRIM(RTRIM(c.SCATCODE))
+        WHERE s.COMPANY_CODE IN (${inClause})
+        GROUP BY 
+            s.COMPANY_CODE, 
+            s.PRODUCT_CODE, 
+            s.SCATCODE, 
+            c.SCATNAME,
+            s.PRODUCT_NAMELONG, 
+            s.COSTPRICE, 
+            s.SCALEPRICE;
+      `;
 
-        return res.status(200).json({
-          message: "Processed parameters for company codes",
-          success: true,
-          tableRecords: tableRecords.recordset || [],
-        });
-      } catch (fetchErr) {
-        console.error("Error fetching product data:", fetchErr);
-        return res
-          .status(500)
-          .json({ message: "Failed to fetch product data" });
-      }
+      const result = await fetchRequest.query(fetchQuery);
+
+      return res.status(200).json({
+        message: "Processed parameters for company codes",
+        success: true,
+        tableRecords: result.recordset || [],
+      });
     });
   } catch (error) {
-    console.error("Unhandled error in productDashboard:", error);
-    return res
-      .status(500)
-      .json({ message: "Failed to load product dashboard" });
+    console.error("Unhandled error in stockSubCategoryDashboard:", error);
+    return res.status(500).json({ message: "Failed to load stock subcategory dashboard" });
   }
 };
 
@@ -5829,9 +5570,7 @@ exports.stockVendorDashboard = async (req, res) => {
     // -------------------------
     const authHeader = req.headers.authorization;
     if (!authHeader) {
-      return res
-        .status(403)
-        .json({ message: "No authorization token provided" });
+      return res.status(403).json({ message: "No authorization token provided" });
     }
 
     const token = authHeader.split(" ")[1];
@@ -5862,24 +5601,30 @@ exports.stockVendorDashboard = async (req, res) => {
         return res.status(400).json({ message: "No company codes provided" });
       }
 
-    //    if (!mssql.connected) {
-    //   console.log('no connection')
-    //   const user_ip = String(req.user.ip).trim();
-    // await mssql.connect(dbConnection(user_ip, req.user.port));
-    // }
+      // -------------------------
+      // 3️⃣ Connect to User Database
+      // -------------------------
+      const user_ip = String(req.user.ip).trim();
+      const user_port = req.user.port.trim();
+if (mssql.connected) {
+    await mssql.close();
+    console.log("✅ Database connection closed successfully");
+  }
+      const pool = await connectToUserDatabase(user_ip, user_port);
+      if (!pool || !pool.connected) {
+        return res.status(500).json({ message: "Database connection failed" });
+      }
 
-    const user_ip = String(req.user.ip).trim(); 
-  await connectToUserDatabase(user_ip, req.user.port.trim());
-
-      // Format dates
+      // -------------------------
+      // 4️⃣ Format Dates & Setup
+      // -------------------------
       const formattedCurrentDate = formatDate(currentDate);
       const formattedDate = formatDate(date);
 
-      // Create request instance
-      const request = new mssql.Request();
+      const request = pool.request();
 
       // -------------------------
-      // 3️⃣ Build Query to Create View
+      // 5️⃣ Build View Creation Query
       // -------------------------
       let query;
 
@@ -5938,100 +5683,66 @@ exports.stockVendorDashboard = async (req, res) => {
       }
 
       // -------------------------
-      // 4️⃣ Execute View Update
+      // 6️⃣ Execute View Creation
       // -------------------------
-      let result;
       try {
-        result = await request.query(query);
+        await request.query(query);
       } catch (error) {
-        console.error("Error updating view:", error);
+        console.error("Error updating stock view:", error);
         return res.status(500).json({ message: "Error updating stock view" });
       }
 
-      if (!result) {
-        return res
-          .status(403)
-          .json({ message: "Error occurred in view updating" });
-      }
-
       // -------------------------
-      // 5️⃣ Fetch Table Records
+      // 7️⃣ Fetch Table Records
       // -------------------------
       const inClause = selectedOptions.map((code) => `'${code}'`).join(",");
+      const fetchRequest = pool.request();
 
-      let tableRecords;
-      try {
-        if (state === true || String(state).toLowerCase() === "true") {
-          tableRecords = await mssql.query(`
-    USE [${rtweb}];
-    SELECT   
-        LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
-        LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
-        LTRIM(RTRIM(s.VENDORCODE)) AS VENDOR_CODE,
-        v.VENDORNAME AS VENDOR_NAME,
-        s.PRODUCT_NAMELONG AS PRODUCT_NAME,
-        SUM(s.QTY) AS QUANTITY,
-        SUM(s.QTY * s.COSTPRICE) AS COST_VALUE,
-        SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,
-        s.COSTPRICE,
-        s.SCALEPRICE
-    FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
-    LEFT JOIN [${posback}].dbo.tb_VENDOR v
-        ON LTRIM(RTRIM(s.VENDORCODE)) = LTRIM(RTRIM(v.VENDORCODE))
-    WHERE s.COMPANY_CODE IN (${inClause})
-    GROUP BY 
-        s.COMPANY_CODE, 
-        s.PRODUCT_CODE, 
-        s.VENDORCODE, 
-        v.VENDORNAME,
-        s.PRODUCT_NAMELONG, 
-        s.COSTPRICE, 
-        s.SCALEPRICE;
-  `);
-        } else {
-          tableRecords = await mssql.query(`
-    USE [${rtweb}];
-    SELECT   
-        LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
-        LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
-        LTRIM(RTRIM(s.VENDORCODE)) AS VENDOR_CODE,
-        v.VENDORNAME AS VENDOR_NAME,
-        s.PRODUCT_NAMELONG AS PRODUCT_NAME,
-        SUM(s.QTY) AS QUANTITY,
-        s.COSTPRICE,
-        s.SCALEPRICE
-    FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
-    LEFT JOIN [${posback}].dbo.tb_VENDOR v
-        ON LTRIM(RTRIM(s.VENDORCODE)) = LTRIM(RTRIM(v.VENDORCODE))
-    WHERE s.COMPANY_CODE IN (${inClause})
-    GROUP BY 
-        s.COMPANY_CODE, 
-        s.PRODUCT_CODE, 
-        s.VENDORCODE, 
-        v.VENDORNAME,
-        s.PRODUCT_NAMELONG, 
-        s.COSTPRICE, 
-        s.SCALEPRICE;
-  `);
-        }
+      let fetchQuery = `
+        USE [${rtweb}];
+        SELECT   
+            LTRIM(RTRIM(s.COMPANY_CODE)) AS COMPANY_CODE,
+            LTRIM(RTRIM(s.PRODUCT_CODE)) AS PRODUCT_CODE,
+            LTRIM(RTRIM(s.VENDORCODE)) AS VENDOR_CODE,
+            v.VENDORNAME AS VENDOR_NAME,
+            s.PRODUCT_NAMELONG AS PRODUCT_NAME,
+            SUM(s.QTY) AS QUANTITY,
+            ${state === true || String(state).toLowerCase() === "true"
+              ? `SUM(s.QTY * s.COSTPRICE) AS COST_VALUE,
+                 SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,`
+              : ``}
+            s.COSTPRICE,
+            s.SCALEPRICE
+        FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
+        LEFT JOIN [${posback}].dbo.tb_VENDOR v
+            ON LTRIM(RTRIM(s.VENDORCODE)) = LTRIM(RTRIM(v.VENDORCODE))
+        WHERE s.COMPANY_CODE IN (${inClause})
+        GROUP BY 
+            s.COMPANY_CODE, 
+            s.PRODUCT_CODE, 
+            s.VENDORCODE, 
+            v.VENDORNAME,
+            s.PRODUCT_NAMELONG, 
+            s.COSTPRICE, 
+            s.SCALEPRICE;
+      `;
 
-        return res.status(200).json({
-          message: "Processed parameters for company codes",
-          success: true,
-          tableRecords: tableRecords.recordset || [],
-        });
-      } catch (fetchErr) {
-        console.error("Error fetching product data:", fetchErr);
-        return res
-          .status(500)
-          .json({ message: "Failed to fetch product data" });
-      }
+      const result = await fetchRequest.query(fetchQuery);
+
+      // -------------------------
+      // ✅ Response
+      // -------------------------
+      return res.status(200).json({
+        message: "Processed parameters for company codes",
+        success: true,
+        tableRecords: result.recordset || [],
+      });
     });
   } catch (error) {
-    console.error("Unhandled error in productDashboard:", error);
+    console.error("Unhandled error in stockVendorDashboard:", error);
     return res
       .status(500)
-      .json({ message: "Failed to load product dashboard" });
+      .json({ message: "Failed to load vendor stock dashboard" });
   }
 };
 
@@ -6055,7 +5766,15 @@ exports.scan = async (req, res) => {
     // mssql.close(); // Close existing connections
     // const pool = await mssql.connect(dbConnection(String(req.user.ip).trim(), req.user.port));
     const user_ip = String(req.user.ip).trim(); 
+    if (mssql.connected) {
+    await mssql.close();
+    console.log("✅ Database connection closed successfully");
+  }
     const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+
+    if (!pool || !pool.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
 
     let productCode = null;
     let stockQty = 0;
@@ -6303,206 +6022,145 @@ exports.scan = async (req, res) => {
 
 // product view
 exports.productView = async (req, res) => {
-  const codeData = req.query.data?.trim();
-  const name = req.query.inputValue?.trim();
-  const mode = req.query.mode?.trim();
+  let pool;
 
-  if ((!codeData || codeData === "No result") && !name) {
-    return res.status(400).json({
-      message: "Please provide a valid barcode or product code or name",
-    });
+  if (mssql.connected) {
+    await mssql.close();
+    console.log("✅ Database connection closed successfully");
   }
-
-  // ✅ Helper function to execute SQL queries
-  const execQuery = async (query, params = {}) => {
-    const request = new mssql.Request();
-    Object.entries(params).forEach(([key, value]) => request.input(key, value));
-    return request.query(query);
-  };
-
   try {
-    //  if (!mssql.connected) {
-    //   console.log('no connection')
-    //   const user_ip = String(req.user.ip).trim();
-    // await mssql.connect(dbConnection(user_ip, req.user.port));
-    // }
-    const user_ip = String(req.user.ip).trim(); 
-  await connectToUserDatabase(user_ip, req.user.port.trim());
+    const codeData = req.query.data?.trim();
+    const name = req.query.inputValue?.trim();
+    const mode = req.query.mode?.trim();
+
+    if ((!codeData || codeData === "No result") && !name) {
+      return res.status(400).json({
+        message: "Please provide a valid barcode or product code or name",
+      });
+    }
+
+    // 1. Connect to Database Pool
+    const user_ip = String(req.user.ip).trim();
+    const user_port = req.user.port.trim();
+    pool = await connectToUserDatabase(user_ip, user_port);
+    if (!pool.connected)
+      return res.status(500).json({ message: "Database connection failed" });
+
+    // 2. Helper function to run queries using the pool
+    const execQuery = async (query, params = {}) => {
+      const request = pool.request();
+      Object.entries(params).forEach(([key, value]) => request.input(key, value));
+      return request.query(query);
+    };
 
     let productCode = null;
-    let result = null;
     let status = "F";
 
-    // ✅ Check COLORSIZE status
+    // 3. Check COLORSIZE status
     const colorSize = await execQuery(
       `SELECT COLORSIZE_ACTIVE FROM [${rtweb}].dbo.tb_COMPANY WHERE MAIN = 'T';`
     );
-    if (colorSize.recordset.length > 0) {
-      status = colorSize.recordset[0].COLORSIZE_ACTIVE;
-    }
+    if (colorSize.recordset.length > 0) status = colorSize.recordset[0].COLORSIZE_ACTIVE;
 
-    // ✅ Step 1: Find product code based on barcode or name
+    // 4. Determine product code
     if (codeData && codeData !== "No result") {
       const tableName = status === "T" ? "tb_STOCKRELOAD" : "tb_BARCODELINK";
       const column = status === "T" ? "SERIALNO" : "BARCODE";
-
-      try {
-        const barcodeResult = await execQuery(
-          `SELECT PRODUCT_CODE FROM [${posback}].dbo.${tableName} WHERE ${column} = @code;`,
-          { code: codeData }
-        );
-        if (barcodeResult.recordset.length > 0) {
-          productCode = barcodeResult.recordset[0].PRODUCT_CODE;
-        }
-      } catch (error) {
-        return res.status(404).json({ message: "Product not found" });
-      }
-
-      const productQueryText = productCode
-        ? `SELECT PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE 
-           FROM [${posback}].dbo.tb_PRODUCT WHERE PRODUCT_CODE = @code;`
-        : `SELECT PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE 
-           FROM [${posback}].dbo.tb_PRODUCT 
-           WHERE PRODUCT_CODE = @code OR BARCODE = @code OR BARCODE2 = @code;`;
-
-      const productData = await execQuery(productQueryText, {
-        code: productCode || codeData,
-      });
-      if (productData.recordset.length === 0) {
-        return res.status(404).json({ message: "Product not found" });
-      }
-
-      productCode = productData.recordset[0].PRODUCT_CODE;
-    } else if (name) {
-      const productData = await execQuery(
-        `SELECT PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE 
-         FROM [${posback}].dbo.tb_PRODUCT 
-         WHERE PRODUCT_NAMELONG = @name`,
-        { name }
+      const barcodeResult = await execQuery(
+        `SELECT PRODUCT_CODE FROM [${posback}].dbo.${tableName} WHERE ${column} = @code;`,
+        { code: codeData }
       );
-      if (productData.recordset.length === 0) {
-        return res.status(404).json({ message: "Product not found" });
-      }
-      productCode = productData.recordset[0].PRODUCT_CODE;
+      if (barcodeResult.recordset.length > 0) productCode = barcodeResult.recordset[0].PRODUCT_CODE;
     }
 
-    // ✅ Step 2: Get full product details
-    try {
-      const productDetails = await execQuery(
-        `SELECT 
-          P.PRODUCT_CODE, P.BARCODE, P.BARCODE2, P.PRODUCT_NAMELONG, 
-          P.DEPTCODE, D.DEPTNAME, P.CATCODE, C.CATNAME, 
-          P.SCATCODE, S.SCATNAME, P.VENDORCODE, V.VENDORNAME,
-          P.COSTPRICE, P.MINPRICE, P.AVGCOST, P.SCALEPRICE, 
-          P.WPRICE, P.PRICE1, P.PRICE2, P.PRICE3
+    if (!productCode && name) {
+      const productData = await execQuery(
+        `SELECT PRODUCT_CODE FROM [${posback}].dbo.tb_PRODUCT WHERE PRODUCT_NAMELONG = @name`,
+        { name }
+      );
+      if (productData.recordset.length > 0) productCode = productData.recordset[0].PRODUCT_CODE;
+    }
+
+    if (!productCode) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+
+    // 5. Get full product details
+    const productDetails = await execQuery(
+      `SELECT 
+         P.PRODUCT_CODE, P.BARCODE, P.BARCODE2, P.PRODUCT_NAMELONG, 
+         P.DEPTCODE, D.DEPTNAME, P.CATCODE, C.CATNAME, 
+         P.SCATCODE, S.SCATNAME, P.VENDORCODE, V.VENDORNAME,
+         P.COSTPRICE, P.MINPRICE, P.AVGCOST, P.SCALEPRICE, 
+         P.WPRICE, P.PRICE1, P.PRICE2, P.PRICE3
        FROM [${posback}].dbo.tb_PRODUCT P
        LEFT JOIN [${posback}].dbo.tb_DEPARTMENT D ON P.DEPTCODE = D.DEPTCODE
        LEFT JOIN [${posback}].dbo.tb_CATEGORY C ON P.CATCODE = C.CATCODE
        LEFT JOIN [${posback}].dbo.tb_SUBCATEGORY S ON P.SCATCODE = S.SCATCODE
        LEFT JOIN [${posback}].dbo.tb_VENDOR V ON P.VENDORCODE = V.VENDORCODE
        WHERE P.PRODUCT_CODE = @code`,
-        { code: productCode }
-      );
-      result = productDetails.recordset[0];
-    } catch (error) {
-      return res
-        .status(404)
-        .json({ message: "Error fetching product details" });
-    }
+      { code: productCode }
+    );
 
-    if (!result) {
+    if (productDetails.recordset.length === 0)
       return res.status(404).json({ message: "Product not found" });
-    }
 
-    // ✅ Step 3: Recreate stock view
-    await execQuery(`
-      USE ${rtweb};
-      IF OBJECT_ID('dbo.vw_STOCK', 'V') IS NOT NULL
-          DROP VIEW dbo.vw_STOCK;
-      EXEC('CREATE VIEW dbo.vw_STOCK AS 
-        SELECT PRODUCT_CODE, COMPANY_CODE, ISNULL(SUM(STOCK), 0) AS QTY
-        FROM ${posback}.dbo.tb_STOCK
-        WHERE (BIN = ''F'') OR (BIN IS NULL)
-        GROUP BY COMPANY_CODE, PRODUCT_CODE;');
-    `);
+    const result = productDetails.recordset[0];
 
-    let companyCodes = [];
-    let stockQty;
-    try {
-      stockQty = await execQuery(
-        `SELECT * FROM [${rtweb}].dbo.vw_STOCK WHERE PRODUCT_CODE = @code;`,
-        { code: productCode }
-      );
-      companyCodes = stockQty.recordset.map((row) => row.COMPANY_CODE);
-    } catch (error) {
-      return res.status(404).json({ message: "Error fetching stock details" });
-    }
-
-    // ✅ Step 4: Recreate price view
-    await execQuery(`
-      USE ${rtweb};
-      IF OBJECT_ID('dbo.vw_PRICE_DETAILS', 'V') IS NOT NULL
-          DROP VIEW dbo.vw_PRICE_DETAILS;
-      EXEC('CREATE VIEW dbo.vw_PRICE_DETAILS AS 
-        SELECT PRODUCT_CODE, COMPANY_CODE, COST_PRICE, UNIT_PRICE, WPRICE, MIN_PRICE
-        FROM ${posback}.dbo.tb_PRICEDETAILS;');
-    `);
-
-    let priceDetails;
-    try {
-      priceDetails = await execQuery(
-        `SELECT * FROM [${rtweb}].dbo.vw_PRICE_DETAILS WHERE PRODUCT_CODE = @code;`,
-        { code: productCode }
-      );
-    } catch (error) {
-      return res.status(404).json({ message: "Error fetching price details" });
-    }
-
-    // ✅ Step 5: Company-wise stock
-    let companyWiseStock;
-    try {
-      companyWiseStock = await execQuery(
-        `SELECT COMPANY_CODE, SUM(STOCK) AS STOCK
+    // 6. Fetch stock and price views
+    const stockQty = await execQuery(
+      `SELECT PRODUCT_CODE, COMPANY_CODE, ISNULL(SUM(STOCK),0) AS QTY
        FROM ${posback}.dbo.tb_STOCK
-       WHERE (BIN = 'F' OR BIN IS NULL) AND PRODUCT_CODE = @code
-       GROUP BY COMPANY_CODE`,
-        { code: productCode }
-      );
-    } catch (error) {
-      return res
-        .status(404)
-        .json({ message: "Error fetching company stock details" });
-    }
+       WHERE (BIN='F' OR BIN IS NULL) AND PRODUCT_CODE=@code
+       GROUP BY COMPANY_CODE, PRODUCT_CODE`,
+      { code: productCode }
+    );
 
+    const priceDetails = await execQuery(
+      `SELECT PRODUCT_CODE, COMPANY_CODE, COST_PRICE, UNIT_PRICE, WPRICE, MIN_PRICE
+       FROM ${posback}.dbo.tb_PRICEDETAILS
+       WHERE PRODUCT_CODE = @code`,
+      { code: productCode }
+    );
+
+    const companyWiseStock = await execQuery(
+      `SELECT COMPANY_CODE, SUM(STOCK) AS STOCK
+       FROM ${posback}.dbo.tb_STOCK
+       WHERE (BIN='F' OR BIN IS NULL) AND PRODUCT_CODE = @code
+       GROUP BY COMPANY_CODE`,
+      { code: productCode }
+    );
+
+    // 7. Fetch company names
+    const companyCodes = stockQty.recordset.map((r) => r.COMPANY_CODE);
     let companies = [];
     if (companyCodes.length > 0) {
-      const formattedCodes = companyCodes
-        .map((c) => `'${c.trim()}'`)
-        .join(", ");
-      const companyNames = await execQuery(`
-        SELECT COMPANY_CODE, COMPANY_NAME 
-        FROM ${posback}.dbo.tb_COMPANY 
-        WHERE COMPANY_CODE IN (${formattedCodes})
-      `);
+      const formattedCodes = companyCodes.map((c) => `'${c.trim()}'`).join(",");
+      const companyNames = await execQuery(
+        `SELECT COMPANY_CODE, COMPANY_NAME 
+         FROM ${posback}.dbo.tb_COMPANY
+         WHERE COMPANY_CODE IN (${formattedCodes})`
+      );
       companies = companyNames.recordset;
     }
 
-    // ✅ Step 6: Color-wise stock data (only if COLORSIZE = T)
+    // 8. Color-wise stock if applicable
     let colorWiseData = [];
     if (status === "T") {
       const codeValue = mode === "scan" ? codeData : productCode;
-
       const colorResult = await execQuery(
-        `SELECT COMPANY_CODE, PRODUCT_CODE, SERIALNO, MAX(COLORCODE) AS COLORCODE, MAX(SIZECODE) AS SIZECODE,
+        `SELECT COMPANY_CODE, PRODUCT_CODE, SERIALNO,
+                MAX(COLORCODE) AS COLORCODE, MAX(SIZECODE) AS SIZECODE,
                 SUM(STOCK) AS STOCK
          FROM [${posback}].dbo.tb_STOCK
-         WHERE SERIALNO <> '' AND PRODUCT_CODE = @product_code AND (BIN = 'F' OR BIN IS NULL)
+         WHERE SERIALNO<>'' AND PRODUCT_CODE=@product_code AND (BIN='F' OR BIN IS NULL)
          GROUP BY COMPANY_CODE, PRODUCT_CODE, SERIALNO`,
         { product_code: codeValue }
       );
       colorWiseData = colorResult.recordset;
     }
 
+    // 9. Send Response
     return res.status(200).json({
       message: "Item Found Successfully",
       result,
@@ -6513,58 +6171,85 @@ exports.productView = async (req, res) => {
       colorWiseData: colorWiseData || [],
     });
   } catch (error) {
-    console.error("Error retrieving barcode data in product view:", error);
-    return res
-      .status(500)
-      .json({ message: "Failed to fetch product view data" });
+    console.error("❌ Error retrieving product view:", error);
+    return res.status(500).json({ message: "Failed to fetch product view data" });
+  } finally {
+    // 10. Close pool safely
+    if (pool && pool.connected) {
+      await pool.close();
+      console.log("🔒 Database pool connection closed");
+    }
   }
 };
 
 // product view page sales
 exports.productViewSales = async (req, res) => {
-  const code = req.query.code?.trim();
-  const fromDate = formatDate(req.query.fromDate?.trim());
-  const toDate = formatDate(req.query.toDate?.trim());
-
-  if (!code || fromDate === "" || toDate === "") {
-    return res.status(400).json({
-      message: "Please provide a from date and to date",
-    });
+  if (mssql.connected) {
+    await mssql.close();
+    console.log("✅ Database connection closed successfully");
   }
-
+  let pool;
   try {
-    //  if (!mssql.connected) {
-    //   console.log('no connection')
-    //   const user_ip = String(req.user.ip).trim();
-    // await mssql.connect(dbConnection(user_ip, req.user.port));
-    // }
-    const user_ip = String(req.user.ip).trim(); 
-  await connectToUserDatabase(user_ip, req.user.port.trim());
+    const code = req.query.code?.trim();
+    const fromDate = formatDate(req.query.fromDate?.trim());
+    const toDate = formatDate(req.query.toDate?.trim());
+
+    if (!code || !fromDate || !toDate) {
+      return res.status(400).json({
+        message: "Please provide a valid product code, from date, and to date",
+      });
+    }
+
+    // 1. Connect to user-specific database pool
+    const user_ip = String(req.user.ip).trim();
+    const user_port = req.user.port.trim();
+    pool = await connectToUserDatabase(user_ip, user_port);
+
+    if (!pool || !pool.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
+
+    // 2. Helper function for queries
+    const execQuery = async (query, params = {}) => {
+      const request = pool.request();
+      Object.entries(params).forEach(([key, value]) => request.input(key, value));
+      return request.query(query);
+    };
+
+    // 3. Run sales query
     const salesQuery = `
-          USE [${posback}];
-          SELECT SALESDATE, COMPANY_CODE, PRODUCT_CODE, COST_PRICE, UNIT_PRICE, SUM(QTY) AS QTY, 
-          SUM(DISCOUNT) AS DISCOUNT, SUM(AMOUNT) AS AMOUNT FROM tb_SALES
-          WHERE CONVERT(DATETIME,SALESDATE,103)>= CONVERT(DATETIME,@from,103) AND 
-          CONVERT(DATETIME,SALESDATE,103) <= CONVERT(DATETIME,@to,103) AND PRODUCT_CODE = @code
-          GROUP BY SALESDATE, COMPANY_CODE, PRODUCT_CODE, COST_PRICE, UNIT_PRICE
-         `;
+      USE [${posback}];
+      SELECT SALESDATE, COMPANY_CODE, PRODUCT_CODE, COST_PRICE, UNIT_PRICE, 
+             SUM(QTY) AS QTY, SUM(DISCOUNT) AS DISCOUNT, SUM(AMOUNT) AS AMOUNT
+      FROM tb_SALES
+      WHERE CONVERT(DATETIME, SALESDATE, 103) >= CONVERT(DATETIME, @from, 103)
+        AND CONVERT(DATETIME, SALESDATE, 103) <= CONVERT(DATETIME, @to, 103)
+        AND PRODUCT_CODE = @code
+      GROUP BY SALESDATE, COMPANY_CODE, PRODUCT_CODE, COST_PRICE, UNIT_PRICE
+    `;
 
-    const salesRequest = new mssql.Request();
-    salesRequest.input("from", fromDate);
-    salesRequest.input("to", toDate);
-    salesRequest.input("code", code);
-    const sales = await salesRequest.query(salesQuery);
-    const salesData = sales.recordset;
+    const salesResult = await execQuery(salesQuery, {
+      from: fromDate,
+      to: toDate,
+      code,
+    });
 
+    // 4. Send response
     return res.status(200).json({
       message: "Item Found Successfully",
-      salesData: salesData || [],
+      salesData: salesResult.recordset || [],
     });
   } catch (error) {
-    console.error("Error retrieving barcode data in product view sales:", error);
+    console.error("❌ Error in productViewSales:", error);
     return res
       .status(500)
-      .json({ message: "Failed to fetch product view data" });
+      .json({ message: "Failed to fetch product sales data", error: error.message });
+  } finally {
+    // 5. Close pool safely
+    if (pool && pool.connected) {
+      await pool.close();
+      console.log("🔒 Database pool connection closed");
+    }
   }
 };
 
@@ -6622,7 +6307,14 @@ exports.stockUpdate = async (req, res) => {
     // const user_ip = String(req.user.ip).trim(); 
     // const pool = await mssql.connect(dbConnection(user_ip, req.user.port));
     const user_ip = String(req.user.ip).trim(); 
+    if (mssql.connected) {
+    await mssql.close();
+    console.log("✅ Database connection closed successfully");
+  }
   const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+  if (!pool || !pool.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
     const request = pool.request();
     request.input("company", mssql.NChar(10), company);
 
@@ -6662,8 +6354,14 @@ exports.grnprnTableData = async (req, res) => {
     // const pool = await mssql.connect(dbConnection(user_ip, req.user.port));
 
     const user_ip = String(req.user.ip).trim(); 
+     if (mssql.connected) {
+    await mssql.close();
+    console.log("✅ Database connection closed successfully");
+  }
     const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
-
+if (!pool || !pool.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
     let query = `USE [${rtweb}];\n`;
 
     if (selectedType === "GRN") {
@@ -6715,8 +6413,14 @@ exports.productName = async (req, res) => {
 
     // mssql.close();
     const user_ip = String(req.user.ip).trim(); 
+    if (mssql.connected) {
+    await mssql.close();
+    console.log("✅ Database connection closed successfully");
+  }
   const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
-
+if (!pool || !pool.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
     const query = `
   USE [${posback}];
   SELECT PRODUCT_NAMELONG FROM tb_PRODUCT;
@@ -6766,8 +6470,16 @@ exports.findUserConnection = async (req, res) => {
       return res.status(401).json({ message: "Invalid or expired token" });
     }
 
+    if (mssql.connected) {
+    await mssql.close();
+    console.log("✅ Database connection closed successfully");
+  }
     // Get the connection pool
     const pool = await connectToDatabase();
+
+    if (!pool || !pool.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
 
     // Define posmain (e.g., from query parameter, body, or environment variable)
     const posmain =
@@ -6883,6 +6595,11 @@ exports.resetDatabaseConnection = async (req, res) => {
   const trimmedIP = ip?.trim();
   const trimmedPort = port?.trim();
 
+  if (mssql.connected) {
+    await mssql.close();
+    console.log("✅ Database connection closed successfully");
+  }
+
   let pool;
   let transaction;
 
@@ -6958,6 +6675,10 @@ exports.resetDatabaseConnection = async (req, res) => {
 
     // pool = await mssql.connect(dbConnection);
     pool = await connectToDatabase();
+
+    if (!pool || !pool.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
     console.log("Database connected");
     transaction = new mssql.Transaction(pool);
     await transaction.begin();
@@ -7412,51 +7133,77 @@ exports.resetDatabaseConnection = async (req, res) => {
 
 //server connection details for admin page
 exports.serverConnection = async (req, res) => {
-
   try {
+    // -------------------------
+    // 1️⃣ Authorization Check
+    // -------------------------
     const authHeader = req.headers.authorization;
     if (!authHeader) {
-      return res
-        .status(403)
-        .json({ message: "No authorization token provided" });
+      return res.status(403).json({ message: "No authorization token provided" });
     }
 
-    try {
-      await mssql.close();
+    const token = authHeader.split(" ")[1];
+    if (!token) {
+      return res.status(403).json({ message: "Token is missing" });
+    }
 
-      // await mssql.connect(dbConnection);
-      await connectToDatabase()
+    // -------------------------
+    // 2️⃣ Verify JWT
+    // -------------------------
+    jwt.verify(token, process.env.JWT_SECRET, async (err) => {
+      if (err) {
+        return res.status(403).json({ message: "Invalid or expired token" });
+      }
 
-      const [tableRecords] = await Promise.all([
-        mssql.query(`
-            USE [${posmain}];
-            SELECT 
+      // -------------------------
+      // 3️⃣ Connect to Database (Pooled)
+      // -------------------------
+      if (mssql.connected) {
+        await mssql.close();
+        console.log("✅ Closed existing connection");
+      }
+
+      const pool = await connectToDatabase();
+
+      if (!pool || !pool.connected) {
+        return res.status(500).json({ message: "Database connection failed" });
+      }
+
+      // -------------------------
+      // 5️⃣ Query Execution
+      // -------------------------
+      const request = pool.request();
+
+      const query = `
+        USE [${posmain}];
+        SELECT 
           s.CUSTOMERID,
           s.COMPANY_NAME,
           s.SERVERIP,
           s.START_DATE,
           s.END_DATE,
           (
-              SELECT TOP 1 u.PORT
-              FROM tb_USERS u
-              WHERE u.CUSTOMERID = s.CUSTOMERID
+            SELECT TOP 1 u.PORT
+            FROM tb_USERS u
+            WHERE u.CUSTOMERID = s.CUSTOMERID
           ) AS PORT
-      FROM tb_SERVER_DETAILS s;
-                `),
-      ]);
+        FROM tb_SERVER_DETAILS s;
+      `;
 
-      return res.status(200).json({
-        message: "Details fetched successfully",
-        success: true,
-        records: tableRecords.recordset || [],
-      });
-
-    } catch (fetchErr) {
-      console.error("Error fetching data:", fetchErr);
-      return res.status(500).json({ message: "Failed to fetch data" });
-    }
+      try {
+        const tableRecords = await request.query(query);
+        return res.status(200).json({
+          message: "Details fetched successfully",
+          success: true,
+          records: tableRecords.recordset || [],
+        });
+      } catch (fetchErr) {
+        console.error("❌ Error fetching data:", fetchErr);
+        return res.status(500).json({ message: "Failed to fetch data" });
+      }
+    });
   } catch (error) {
-    console.error("Unhandled error in Dashboard:", error);
-    return res.status(500).json({ message: "Failed to load dashboard" });
+    console.error("❌ Unhandled error in serverConnection:", error);
+    return res.status(500).json({ message: "Failed to load server connection data" });
   }
 };
