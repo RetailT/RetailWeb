@@ -605,28 +605,15 @@ exports.login = async (req, res) => {
     // Close old connection
     await mssql.close();
 
-    // Connect to dynamic DB
-    // const dynamicDbConfig = {
-    //   user: process.env.DB_USER,
-    //   password: process.env.DB_PASSWORD,
-    //   server: ip_address.trim(),
-    //   database: process.env.DB_DATABASE2,
-    //   options: {
-    //     encrypt: false,
-    //     trustServerCertificate: true,
-    //   },
-    //   port: parseInt(port.trim()),
-    //   connectionTimeout: 5000, // << timeout in ms
-    //   requestTimeout: 5000,
-    // };
-
+// console.log('hi')
     const user_ip = String(ip_address).trim();
+    // console.log('ip', user_ip,port.trim());
       const dynamicPool = await connectToUserDatabase(user_ip, port.trim());
       if (!dynamicPool.connected) {
         return res.status(500).json({ message: "Database connection failed" });
       }
     
-
+// console.log('db connected for company fetch');
     const companyResult = await dynamicPool
       .request()
       .input("CUSTOMER_ID", mssql.Int, CUSTOMERID)
