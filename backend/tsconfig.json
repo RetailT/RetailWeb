@@ -2,7 +2,15 @@
   "compilerOptions": {
     "typeRoots": ["./node_modules/@types", "./types"],
     "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true, // optional, but helps with compatibility
+    "allowSyntheticDefaultImports": true,
     "module": "CommonJS",
-  }
+    "target": "ES2020",
+    "outDir": "./dist",
+    "rootDir": "./api",
+    "strict": true,
+    "moduleResolution": "node",
+    "skipLibCheck": true
+  },
+  "include": ["api/**/*"],
+  "exclude": ["node_modules"]
 }
