@@ -95,8 +95,8 @@ app.put('/reset-database-connection', authenticateToken, authController.resetDat
 // export default handler;
 
 
-// // Uncomment the following lines if you want to export the app for serverless deployment
-// module.exports = app;
-// module.exports.handler = serverless(app);
+// Uncomment the following lines if you want to export the app for serverless deployment
+module.exports = app;
+module.exports.handler = serverless(app);
 
 
