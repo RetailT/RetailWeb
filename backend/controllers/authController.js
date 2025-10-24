@@ -320,7 +320,7 @@ async function syncDB() {
         //   port: syncdbPort,
         // };
 
-        const user_ip = String(customer.IP).trim();      
+        const user_ip = (customer.IP).trim();      
         await connectToUserDatabase(user_ip, customer.PORT.trim());
         
         console.log(
