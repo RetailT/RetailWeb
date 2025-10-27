@@ -32,6 +32,7 @@ const Reset = () => {
   const [department, setDepartment] = useState(false);
   const [subCategory, setSubCategory] = useState(false);
   const [vendor, setVendor] = useState(false);
+  const [hourlyReport, setHourlyReport] = useState(false);
   const [invoice, setInvoice] = useState(false);
   const [productView, setProductView] = useState(false);
   const [scan, setScan] = useState(false);
@@ -182,6 +183,7 @@ useEffect(() => {
             d_department: department,
             d_scategory: subCategory,
             d_vendor: vendor,
+            d_hourly_report: hourlyReport,
             d_invoice: invoice,
             d_productView: productView,
           },
@@ -331,6 +333,7 @@ setNewCustomerID("");
             setDepartment(user.d_department === "T");
             setSubCategory(user.d_scategory === "T");
             setVendor(user.d_vendor === "T");
+            setHourlyReport(user.d_hourly_report === "T");
             setInvoice(user.d_invoice === "T");
             setProductView(user.d_productView === "T");
             setScan(user.t_scan === "T");
@@ -372,6 +375,7 @@ setNewCustomerID("");
             setDepartment(false);
             setSubCategory(false);
             setVendor(false);
+            setHourlyReport(false);
             setInvoice(false);
             setProductView(false);
             setScan(false);
@@ -413,6 +417,7 @@ setNewCustomerID("");
             setDepartment(false);
             setSubCategory(false);
             setVendor(false);
+            setHourlyReport(false);
             setInvoice(false);
             setProductView(false);
             setScan(false);
@@ -732,6 +737,15 @@ const autoFill = (customerID) => {
                           className="w-4 h-4 sm:w-5 sm:h-5"
                         />
                         <span className="text-gray-700 text-sm">Vendor</span>
+                      </label>
+                      <label className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          checked={hourlyReport}
+                          onChange={(e) => setHourlyReport(e.target.checked)}
+                          className="w-4 h-4 sm:w-5 sm:h-5"
+                        />
+                        <span className="text-gray-700 text-sm">Hourly Report</span>
                       </label>
                       <label className="flex items-center space-x-2">
                         <input

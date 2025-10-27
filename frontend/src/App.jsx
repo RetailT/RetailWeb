@@ -24,6 +24,7 @@ import StockWiseProduct from "./pages/stockWiseReportProduct"
 import StockWiseDepartment from "./pages/stockWiseReportDepartment"
 import StockWiseCategory from "./pages/stockWiseReportCategory"
 import StockWiseSubCategory from "./pages/stockWiseReportSubCategory"
+import HourlyReportDashboard from './pages/hourlyReport'; 
 import StockWiseVendor from "./pages/stockWiseReportVendor"
 import Report from "./pages/report";
 import Scan from "./pages/scan";
@@ -55,6 +56,7 @@ function App() {
         <Route path="/stock-update" element={<ProtectedRoute> <StockUpdate /> </ProtectedRoute>}/>
         <Route path="/report" element={<ProtectedRoute> <Report /> </ProtectedRoute>}/>
         <Route path="/vendor-dashboard" element={<ProtectedRoute> <VendorDashboard /> </ProtectedRoute>}/>
+        <Route path="/hourly-report-dashboard" element={<ProtectedRoute> <HourlyReportDashboard /> </ProtectedRoute>}/>
         <Route path="/sync-databases" element={<ProtectedRoute> <SyncDatabase /> </ProtectedRoute>}/> 
         <Route path="/product-view" element={<ProtectedRoute> <ProductView /> </ProtectedRoute>}/> 
         <Route path="/color-size-sales-department" element={<ProtectedRoute> <ColorSizeSalesDepartment /> </ProtectedRoute>}/>   

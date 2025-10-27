@@ -27,6 +27,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
   let d_category = "";
   let d_scategory = "";
   let d_vendor = "";
+  let d_hourlyReport = "";
   let d_invoice = "";
   let d_productView = "";
   let t_scan = "";
@@ -56,6 +57,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
     d_category = decodedToken.d_category;
     d_scategory = decodedToken.d_scategory;
     d_vendor = decodedToken.d_vendor;
+    d_hourlyReport = decodedToken.d_hourlyReport;
     d_invoice = decodedToken.d_invoice;
     d_productView = decodedToken.d_productView;
     d_productView = decodedToken.d_productView;
@@ -141,6 +143,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
             (d_category && d_category.toLowerCase() === "t") ||
             (d_scategory && d_scategory.toLowerCase() === "t") ||
             (d_vendor && d_vendor.toLowerCase() === "t") ||
+            (d_hourlyReport && d_hourlyReport.toLowerCase() === "t") ||
             (d_invoice && d_invoice.toLowerCase() === "t") ||
             (d_productView && d_productView.toLowerCase() === "t")) && (
             <li
@@ -203,6 +206,14 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
               <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
                 <NavLink to="/vendor-dashboard" onClick={establishConnection} className="w-full">
                   Vendor
+                </NavLink>
+              </li>
+            )}
+
+            {d_hourlyReport?.toLowerCase() === "t" && dashboardOpen && isOpen && (
+              <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
+                <NavLink to="/hourly-report-dashboard" onClick={establishConnection} className="w-full">
+                  Hourly Report
                 </NavLink>
               </li>
             )}
