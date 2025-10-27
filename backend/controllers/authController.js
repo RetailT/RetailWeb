@@ -654,6 +654,7 @@ exports.login = async (req, res) => {
         d_category: user.d_category,
         d_scategory: user.d_scategory,
         d_vendor: user.d_vendor,
+        d_hourlyReport: user.d_hourly_report,
         d_invoice: user.d_invoice,
         d_productView: user.d_productView,
         t_scan: user.t_scan,
@@ -2008,14 +2009,14 @@ exports.reportData = async (req, res) => {
 
         // Clean previous data
         await pool.request().query(`
-          USE RT_WEB;
+          USE ${rtweb};
           DELETE FROM tb_SALESVIEW WHERE REPUSER = '${username}';
         `);
 
         // Run SP for each company
         for (const companyCode of selectedOptions) {
           await pool.request().query(`
-            EXEC RT_WEB.dbo.Sp_SalesView 
+            EXEC ${rtweb}.dbo.Sp_SalesView 
               @COMPANY_CODE='${companyCode}', 
               @DATE1='${formattedFromDate}', 
               @DATE2='${formattedToDate}', 
@@ -2026,7 +2027,7 @@ exports.reportData = async (req, res) => {
 
         // Main report query
         reportQuery = await pool.request().query(`
-          USE RT_WEB;
+          USE ${rtweb};
           SELECT INVOICENO, COMPANY_CODE, UNITNO, REPNO, 'CASH' AS PRODUCT_NAME, 
                  ISNULL(SUM(CASE PRODUCT_NAME 
                    WHEN 'CASH' THEN AMOUNT 
@@ -2050,13 +2051,13 @@ exports.reportData = async (req, res) => {
         const reportType = "INVOICEWISE";
 
         await pool.request().query(`
-          USE RT_WEB;
+          USE ${rtweb};
           DELETE FROM tb_SALESVIEW WHERE REPUSER='${username}';
         `);
 
         for (const companyCode of selectedOptions) {
           await pool.request().query(`
-            EXEC RT_WEB.dbo.Sp_SalesCurView 
+            EXEC ${rtweb}.dbo.Sp_SalesCurView 
               @COMPANY_CODE='${companyCode}', 
               @DATE='${date}', 
               @REPUSER='${username}', 
@@ -2065,7 +2066,7 @@ exports.reportData = async (req, res) => {
         }
 
         reportQuery = await pool.request().query(`
-          USE RT_WEB;
+          USE ${rtweb};
           SELECT INVOICENO, COMPANY_CODE, UNITNO, REPNO, 'CASH' AS PRODUCT_NAME, 
                  ISNULL(SUM(CASE PRODUCT_NAME 
                    WHEN 'CASH' THEN AMOUNT 
@@ -2092,7 +2093,7 @@ exports.reportData = async (req, res) => {
 
     if (rowClicked === true || String(rowClicked).toLowerCase() === "true") {
       const result = await pool.request().query(`
-        USE RT_WEB;
+        USE ${rtweb};
         SELECT INVOICENO, PRODUCT_CODE, PRODUCT_NAME, QTY, AMOUNT, COSTPRICE, UNITPRICE, DISCOUNT
         FROM tb_SALESVIEW 
         WHERE INVOICENO='${invoiceNo}' AND ID IN ('SL','SLF','RF','RFF') AND REPUSER='${username}';
@@ -2288,7 +2289,6 @@ try {
     const formattedFromDate = formatDate(fromDate);
     const formattedToDate = formatDate(toDate);
     const reportType = "SALESSUM1";
-    const rtweb = "RT_WEB";
 
     // 🔹 6. Clear previous dashboard data
     await pool
@@ -2488,7 +2488,6 @@ exports.departmentDashboard = async (req, res) => {
 
     console.log("✅ Connected to user database");
 
-    const rtweb = "RT_WEB";
     const formattedCurrentDate = formatDate(currentDate);
     const formattedFromDate = formatDate(fromDate);
     const formattedToDate = formatDate(toDate);
@@ -2660,7 +2659,6 @@ exports.categoryDashboard = async (req, res) => {
     }
     console.log("✅ Connected to user database");
 
-    const rtweb = "RT_WEB"; // ✅ explicitly define
     const formattedCurrentDate = formatDate(currentDate);
     const formattedFromDate = formatDate(fromDate);
     const formattedToDate = formatDate(toDate);
@@ -3025,6 +3023,163 @@ exports.vendorDashboard = async (req, res) => {
       await pool.close();
       console.log("🔒 Database pool connection closed");
     }
+  }
+};
+
+//hourly report dashboard
+exports.hourlyReportDashboard = async (req, res) => {
+  try {
+    // 🔹 1. Token validation
+    const authHeader = req.headers.authorization;
+    if (!authHeader)
+      return res.status(403).json({ message: "No authorization token provided" });
+
+    const token = authHeader.split(" ")[1];
+    if (!token) return res.status(403).json({ message: "Token is missing" });
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const username = decoded.username;
+
+    // 🔹 2. Parse query parameters
+    let { currentDate, fromDate, toDate, selectedOptions } = req.query;
+
+    if (typeof selectedOptions === "string") {
+      selectedOptions = selectedOptions.split(",").map((code) => code.trim());
+    }
+
+    if (
+      !Array.isArray(selectedOptions) ||
+      selectedOptions.length === 0 ||
+      selectedOptions[0] === ""
+    ) {
+      return res.status(400).json({ message: "No company codes provided" });
+    }
+
+    // 🔹 3. Establish connection
+    if (mssql.connected) {
+      await mssql.close();
+      console.log("✅ Closed previous connection");
+    }
+
+    const user_ip = String(req.user.ip).trim();
+    const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+    if (!pool || !pool.connected)
+      return res.status(500).json({ message: "Database connection failed" });
+
+    console.log("✅ Connected to user database");
+
+    const formattedCurrentDate = formatDate(currentDate);
+    const formattedFromDate = formatDate(fromDate);
+    const formattedToDate = formatDate(toDate);
+
+    // 🔹 4. Helper: Retry on deadlock
+    const executeWithRetry = async (queryFn, retries = 3) => {
+      for (let i = 0; i < retries; i++) {
+        try {
+          return await queryFn();
+        } catch (err) {
+          if (err.originalError?.number === 1205 && i < retries - 1) {
+            console.warn(`⚠️ Deadlock. Retrying attempt ${i + 1}...`);
+            await new Promise((r) => setTimeout(r, 1000));
+          } else {
+            throw err;
+          }
+        }
+      }
+    };
+
+    // 🔹 5. Clear previous records
+    try {
+      await executeWithRetry(() =>
+        pool
+          .request()
+          .input("username", mssql.NVarChar(50), username)
+          .query(`USE ${rtweb}; DELETE FROM tb_HOURLYVIEW WHERE REPUSER = @username;`)
+      );
+      console.log("✅ Cleared previous records");
+    } catch (deleteErr) {
+      console.error("⚠️ Error deleting previous records:", deleteErr.message);
+    }
+
+    // 🔹 6. Run stored procedures for each company
+    const errors = [];
+    for (const companyCode of selectedOptions) {
+      try {
+        const spRequest = pool
+          .request()
+          .input("COMPANY_CODE", mssql.Char(10), companyCode)
+          .input("REPUSER", mssql.NVarChar(50), username);
+
+        if (formattedFromDate !== "NaN/NaN/NaN" && formattedToDate !== "NaN/NaN/NaN") {
+          spRequest
+            .input("DATE1", mssql.Char(10), formattedFromDate)
+            .input("DATE2", mssql.Char(10), formattedToDate);
+          await executeWithRetry(() => spRequest.execute(`${rtweb}.dbo.Sp_HourlySalesView`));
+        } else {
+          spRequest.input("DATE1", mssql.NVarChar(10), formattedCurrentDate);
+          await executeWithRetry(() => spRequest.execute(`${rtweb}.dbo.Sp_HourlySalesCurView`));
+        }
+
+      } catch (spErr) {
+        console.error(`⚠️ Error executing SP for ${companyCode}:`, spErr.message);
+        errors.push(`Failed to execute SP for company ${companyCode}: ${spErr.message}`);
+      }
+    }
+
+    if (errors.length > 0) {
+      return res.status(500).json({ message: "Some stored procedures failed", errors });
+    }
+
+    // 🔹 7. Create view with parameterized company codes
+const companyList = selectedOptions.map(c => `'${c}'`).join(", ");
+
+const drop_query = `
+  IF OBJECT_ID('dbo.vw_HOURLY_SALES_VIEW', 'V') IS NOT NULL
+      DROP VIEW dbo.vw_HOURLY_SALES_VIEW;
+`;
+
+const create_query = `
+CREATE VIEW dbo.vw_HOURLY_SALES_VIEW AS
+SELECT TYPE, DATE, COMPANY_CODE, COMPANY_NAME, REPUSER, SUM(NetSale) AS TOTAL_SALES FROM tb_HOURLYVIEW
+WHERE REPUSER = '${username}' AND COMPANY_CODE IN (${companyList})
+GROUP BY TYPE, DATE, COMPANY_CODE, COMPANY_NAME, REPUSER;
+`;
+
+
+try {
+
+  await pool.request().query(drop_query);
+  await pool.request().query(create_query);
+  console.log(`✅ View created successfully in ${rtweb}`);
+} catch (viewErr) {
+  console.error("⚠️ Error creating view:", viewErr.message);
+  return res.status(500).json({ message: "Failed to create view", error: viewErr.message });
+}
+
+
+
+    // 🔹 8. Fetch data from view
+    const table_query = `
+      USE [${rtweb}];
+      SELECT 
+          TYPE, DATE, COMPANY_CODE, COMPANY_NAME, TOTAL_SALES, REPUSER
+      FROM dbo.vw_HOURLY_SALES_VIEW WHERE REPUSER = '${username}'
+      ORDER BY DATE, TYPE;
+    `;
+
+    const tableRecords = await executeWithRetry(() => pool.request().query(table_query));
+   
+
+    return res.status(200).json({
+      message: "Processed parameters for company codes",
+      success: true,
+      tableRecords: tableRecords.recordset || [],
+    });
+  } catch (error) {
+    console.error("❌ Unhandled error in departmentDashboard:", error);
+    return res
+      .status(500)
+      .json({ message: "Failed to load department dashboard", error: error.message });
   }
 };
 
@@ -6507,7 +6662,8 @@ exports.findUserConnection = async (req, res) => {
         u.[d_department], 
         u.[d_category], 
         u.[d_scategory], 
-        u.[d_vendor], 
+        u.[d_vendor],
+        u.[d_hourly_report], 
         u.[d_invoice],
         u.[d_productView], 
         u.[t_scan], 
@@ -6899,6 +7055,7 @@ exports.resetDatabaseConnection = async (req, res) => {
         "d_department",
         "d_scategory",
         "d_vendor",
+        "d_hourly_report",
         "d_invoice",
         "d_productView",
         "t_scan",
