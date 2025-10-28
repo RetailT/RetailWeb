@@ -528,6 +528,7 @@ exports.login = async (req, res) => {
     }
 
     const { username, password, ip } = req.body;
+    
     const date = moment().format("YYYY-MM-DD HH:mm:ss");
 
     if (!username || !password) {
