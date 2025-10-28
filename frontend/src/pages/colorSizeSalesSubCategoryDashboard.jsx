@@ -170,7 +170,6 @@ setDisable(false);
           };
         });
 
-
         const namesArray = firstOption.map((option) => option.name);
         const filteredNames = namesArray.filter((name) =>
           updatedTableData.some((record) => record.COMPANY_NAME === name)
@@ -241,14 +240,14 @@ setDisable(false);
         else{
           setTableRecords([]);
           setTableHeadings([]);
-           setDisable(false);
+          setDisable(false);
         setAlert({ message: response.data.message || "Error Occured", type: "error" });
       setTimeout(() => setAlert(null), 3000);
         }
         
       } catch (err) {
         console.error("Error sending parameters:", err);
-       setDisable(false);
+        setDisable(false);
         setAlert({ message: err.response?.data?.message || "Error Occured", type: "error" });
       setTimeout(() => setAlert(null), 3000);
       }
@@ -278,8 +277,7 @@ setDisable(false);
           if (response.data.message==='Processed parameters for company codes'){
 const tableData = response.data.records;
 setDepartmentName(row.SUBCATEGORY_NAME);
-          
-  
+        
           const customDepartmentHeaders = ["PRODUCT_CODE", "PRODUCT_NAME", "SERIALNO",  "COSTPRICE", "UNITPRICE", "DISCOUNT", "AMOUNT" ];
 
         const customDepartmentHeaderMapping = {
@@ -407,7 +405,7 @@ setDisable(false);
 
       {/* Main Layout */}
       
-        <div className="container mx-auto p-6 md:p-16">
+        <div className="container p-6 mx-auto md:p-16">
           <div className="mt-20 md:mt-14">
             <Heading text="Sub Category Sales Dashboard" />
           </div>
@@ -420,26 +418,26 @@ setDisable(false);
               />
             )}
             <div
-          className="bg-gray-200 p-4 rounded-lg shadow-md mt-4" style={{ backgroundColor: "#d8d8d8" }}
+          className="p-4 mt-4 bg-gray-200 rounded-lg shadow-md" style={{ backgroundColor: "#d8d8d8" }}
         >
               {isChecked ? (
                     <div className="mt-8">
   {/* First Row - Centered Title */}
-  <div className="text-center text-xl sm:text-2xl font-bold mb-4">
+  <div className="mb-4 text-xl font-bold text-center sm:text-2xl">
     Current Sub Category Sales
   </div>
 
   {/* Second Row - Checkbox on Left, Button on Right */}
-  <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+  <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
     <div className="flex items-center">
       <input
         type="checkbox"
         checked={isChecked}
         onChange={handleCheckboxChange}
         id="checkbox"
-        className="h-3 w-3 text-blue-600 focus:ring-blue-500 mt-4 md:mt-0"
+        className="w-3 h-3 mt-4 text-blue-600 focus:ring-blue-500 md:mt-0"
       />
-      <label htmlFor="checkbox" className="ml-2 text-md font-semibold mt-4 md:mt-0">
+      <label htmlFor="checkbox" className="mt-4 ml-2 font-semibold text-md md:mt-0">
         Current Sales
       </label>
     </div>
@@ -456,8 +454,8 @@ setDisable(false);
 </div>
               ) : (
                 <div className="mt-10">
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+                              <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+                                <div className="flex flex-col w-full gap-4 sm:flex-row sm:w-auto">
                                   <DatePicker
                                     label="Select Date Range:"
                                     onDateChange={handleDateChange}
@@ -473,7 +471,7 @@ setDisable(false);
                               />
                             </div>
                                 </div>
-                                <div className="flex flex-col sm:flex-row justify-center sm:justify-end gap-4 mt-3 md:mt-6">
+                                <div className="flex flex-col justify-center gap-4 mt-3 sm:flex-row sm:justify-end md:mt-6">
                                   <button
                                     onClick={handleSubmit}
                                     disabled={disable}
@@ -500,21 +498,21 @@ setDisable(false);
 
             {!isChecked && (
              <div
-            className="bg-white p-4 sm:p-5 rounded-md shadow-md mt-3 mb-5"
+            className="p-4 mt-3 mb-5 bg-white rounded-md shadow-md sm:p-5"
             style={{ backgroundColor: "#d8d8d8" }}
           >
-            <div className="flex justify-center text-xl sm:text-2xl font-bold text-black">
+            <div className="flex justify-center text-xl font-bold text-black sm:text-2xl">
               Sub Category Sales Summary
             </div>
 
-            <div className="flex justify-center font-bold mt-4">
+            <div className="flex justify-center mt-4 font-bold">
               <p>{displayDate}</p>
             </div>
           </div>
             )}
 
             {(submitted || isChecked) && (
-              <div className="flex flex-col w-full space-y-5 mt-10">
+              <div className="flex flex-col w-full mt-10 space-y-5">
               <div className="overflow-x-auto">
                 <div className="bg-white p-4 border border-gray-300 rounded-md shadow-md min-w-[300px]">
                   <NestedDynamicTable
@@ -529,7 +527,7 @@ setDisable(false);
             <p className="text-center text-[#bc4a17] text-lg sm:text-xl font-bold mt-5">
                             {departmentName ? `${departmentName}` : ""}
                           </p>
-            <div className="w-max mx-auto"> 
+            <div className="mx-auto w-max"> 
               <Table
                 headers={newTableHeaders}
                 data={newTableData}

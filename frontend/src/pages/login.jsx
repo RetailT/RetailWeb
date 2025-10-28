@@ -47,7 +47,9 @@ const Login = ({ setAuthToken }) => {
   
     if (valid) {
       try {
+        
         const res = await axios.post(`${process.env.REACT_APP_BACKEND_URL}login`, { username, password,ip });
+       
         if (res.data.message === "Login successful") {
           const token = res.data.token; 
           const storage = rememberMe ? localStorage : sessionStorage;
@@ -118,10 +120,10 @@ const Login = ({ setAuthToken }) => {
             id="username"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            className="mt-1 block w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-gray-700 focus:outline-none"
+            className="block w-full px-3 py-2 mt-1 text-gray-700 bg-gray-100 border border-gray-300 rounded-md focus:outline-none"
             placeholder="Enter Username"
           />
-          {usernameError && <p className="text-red-500 text-sm mt-1">{usernameError}</p>}
+          {usernameError && <p className="mt-1 text-sm text-red-500">{usernameError}</p>}
         </div>
 
         <div className="relative">
@@ -133,24 +135,24 @@ const Login = ({ setAuthToken }) => {
             id="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="mt-1 block w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-gray-700 focus:outline-none"
+            className="block w-full px-3 py-2 mt-1 text-gray-700 bg-gray-100 border border-gray-300 rounded-md focus:outline-none"
             placeholder="Enter password"
           />
           {showPassword ? (
             <FaEyeSlash
-              className="absolute right-3 top-10 text-gray-500 cursor-pointer"
+              className="absolute text-gray-500 cursor-pointer right-3 top-10"
               onClick={() => setShowPassword(!showPassword)}
             />
           ) : (
             <FaEye
-              className="absolute right-3 top-10 text-gray-500 cursor-pointer"
+              className="absolute text-gray-500 cursor-pointer right-3 top-10"
               onClick={() => setShowPassword(!showPassword)}
             />
           )}
-          {passwordError && <p className="text-red-500 text-sm mt-1">{passwordError}</p>}
+          {passwordError && <p className="mt-1 text-sm text-red-500">{passwordError}</p>}
         </div>
 
-        <div className="flex justify-between items-center">
+        <div className="flex items-center justify-between">
           <div className="flex items-center">
             <input
               type="checkbox"
