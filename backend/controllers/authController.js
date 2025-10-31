@@ -7,7 +7,6 @@ const mssql = require("mssql");
 const crypto = require("crypto");
 const https = require("https");
 const qs = require("qs");
-// const nodemailer = require("nodemailer");
 const { sendPasswordResetEmail } = require("../utils/nodemailer");
 const { promisify } = require("util");
 const verifyToken = promisify(jwt.verify);
@@ -16,38 +15,6 @@ const axios = require("axios");
 const posback = process.env.DB_DATABASE3;
 const rtweb = process.env.DB_DATABASE2;
 const posmain = process.env.DB_DATABASE1;
-// const port_number = 1443
-
-// const dbConfig1 = {
-//   user: process.env.DB_USER, // Database username
-//   password: process.env.DB_PASSWORD, // Database password
-//   server: process.env.DB_SERVER, // Database server address
-//   database: process.env.DB_DATABASE1, // Database name
-//   options: {
-//     encrypt: false, // Disable encryption
-//     trustServerCertificate: true, // Trust server certificate (useful for local databases)
-//   },
-//   port: port_number,
-// };
-
-// const dbConnection = (user_ip, user_port) => ({
-//   user: process.env.DB_USER,
-//       password: process.env.DB_PASSWORD,
-//       server: user_ip.trim(),
-//       database: process.env.DB_DATABASE2,     
-//       port: parseInt(user_port.trim()),
-//       options: {
-//         encrypt: false,
-//         trustServerCertificate: true,
-//       },
-//       connectionTimeout: 5000, // << timeout in ms
-//       requestTimeout: 5000,
-// });
-
-
-//report data, current report, company dashboard,
-// department dashboard, category dashboard,
-// sub category dashboard, vendor dashboard
 
 function formatDate(dateString) {
   // Convert the input string to a Date object
@@ -60,6 +27,41 @@ function formatDate(dateString) {
 
   // Return the formatted date as 'DD/MM/YYYY'
   return `${day}/${month}/${year}`;
+}
+
+function trimObjectStrings(obj) {
+  if (obj === null || typeof obj !== "object") return obj;
+
+  if (Array.isArray(obj)) {
+    return obj.map(trimObjectStrings);
+  }
+
+  return Object.fromEntries(
+    Object.entries(obj).map(([key, value]) => [
+      key,
+      typeof value === "string" ? value.trim() : trimObjectStrings(value),
+    ])
+  );
+}
+
+function currentDateTime() {
+  const now = new Date();
+  const trDate = new Date(
+    Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
+  );
+  const trTime = new Date(
+    Date.UTC(
+      1900,
+      0,
+      1,
+      now.getHours(),
+      now.getMinutes(),
+      now.getSeconds(),
+      now.getMilliseconds()
+    )
+  );
+
+  return { trDate, trTime };
 }
 
 async function syncDBConnection() {
@@ -212,21 +214,6 @@ async function getAccessToken(user) {
   }
 }
 
-function trimObjectStrings(obj) {
-  if (obj === null || typeof obj !== "object") return obj;
-
-  if (Array.isArray(obj)) {
-    return obj.map(trimObjectStrings);
-  }
-
-  return Object.fromEntries(
-    Object.entries(obj).map(([key, value]) => [
-      key,
-      typeof value === "string" ? value.trim() : trimObjectStrings(value),
-    ])
-  );
-}
-
 async function updateTables() {
   const transaction = new mssql.Transaction();
   try {
@@ -307,18 +294,6 @@ async function syncDB() {
 
       try {
         await mssql.close();
-
-        // const syncdbConfig = {
-        //   user: process.env.DB_USER,
-        //   password: process.env.DB_PASSWORD,
-        //   server: syncdbIp,
-        //   database: process.env.DB_DATABASE2,
-        //   options: {
-        //     encrypt: false,
-        //     trustServerCertificate: true,
-        //   },
-        //   port: syncdbPort,
-        // };
 
         const user_ip = (customer.IP).trim();      
         await connectToUserDatabase(user_ip, customer.PORT.trim());
@@ -458,26 +433,6 @@ async function syncDB() {
   }
 }
 
-function currentDateTime() {
-  const now = new Date();
-  const trDate = new Date(
-    Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
-  );
-  const trTime = new Date(
-    Date.UTC(
-      1900,
-      0,
-      1,
-      now.getHours(),
-      now.getMinutes(),
-      now.getSeconds(),
-      now.getMilliseconds()
-    )
-  );
-
-  return { trDate, trTime };
-}
-
 //sync db
 exports.syncDatabases = async (req, res) => {
   try {
@@ -528,7 +483,6 @@ exports.login = async (req, res) => {
     }
 
     const { username, password, ip } = req.body;
-    
     const date = moment().format("YYYY-MM-DD HH:mm:ss");
 
     if (!username || !password) {
@@ -606,28 +560,12 @@ exports.login = async (req, res) => {
     // Close old connection
     await mssql.close();
 
-    // Connect to dynamic DB
-    // const dynamicDbConfig = {
-    //   user: process.env.DB_USER,
-    //   password: process.env.DB_PASSWORD,
-    //   server: ip_address.trim(),
-    //   database: process.env.DB_DATABASE2,
-    //   options: {
-    //     encrypt: false,
-    //     trustServerCertificate: true,
-    //   },
-    //   port: parseInt(port.trim()),
-    //   connectionTimeout: 5000, // << timeout in ms
-    //   requestTimeout: 5000,
-    // };
-
     const user_ip = String(ip_address).trim();
       const dynamicPool = await connectToUserDatabase(user_ip, port.trim());
       if (!dynamicPool.connected) {
         return res.status(500).json({ message: "Database connection failed" });
       }
     
-
     const companyResult = await dynamicPool
       .request()
       .input("CUSTOMER_ID", mssql.Int, CUSTOMERID)
@@ -695,33 +633,6 @@ exports.login = async (req, res) => {
     if (mssql.connected) await mssql.close();
   }
 };
-
-// // db connection for menu
-// exports.menuDBConnection = async (req, res) => {
-//  mssql.close();
-
-//  try{
-// await mssql.connect({
-//       user: process.env.DB_USER,
-//       password: process.env.DB_PASSWORD,
-//       server: req.user.ip.trim(),
-//       port: parseInt(req.user.port.trim()),
-//       database: process.env.DB_DATABASE2, 
-//       options: {
-//         encrypt: false,
-//         trustServerCertificate: true,
-//       },
-//     });
-
-//     res.status(200).json({ message: "Menu DB Connection Successful" });
-//  }
-//  catch(err){
-//   console.error('Error in menuDBConnection:', err);
-//   res.status(500).json({ message: "Menu DB Connection Failed" });
-  
-//  }
-  
-// };
 
 // register
 exports.register = async (req, res) => {
@@ -1544,9 +1455,8 @@ exports.grnprnDelete = async (req, res) => {
 
 // stock update final
 exports.finalStockUpdate = async (req, res) => {
-  const { username, company } = req.query;
-  const rtweb = req.rtweb; // ensure this is set based on login context
-
+  const { username, company} = req.query;
+  
   if (!username || !company) {
     return res.status(400).json({
       success: false,
@@ -1569,16 +1479,14 @@ exports.finalStockUpdate = async (req, res) => {
       return res.status(500).json({ message: "Database connection failed" });
     }
     // Use the correct DB first
-    if (rtweb) await pool.request().query(`USE [${rtweb}];`);
+    await pool.request().query(`USE [${rtweb}];`);
 
     transaction = new mssql.Transaction(pool);
     await transaction.begin();
 
-    const selectResult = await new mssql.Request(transaction).input(
-      "COMPANY_CODE",
-      mssql.NChar(10),
-      company
-    ).query(`
+    const selectResult = await new mssql.Request(transaction)
+        .input("COMPANY_CODE",mssql.NChar(10),company)
+        .query(`
         SELECT * FROM tb_STOCKRECONCILATION_DATAENTRYTEMP
         WHERE COMPANY_CODE = @COMPANY_CODE
       `);
@@ -1597,11 +1505,11 @@ exports.finalStockUpdate = async (req, res) => {
     const insertQuery = `
       INSERT INTO tb_STOCKRECONCILATION_DATAENTRY (
         COMPANY_CODE, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE,
-        CUR_STOCK, PHY_STOCK, TYPE, COUNT_STATUS, REPUSER, TRDATE, TRTIME, SERIALNO, COLORCODE, SIZECODE
+        CUR_STOCK, PHY_STOCK, TYPE, COUNT_STATUS, REPUSER, TRDATE, TRTIME, SERIALNO, COLORCODE, SIZECODE, APPROVEDBY
       )
       VALUES (
         @COMPANY_CODE, @PRODUCT_CODE, @PRODUCT_NAMELONG, @COSTPRICE, @UNITPRICE,
-        @CUR_STOCK, @PHY_STOCK, @TYPE, @COUNT_STATUS, @REPUSER, @trDate, @trTime, @serialNo, @color, @size
+        @CUR_STOCK, @PHY_STOCK, @TYPE, @COUNT_STATUS, @REPUSER, @trDate, @trTime, @serialNo, @color, @size, @APPROVEDBY
       )
     `;
 
@@ -1622,6 +1530,7 @@ exports.finalStockUpdate = async (req, res) => {
         .input("serialNo", mssql.NVarChar(500), row.SERIALNO?.trim() || "")
         .input("color", mssql.Char(10), row.COLORCODE?.trim() || "")
         .input("size", mssql.Char(10), row.SIZECODE?.trim() || "")
+        .input("APPROVEDBY", mssql.NVarChar(50), username || "")
         .query(insertQuery);
 
       insertCount++;
@@ -1687,9 +1596,9 @@ exports.finalStockUpdate = async (req, res) => {
 
 // GRN/PRN/TOG update final
 exports.finalGrnPrnUpdate = async (req, res) => {
-  const { username, company, type, invoice, remarks = "" } = req.query;
+  const { username, company, type, invoice, remarks = "" ,repUser} = req.query;
 
-  if (!username || !company || !type || (type !== "TOG" && !invoice)) {
+  if (!username || !company || !type || !repUser || (type !== "TOG" && !invoice)) {
     return res.status(400).json({
       success: false,
       message: "Missing required parameters",
@@ -1713,20 +1622,22 @@ exports.finalGrnPrnUpdate = async (req, res) => {
     await transaction.begin();
 
     const request = new mssql.Request(transaction);
-    request.input("COMPANY_CODE", mssql.NChar(10), company.trim());
+    request
+    .input("COMPANY_CODE", mssql.NChar(10), company.trim())
+    .input("SELCTED_USER", mssql.NVarChar(50), repUser.trim());
     if (type !== "TOG") request.input("INVOICE_NO", mssql.NChar(50), invoice.trim());
 
     // Step 1: Retrieve temp data
     const selectResult = await request.query(`
        USE ${rtweb};
       SELECT * FROM ${tempTables[type]} 
-      ${type === "TOG" ? "WHERE COMPANY_CODE = @COMPANY_CODE" : "WHERE COMPANY_CODE = @COMPANY_CODE AND INVOICE_NO = @INVOICE_NO"}
+      ${type === "TOG" ? "WHERE COMPANY_CODE = @COMPANY_CODE AND REPUSER = @SELCTED_USER" : "WHERE COMPANY_CODE = @COMPANY_CODE AND INVOICE_NO = @INVOICE_NO  AND REPUSER = @SELCTED_USER"}
     `);
 
     const records = selectResult.recordset;
     if (records.length === 0) { 
       await transaction.rollback(); 
-      return res.status(404).json({ success: false, message: "No data found in temp table" }); 
+      return res.status(404).json({ success: false, message: "No data found in for the selected criteria" }); 
     }
 
     // Step 2: Update document number
@@ -1767,7 +1678,7 @@ exports.finalGrnPrnUpdate = async (req, res) => {
         UNITPRICE: record.UNITPRICE,
         CUR_STOCK: record.CUR_STOCK,
         PHY_STOCK: record.PHY_STOCK,
-        REPUSER: username.trim(),
+        REPUSER: record.REPUSER.trim(),
         REMARKS: remarks,
         APPROVED_USER: username,
         trDate, trTime,
@@ -1804,12 +1715,12 @@ exports.finalGrnPrnUpdate = async (req, res) => {
 
       const insertQuery = type === "TOG" ?
         `INSERT INTO ${rtweb}.dbo.${finalTables[type]} 
-        (DOCUMENT_NO, COMPANY_CODE, COMPANY_TO_CODE, TYPE, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE, CUR_STOCK, PHY_STOCK, REMARKS, REPUSER, TRDATE, TRTIME, SERIALNO,COLORCODE, SIZECODE)
-         VALUES (@DOCUMENT_NO,@COMPANY_CODE,@COMPANY_TO_CODE,@TYPE,@PRODUCT_CODE,@PRODUCT_NAMELONG,@COSTPRICE,@UNITPRICE,@CUR_STOCK,@PHY_STOCK,@REMARKS,@REPUSER,@trDate,@trTime,@SERIALNO,@COLORCODE,@SIZECODE)` 
+        (DOCUMENT_NO, COMPANY_CODE, COMPANY_TO_CODE, TYPE, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE, CUR_STOCK, PHY_STOCK, REMARKS, REPUSER, TRDATE, TRTIME, SERIALNO,COLORCODE, SIZECODE, APPROVEDBY)
+         VALUES (@DOCUMENT_NO,@COMPANY_CODE,@COMPANY_TO_CODE,@TYPE,@PRODUCT_CODE,@PRODUCT_NAMELONG,@COSTPRICE,@UNITPRICE,@CUR_STOCK,@PHY_STOCK,@REMARKS,@REPUSER,@trDate,@trTime,@SERIALNO,@COLORCODE,@SIZECODE, @APPROVED_USER)` 
         : 
         `INSERT INTO ${rtweb}.dbo.${finalTables[type]} 
-        (DOCUMENT_NO, COMPANY_CODE, VENDOR_CODE, VENDOR_NAME, INVOICE_NO, TYPE, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE, CUR_STOCK, PHY_STOCK, REPUSER, REMARKS, TRDATE, TRTIME, SERIALNO,COLORCODE, SIZECODE)
-         VALUES (@DOCUMENT_NO,@COMPANY_CODE,@VENDOR_CODE,@VENDOR_NAME,@INVOICE_NO,@TYPE,@PRODUCT_CODE,@PRODUCT_NAMELONG,@COSTPRICE,@UNITPRICE,@CUR_STOCK,@PHY_STOCK,@REPUSER,@REMARKS,@trDate,@trTime,@SERIALNO,@COLORCODE,@SIZECODE)`;
+        (DOCUMENT_NO, COMPANY_CODE, VENDOR_CODE, VENDOR_NAME, INVOICE_NO, TYPE, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE, CUR_STOCK, PHY_STOCK, REPUSER, REMARKS, TRDATE, TRTIME, SERIALNO,COLORCODE, SIZECODE, APPROVEDBY)
+         VALUES (@DOCUMENT_NO,@COMPANY_CODE,@VENDOR_CODE,@VENDOR_NAME,@INVOICE_NO,@TYPE,@PRODUCT_CODE,@PRODUCT_NAMELONG,@COSTPRICE,@UNITPRICE,@CUR_STOCK,@PHY_STOCK,@REPUSER,@REMARKS,@trDate,@trTime,@SERIALNO,@COLORCODE,@SIZECODE, @APPROVED_USER)`;
 
       await insertReq.query(insertQuery);
 
@@ -1848,11 +1759,13 @@ exports.finalGrnPrnUpdate = async (req, res) => {
 
     // Step 4: Delete temp data
     const deleteReq = new mssql.Request(transaction);
-    deleteReq.input("COMPANY_CODE", mssql.NChar(10), company.trim());
+    deleteReq
+    .input("COMPANY_CODE", mssql.NChar(10), company.trim())
+    .input("SELCTED_USER", mssql.NVarChar(50), repUser.trim());;
     if (type !== "TOG") deleteReq.input("INVOICE_NO", mssql.NChar(50), invoice.trim());
     await deleteReq.query(`
       USE ${rtweb};
-      DELETE FROM ${tempTables[type]} WHERE COMPANY_CODE = @COMPANY_CODE ${type !== "TOG" ? "AND INVOICE_NO = @INVOICE_NO" : ""}
+      DELETE FROM ${tempTables[type]} WHERE COMPANY_CODE = @COMPANY_CODE AND REPUSER = @SELCTED_USER ${type !== "TOG" ? "AND INVOICE_NO = @INVOICE_NO" : ""}
     `);
 
     await transaction.commit();
@@ -1925,22 +1838,6 @@ if (mssql.connected) {
     if (!pool.connected) {
       return res.status(500).json({ message: "Database connection failed" });
     }
-      // if (!pool.connected) {
-      //   return res.status(500).json({ message: "Database connection failed" });
-      // }
-      
-    
-    // const pool = await mssql.connect({
-    //   user: process.env.DB_USER,
-    //   password: process.env.DB_PASSWORD,
-    //   server: req.user.ip.trim(),
-    //   port: parseInt(req.user.port.trim()),
-    //   database: process.env.DB_DATABASE2, 
-    //   options: {
-    //     encrypt: false,
-    //     trustServerCertificate: true,
-    //   },
-    // });
   
     const result = await pool.request().query(`
       USE [${posback}];
@@ -2029,22 +1926,32 @@ exports.reportData = async (req, res) => {
         // Main report query
         reportQuery = await pool.request().query(`
           USE ${rtweb};
+          SELECT *
+      FROM (
           SELECT INVOICENO, COMPANY_CODE, UNITNO, REPNO, 'CASH' AS PRODUCT_NAME, 
-                 ISNULL(SUM(CASE PRODUCT_NAME 
-                   WHEN 'CASH' THEN AMOUNT 
-                   WHEN 'BALANCE' THEN -AMOUNT 
-                   ELSE 0 END), 0) AS AMOUNT, SALESDATE
+                ISNULL(SUM(CASE PRODUCT_NAME 
+                          WHEN 'CASH' THEN AMOUNT 
+                          WHEN 'BALANCE' THEN -AMOUNT 
+                          ELSE 0 END), 0) AS AMOUNT, 
+                SALESDATE
           FROM tb_SALESVIEW 
-          WHERE (ID='PT' OR ID='BL') AND PRODUCT_NAME IN ('CASH', 'BALANCE') AND REPUSER='${username}'
+          WHERE (ID='PT' OR ID='BL') 
+            AND PRODUCT_NAME IN ('CASH', 'BALANCE') 
+            AND REPUSER='${username}'
           GROUP BY COMPANY_CODE, SALESDATE, UNITNO, REPNO, INVOICENO
-          
+
           UNION ALL
-          
+
           SELECT INVOICENO, COMPANY_CODE, UNITNO, REPNO, PRODUCT_NAME, 
-                 ISNULL(SUM(AMOUNT),0) AS AMOUNT, SALESDATE
+                ISNULL(SUM(AMOUNT),0) AS AMOUNT, 
+                SALESDATE
           FROM tb_SALESVIEW 
-          WHERE ID='PT' AND PRODUCT_NAME NOT IN ('CASH','BALANCE') AND REPUSER='${username}'
-          GROUP BY COMPANY_CODE, SALESDATE, UNITNO, REPNO, INVOICENO, PRODUCT_NAME;
+          WHERE ID='PT' 
+            AND PRODUCT_NAME NOT IN ('CASH','BALANCE') 
+            AND REPUSER='${username}'
+          GROUP BY COMPANY_CODE, SALESDATE, UNITNO, REPNO, INVOICENO, PRODUCT_NAME
+      ) AS CombinedResults
+      ORDER BY COMPANY_CODE ASC, SALESDATE ASC, UNITNO ASC;
         `);
 
       } else if ((state === true || String(state).toLowerCase() === "true") && currentDate && selectedOptions?.length > 0) {
@@ -2068,6 +1975,8 @@ exports.reportData = async (req, res) => {
 
         reportQuery = await pool.request().query(`
           USE ${rtweb};
+          SELECT *
+          FROM (
           SELECT INVOICENO, COMPANY_CODE, UNITNO, REPNO, 'CASH' AS PRODUCT_NAME, 
                  ISNULL(SUM(CASE PRODUCT_NAME 
                    WHEN 'CASH' THEN AMOUNT 
@@ -2083,7 +1992,9 @@ exports.reportData = async (req, res) => {
                  ISNULL(SUM(AMOUNT),0) AS AMOUNT, SALESDATE
           FROM tb_SALESVIEW 
           WHERE ID='PT' AND PRODUCT_NAME NOT IN ('CASH','BALANCE') AND REPUSER='${username}'
-          GROUP BY COMPANY_CODE, SALESDATE, UNITNO, REPNO, INVOICENO, PRODUCT_NAME;
+          GROUP BY COMPANY_CODE, SALESDATE, UNITNO, REPNO, INVOICENO, PRODUCT_NAME
+          ) AS CombinedResults
+          ORDER BY COMPANY_CODE ASC, SALESDATE ASC, UNITNO ASC;;
         `);
       }
     }
@@ -2119,117 +2030,6 @@ exports.reportData = async (req, res) => {
   }
 };
 
-// //current report
-// exports.currentReportData = async (req, res) => {
-//   try {
-//     const authHeader = req.headers.authorization;
-//     if (!authHeader) {
-//       return res
-//         .status(403)
-//         .json({ message: "No authorization token provided" });
-//     }
-
-//     const token = authHeader.split(" ")[1];
-//     if (!token) {
-//       return res.status(403).json({ message: "Token is missing" });
-//     }
-
-//     const decoded = await verifyToken(token, process.env.JWT_SECRET);
-//     const username = decoded.username;
-
-//     // Handle companyCodes parsing (from ?companyCodes=01&companyCodes=02 or ?companyCodes[]=01&companyCodes[]=02)
-//     let companyCodes = req.query.companyCodes || req.query["companyCodes[]"];
-//     if (typeof companyCodes === "string") {
-//       companyCodes = [companyCodes];
-//     }
-
-//     const { currentDate, invoiceNo } = req.query;
-
-//     if (
-//       !Array.isArray(companyCodes) ||
-//       companyCodes.length === 0 ||
-//       !currentDate
-//     ) {
-//       return res.status(400).json({ message: "Missing or invalid parameters" });
-//     }
-
-//     const date = formatDate(currentDate);
-//     const reportType = "INVOICEWISE";
-
-//     // Step 1: Clean previous report data
-//     await mssql.query`
-//       USE RT_WEB;
-//       DELETE FROM tb_SALESVIEW WHERE REPUSER = ${username};
-//     `;
-
-//     // Step 2: Execute SP for each company
-//     for (const companyCode of companyCodes) {
-//       await mssql.query`
-//         EXEC RT_WEB.dbo.Sp_SalesCurView 
-//         @COMPANY_CODE = ${companyCode}, 
-//         @DATE = ${date}, 
-//         @REPUSER = ${username}, 
-//         @REPORT_TYPE = ${reportType};
-//       `;
-//     }
-
-//     // Step 3: Fetch summarized report data
-//     const reportQuery = await mssql.query`
-//       USE RT_WEB;
-//       SELECT 
-//         INVOICENO, COMPANY_CODE, UNITNO, REPNO, 'CASH' AS PRODUCT_NAME, 
-//         ISNULL(SUM(CASE PRODUCT_NAME 
-//           WHEN 'CASH' THEN AMOUNT 
-//           WHEN 'BALANCE' THEN -AMOUNT 
-//           ELSE 0 END), 0) AS AMOUNT, 
-//         SALESDATE
-//       FROM tb_SALESVIEW 
-//       WHERE (ID = 'PT' OR ID = 'BL') 
-//         AND PRODUCT_NAME IN ('CASH', 'BALANCE') 
-//         AND REPUSER = ${username}
-//       GROUP BY COMPANY_CODE, SALESDATE, UNITNO, REPNO, INVOICENO
-
-//       UNION ALL
-
-//       SELECT 
-//         INVOICENO, COMPANY_CODE, UNITNO, REPNO, PRODUCT_NAME, 
-//         ISNULL(SUM(AMOUNT), 0) AS AMOUNT, SALESDATE
-//       FROM tb_SALESVIEW 
-//       WHERE ID = 'PT' 
-//         AND PRODUCT_NAME NOT IN ('CASH', 'BALANCE') 
-//         AND REPUSER = ${username}
-//       GROUP BY COMPANY_CODE, SALESDATE, UNITNO, REPNO, INVOICENO, PRODUCT_NAME;
-//     `;
-
-//     // Step 4: Fetch detailed invoice data if requested
-//     let invoiceData = [];
-//     if (invoiceNo) {
-//       const result = await mssql.query`
-//         USE RT_WEB;
-//         SELECT INVOICENO, PRODUCT_CODE, PRODUCT_NAME, QTY, AMOUNT, COSTPRICE, UNITPRICE, DISCOUNT 
-//         FROM tb_SALESVIEW 
-//         WHERE INVOICENO = ${invoiceNo} 
-//           AND ID IN ('SL', 'SLF', 'RF', 'RFF') 
-//           AND REPUSER = ${username};
-//       `;
-//       invoiceData = result.recordset;
-//     }
-
-//     console.log("Invoice Data:", invoiceData);
-//     // Step 5: Respond
-//     res.status(200).json({
-//       message: "Invoice data found",
-//       success: true,
-//       reportData: reportQuery.recordset || [],
-//       invoiceData,
-//     });
-//   } catch (error) {
-//     console.error("Error retrieving current report data:", error);
-//     res.status(500).json({ message: "Failed to retrieve current report data" });
-//   }
-// };
-
-//company dashboard
 exports.loadingDashboard = async (req, res) => {
 try {
     // 🔹 1. Authorization
@@ -6562,12 +6362,7 @@ if (!pool || !pool.connected) {
 // product name
 exports.productName = async (req, res) => {
   try {
-    // Try finding a product code via barcode link table
-
-    // const user_ip = String(req.user.ip).trim(); 
-    // const pool = await mssql.connect(dbConnection(user_ip, req.user.port));
-
-    // mssql.close();
+   
     const user_ip = String(req.user.ip).trim(); 
     if (mssql.connected) {
     await mssql.close();
@@ -6654,8 +6449,7 @@ exports.findUserConnection = async (req, res) => {
     const query = `
       USE [${posmain}];
       SELECT 
-        u.[ip_address], 
-        u.[port], 
+        u.[ip_address],
         u.[CUSTOMERID], 
         u.[a_permission], 
         u.[a_sync], 
@@ -6689,6 +6483,7 @@ exports.findUserConnection = async (req, res) => {
         u.[s_scategory],
         u.[s_vendor],
         s.[COMPANY_NAME],
+        s.[PORTNO] AS port,
         s.[START_DATE],
         s.[END_DATE]
       FROM tb_USERS u
@@ -6743,15 +6538,18 @@ exports.resetDatabaseConnection = async (req, res) => {
     stock = [],
     colorSize_stock = [],
     colorSize_sales = [],
-    // removeAdmin = [],
-    // removeDashboard = [],
-    // removeStock = [],
   } = req.body;
 
   const trimmedName = name?.trim();
   const trimmedIP = ip?.trim();
-  const trimmedPort = port?.trim();
+  const trimmedPort =
+  typeof port === 'number' && Number.isInteger(port)
+    ? port
+    : Number.isInteger(parseInt(port?.trim(), 10))
+    ? parseInt(port.trim(), 10)
+    : (() => { throw new Error('Invalid port'); })();
 
+    
   if (mssql.connected) {
     await mssql.close();
     console.log("✅ Database connection closed successfully");
@@ -6814,22 +6612,6 @@ exports.resetDatabaseConnection = async (req, res) => {
       parsedNewCustomerID,
     });
 
-    // Connect to the database
-    // const config = {
-    //   user: process.env.DB_USER,
-    //   password: process.env.DB_PASSWORD,
-    //   server: process.env.DB_SERVER,
-    //   database: process.env.DB_DATABASE1,
-    //   options: {
-    //     encrypt: false,
-    //     trustServerCertificate: true,
-    //   },
-    //   port: 1443, //---------1433 initialy there
-    //   connectionTimeout: 30000,
-    //   requestTimeout: 30000,
-    // };
-    console.log("Connecting to database");
-
     // pool = await mssql.connect(dbConnection);
     pool = await connectToDatabase();
 
@@ -6851,12 +6633,7 @@ exports.resetDatabaseConnection = async (req, res) => {
     );
 
     // Case 1: Invalid customerID
-    if (
-      customerID === 0 ||
-      customerID === "" ||
-      customerID === null ||
-      customerID === undefined
-    ) {
+    if (customerID === 0 || customerID === "" || customerID === null || customerID === undefined) {
       if (!isValidNewCustomerID) {
         return res
           .status(400)
@@ -6867,36 +6644,33 @@ exports.resetDatabaseConnection = async (req, res) => {
       serverRequest.input("newCustomerID", mssql.Int, parsedNewCustomerID);
       serverRequest.input("companyName", mssql.NVarChar(50), companyName || "");
       serverRequest.input("trimmedIP", mssql.NVarChar(50), trimmedIP || "");
+      serverRequest.input("trimmedPort", mssql.Int, trimmedPort || 0);
       serverRequest.input("startDate", mssql.Date,startDate ? new Date(startDate) : "");
       serverRequest.input("endDate",mssql.Date,endDate ? new Date(endDate) : "");
 
       if (checkResult.recordset.length === 0) {
-        console.log('1')
         serverResult = await serverRequest.query(`
-        INSERT INTO tb_SERVER_DETAILS (CUSTOMERID, COMPANY_NAME, SERVERIP, START_DATE, END_DATE)
-        VALUES (@newCustomerID, @companyName, @trimmedIP, @startDate, @endDate);
+        INSERT INTO tb_SERVER_DETAILS (CUSTOMERID, COMPANY_NAME, SERVERIP, PORTNO, START_DATE, END_DATE)
+        VALUES (@newCustomerID, @companyName, @trimmedIP, @trimmedPort, @startDate, @endDate);
         `);
         console.log("tb_SERVER_DETAILS inserted", serverResult.rowsAffected);
-      } else if (checkResult.recordset[0].COMPANY_NAME !== companyName) {
-        console.log('2')
+      } 
+      else if (checkResult.recordset[0].COMPANY_NAME !== companyName) {
         console.log("Company name mismatch in tb_SERVER_DETAILS");
         return res.status(400).json({
           message: "Customer ID already exist for a different company name",
         });
-      } else if (
-        checkResult.recordset[0].SERVERIP !== trimmedIP ||
-        new Date(checkResult.recordset[0].START_DATE)
-          .toISOString()
-          .split("T")[0] !== new Date(startDate).toISOString().split("T")[0] ||
-        new Date(checkResult.recordset[0].END_DATE)
-          .toISOString()
-          .split("T")[0] !== new Date(endDate).toISOString().split("T")[0]
+      } 
+      else if (
+        checkResult.recordset[0].SERVERIP !== trimmedIP || checkResult.recordset[0].PORTNO !== trimmedPort || 
+        new Date(checkResult.recordset[0].START_DATE).toISOString().split("T")[0] !== new Date(startDate).toISOString().split("T")[0] ||
+        new Date(checkResult.recordset[0].END_DATE).toISOString().split("T")[0] !== new Date(endDate).toISOString().split("T")[0]
       ) {
-        console.log('3')
         serverResult = await serverRequest.query(`
         UPDATE tb_SERVER_DETAILS
           SET 
               SERVERIP = @trimmedIP,
+              PORTNO = @trimmedPort,
               START_DATE = @startDate,
               END_DATE = @endDate
           WHERE 
@@ -6905,14 +6679,13 @@ exports.resetDatabaseConnection = async (req, res) => {
       `);
       }
 
-      console.log(
-        "Executing Case 1 - Update tb_USERS and insert tb_SERVER_DETAILS"
-      );
+      console.log( "Executing Case 1 - Update tb_USERS and insert tb_SERVER_DETAILS" );
+
       const userRequest = new mssql.Request(transaction);
       userRequest.input("newCustomerID", mssql.Int, parsedNewCustomerID);
-      userRequest.input("trimmedIP", mssql.VarChar(20), trimmedIP || null);
-      userRequest.input("trimmedPort", mssql.VarChar(10), trimmedPort || null);
-      userRequest.input("username", mssql.VarChar(20), username || null);
+      userRequest.input("trimmedIP", mssql.VarChar(20), trimmedIP || "");
+      userRequest.input("trimmedPort", mssql.VarChar(10), String(trimmedPort || ""));
+      userRequest.input("username", mssql.VarChar(20), username || "");
       userRequest.input("trimmedName", mssql.VarChar(50), trimmedName);
 
       userResult = await userRequest.query(`
@@ -6920,20 +6693,16 @@ exports.resetDatabaseConnection = async (req, res) => {
         SET CUSTOMERID = @newCustomerID, ip_address = @trimmedIP, port = @trimmedPort, registered_by = @username
         WHERE username = @trimmedName;
       `);
+
       console.log("tb_USERS updated", userResult.rowsAffected);
+
     }
     // Case 2: Valid customerID and newCustomerID, and they are equal
-    else if (
-      isValidCustomerID &&
-      isValidNewCustomerID &&
-      parsedCustomerID === parsedNewCustomerID
-    ) {
-      console.log(
-        "Executing Case 2 - Update tb_USERS and tb_SERVER_DETAILS (same CUSTOMERID)"
-      );
+    else if (isValidCustomerID && isValidNewCustomerID && parsedCustomerID === parsedNewCustomerID) {
+      console.log("Executing Case 2 - Update tb_USERS and tb_SERVER_DETAILS (same CUSTOMERID)");
       const userRequest = new mssql.Request(transaction);
-      userRequest.input("trimmedIP", mssql.VarChar(20), trimmedIP || null);
-      userRequest.input("trimmedPort", mssql.VarChar(10), trimmedPort || null);
+      userRequest.input("trimmedIP", mssql.VarChar(20), trimmedIP || "");
+      userRequest.input("trimmedPort", mssql.VarChar(10), String(trimmedPort || ""));
       userRequest.input("trimmedName", mssql.VarChar(50), trimmedName);
 
       userResult = await userRequest.query(`
@@ -6941,46 +6710,33 @@ exports.resetDatabaseConnection = async (req, res) => {
         SET ip_address = @trimmedIP, port = @trimmedPort
         WHERE username = @trimmedName;
       `);
+
       console.log("tb_USERS updated", userResult.rowsAffected);
 
       const serverRequest = new mssql.Request(transaction);
-      serverRequest.input(
-        "companyName",
-        mssql.NVarChar(50),
-        companyName || null
-      );
-      serverRequest.input("trimmedIP", mssql.NVarChar(50), trimmedIP || null);
-      serverRequest.input(
-        "startDate",
-        mssql.Date,
-        startDate ? new Date(startDate) : null
-      );
-      serverRequest.input(
-        "endDate",
-        mssql.Date,
-        endDate ? new Date(endDate) : null
-      );
+      serverRequest.input("companyName", mssql.NVarChar(50), companyName || "");
+      serverRequest.input("trimmedIP", mssql.NVarChar(50), trimmedIP || "");
+      serverRequest.input("trimmedPort", mssql.Int, trimmedPort || 0);
+      serverRequest.input("startDate", mssql.Date, startDate ? new Date(startDate) : null);
+      serverRequest.input("endDate", mssql.Date, endDate ? new Date(endDate) : null );
       serverRequest.input("customerID", mssql.Int, parsedCustomerID);
 
       serverResult = await serverRequest.query(`
         UPDATE tb_SERVER_DETAILS 
-        SET COMPANY_NAME = @companyName, SERVERIP = @trimmedIP, START_DATE = @startDate, END_DATE = @endDate
+        SET COMPANY_NAME = @companyName, SERVERIP = @trimmedIP, PORTNO = @trimmedPort, START_DATE = @startDate, END_DATE = @endDate
         WHERE CUSTOMERID = @customerID;
       `);
+
       console.log("tb_SERVER_DETAILS updated", serverResult.rowsAffected);
     }
     // Case 3: Valid customerID and newCustomerID, but they are not equal
-    else if (
-      isValidCustomerID &&
-      isValidNewCustomerID &&
-      parsedCustomerID !== parsedNewCustomerID
-    ) {
-      console.log(
-        "Executing Case 3 - Update tb_USERS and tb_SERVER_DETAILS (new CUSTOMERID)"
-      );
+    else if (isValidCustomerID && isValidNewCustomerID && parsedCustomerID !== parsedNewCustomerID) {
+      
+      console.log("Executing Case 3 - Update tb_USERS and tb_SERVER_DETAILS (new CUSTOMERID)");
+
       const userRequest = new mssql.Request(transaction);
-      userRequest.input("trimmedIP", mssql.VarChar(20), trimmedIP || null);
-      userRequest.input("trimmedPort", mssql.VarChar(10), trimmedPort || null);
+      userRequest.input("trimmedIP", mssql.VarChar(20), trimmedIP || "");
+      userRequest.input("trimmedPort", mssql.VarChar(10), String(trimmedPort || ""));
       userRequest.input("newCustomerID", mssql.Int, parsedNewCustomerID);
       userRequest.input("trimmedName", mssql.VarChar(50), trimmedName);
 
@@ -6989,35 +6745,27 @@ exports.resetDatabaseConnection = async (req, res) => {
         SET ip_address = @trimmedIP, port = @trimmedPort, CUSTOMERID = @newCustomerID
         WHERE username = @trimmedName;
       `);
+      
       console.log("tb_USERS updated", userResult.rowsAffected);
 
       const serverRequest = new mssql.Request(transaction);
-      serverRequest.input(
-        "companyName",
-        mssql.NVarChar(50),
-        companyName || null
-      );
-      serverRequest.input("trimmedIP", mssql.NVarChar(50), trimmedIP || null);
+      serverRequest.input("companyName",mssql.NVarChar(50),companyName || "");
+      serverRequest.input("trimmedIP", mssql.NVarChar(50), trimmedIP || "");
+      serverRequest.input("trimmedPort", mssql.Int, trimmedPort || 0);
       serverRequest.input("newCustomerID", mssql.Int, parsedNewCustomerID);
-      serverRequest.input(
-        "startDate",
-        mssql.Date,
-        startDate ? new Date(startDate) : null
-      );
-      serverRequest.input(
-        "endDate",
-        mssql.Date,
-        endDate ? new Date(endDate) : null
-      );
+      serverRequest.input("startDate", mssql.Date, startDate ? new Date(startDate) : null);
+      serverRequest.input( "endDate", mssql.Date, endDate ? new Date(endDate) : null);
       serverRequest.input("customerID", mssql.Int, parsedCustomerID);
 
       serverResult = await serverRequest.query(`
         UPDATE tb_SERVER_DETAILS 
-        SET COMPANY_NAME = @companyName, SERVERIP = @trimmedIP, CUSTOMERID = @newCustomerID, 
+        SET COMPANY_NAME = @companyName, SERVERIP = @trimmedIP, PORTNO = @trimmedPort, CUSTOMERID = @newCustomerID, 
             START_DATE = @startDate, END_DATE = @endDate
         WHERE CUSTOMERID = @customerID;
       `);
+
       console.log("tb_SERVER_DETAILS updated", serverResult.rowsAffected);
+
     } else {
       throw new Error("Invalid customerID or newCustomerID");
     }
@@ -7025,10 +6773,11 @@ exports.resetDatabaseConnection = async (req, res) => {
     // Check if updates were successful
     console.log('userResult',userResult)
     console.log('serverResult',serverResult)
+
     if (userResult.rowsAffected[0] === 0) {
-  console.log("No user found with username", trimmedName);
-  throw new Error(`User '${trimmedName}' not found in tb_USERS`);
-}
+      console.log("No user found with username", trimmedName);
+      throw new Error(`User '${trimmedName}' not found in tb_USERS`);
+    }
 
     if (serverResult!==undefined) {
       if(serverResult.rowsAffected[0] === 0 ){
@@ -7130,95 +6879,6 @@ exports.resetDatabaseConnection = async (req, res) => {
       }
     };
 
-    // // Remove permissions
-    // const removePermissions = async (permissionArray, permissionType) => {
-    //   if (!Array.isArray(permissionArray) || permissionArray.length === 0) {
-    //     console.log(
-    //       `Skipping ${permissionType} removal - empty or invalid array`
-    //     );
-    //     return;
-    //   }
-
-    //   const allowedColumns = [
-    //     "a_permission",
-    //     "a_sync",
-    //     "d_company",
-    //     "d_category",
-    //     "d_department",
-    //     "d_scategory",
-    //     "d_vendor",
-    //     "d_invoice",
-    //     "d_productView",
-    //     "t_scan",
-    //     "t_stock",
-    //     "t_stock_update",
-    //     "t_grn",
-    //     "t_prn",
-    //     "t_tog",
-    //     "c_st_product_wise",
-    //     "c_st_department",
-    //     "c_st_category",
-    //     "c_st_scategory",
-    //     "c_st_vendor",
-    //     "c_sa_product_wise",
-    //     "c_sa_department",
-    //     "c_sa_category",
-    //     "c_sa_scategory",
-    //     "c_sa_vendor",
-    //     "s_product",
-    //     "s_department",
-    //     "s_category",
-    //     "s_scategory",
-    //     "s_vendor",
-    //   ];
-
-    //   for (const permissionObject of permissionArray) {
-    //     console.log(`Processing ${permissionType} removal`, permissionObject);
-    //     for (const column in permissionObject) {
-    //       if (!allowedColumns.includes(column)) {
-    //         console.log(
-    //           `Skipping invalid column ${column} for ${permissionType} removal. Verify tb_USERS schema.`
-    //         );
-    //         continue;
-    //       }
-
-    //       if (permissionObject[column]) {
-    //         console.log("Removing permission", {
-    //           column,
-    //           username: trimmedName,
-    //         });
-    //         const request = new mssql.Request(transaction);
-    //         request.input("value", mssql.Char(1), "F");
-    //         request.input("registeredBy", mssql.VarChar(20), username || null);
-    //         request.input("username", mssql.VarChar(50), trimmedName);
-
-    //         try {
-    //           const result = await request.query(`
-    //             UPDATE tb_USERS
-    //             SET ${column} = @value, registered_by = @registeredBy
-    //             WHERE username = @username;
-    //           `);
-    //           console.log("Permission removed", {
-    //             column,
-    //             rowsAffected: result.rowsAffected,
-    //           });
-
-    //           if (result.rowsAffected[0] === 0) {
-    //             console.log(
-    //               `No rows affected for ${column} removal - user may not exist`
-    //             );
-    //           }
-    //         } catch (err) {
-    //           console.log(
-    //             `Failed to remove ${column} for ${permissionType}: ${err.message}`
-    //           );
-    //           throw err;
-    //         }
-    //       }
-    //     }
-    //   }
-    // };
-
     console.log("Applying permission updates");
     await updatePermissions(admin, "admin");
     await updatePermissions(dashboard, "dashboard");
@@ -7226,12 +6886,6 @@ exports.resetDatabaseConnection = async (req, res) => {
     await updatePermissions(stock_wise, "stock_wise");
     await updatePermissions(colorSize_stock, "colorSize_stock");
     await updatePermissions(colorSize_sales, "colorSize_sales");
-
-    // console.log("Applying permission removals");
-    // await removePermissions(removeAdmin, "admin");
-    // await removePermissions(removeDashboard, "dashboard");
-    // await removePermissions(removeStock, "stock");
-    // console.log("Permissions processed");
 
     // Check if nothing was sent
     const isEmptyOrAllFalse = (arr) => {
@@ -7256,10 +6910,7 @@ exports.resetDatabaseConnection = async (req, res) => {
       isEmptyOrAllFalse(stock) &&
       isEmptyOrAllFalse(colorSize_stock) &&
       isEmptyOrAllFalse(colorSize_sales);
-    // &&
-    // isEmptyOrAllFalse(removeAdmin) &&
-    // isEmptyOrAllFalse(removeDashboard) &&
-    // isEmptyOrAllFalse(removeStock);
+
     console.log("nothingToUpdate check", nothingToUpdate);
 
     if (nothingToUpdate) {
@@ -7335,17 +6986,13 @@ exports.serverConnection = async (req, res) => {
       const query = `
         USE [${posmain}];
         SELECT 
-          s.CUSTOMERID,
-          s.COMPANY_NAME,
-          s.SERVERIP,
-          s.START_DATE,
-          s.END_DATE,
-          (
-            SELECT TOP 1 u.PORT
-            FROM tb_USERS u
-            WHERE u.CUSTOMERID = s.CUSTOMERID
-          ) AS PORT
-        FROM tb_SERVER_DETAILS s;
+          CUSTOMERID,
+          COMPANY_NAME,
+          SERVERIP,
+          START_DATE,
+          END_DATE,
+          PORTNO AS PORT
+        FROM tb_SERVER_DETAILS;
       `;
 
       try {
