@@ -130,7 +130,7 @@ function App() {
             },
             params: {
               username: username,
-              company: selectedCompany,
+              company: selectedCompany
             },
           }
         );
@@ -147,6 +147,7 @@ function App() {
               type: selectedType,
               invoice: invoiceFilter,
               remarks: remarks,
+              repUser: repUserFilter,
             },
           }
         );
@@ -630,8 +631,9 @@ function App() {
             <div className="text-xl sm:text-2xl font-bold mt-2 sm:mt-4 mb-2 sm:mb-4 text-center w-full">
               {selectedType}
             </div>
-            <div className="overflow-x-auto w-full max-w-full lg:max-w-[90%] mx-auto">
-              <div className="w-full max-w-full">
+
+  <div className="w-full max-w-full lg:max-w-[100%] mx-auto px-4 sm:px-6 md:px-8">
+    <div className="overflow-hidden rounded-lg bg-white shadow-md border border-gray-300 mb-5">
                 <Table
                   headers={headers}
                   data={filteredTableData.map((item) => item.rowData)}
@@ -655,7 +657,8 @@ function App() {
                 />
               </div>
             </div>
-          </div>
+            </div>
+          
         </div>
       )}
     </div>

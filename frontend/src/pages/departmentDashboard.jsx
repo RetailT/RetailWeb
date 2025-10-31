@@ -467,7 +467,7 @@ setDisable(false);
             {(submitted || isChecked) && (
               <div className="flex flex-col w-full mt-10 space-y-5">
                             <div className="overflow-x-auto">
-                              <div className="bg-white p-4 border border-gray-300 rounded-md shadow-md min-w-[300px]">
+                              <div className="bg-white p-4 border border-gray-300 rounded-md min-w-[300px]">
                                 <NestedDynamicTable
                                   data={tableRecords}
                                   mainHeadings={tableHeadings}
@@ -477,7 +477,7 @@ setDisable(false);
                             </div>
               
                             <div className="overflow-x-auto">
-                              <div className="w-full p-4 bg-white border border-gray-300 rounded-md shadow-md">
+                              <div className="w-full p-4 bg-white border border-gray-300 rounded-md">
                                 <BarChart
                                   data={amountBarChartRecords}
                                   labels={amountBarChartLabels}
@@ -488,7 +488,7 @@ setDisable(false);
                             </div>
               
                             <div className="overflow-x-auto">
-                              <div className="w-full p-4 bg-white border border-gray-300 rounded-md shadow-md">
+                              <div className="w-full p-4 bg-white border border-gray-300 rounded-md">
                                 <BarChart
                                   data={quantityBarChartRecords}
                                   labels={quantityBarChartLabels}

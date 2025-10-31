@@ -637,7 +637,7 @@ function App() {
 
                 {isData && (
                   <div className="mt-6 w-full max-w-4xl mx-auto">
-                    <div className="p-4 bg-white rounded-xl shadow-md">
+                    <div className="p-4 bg-white rounded-xl border border-gray-300 shadow-md">
                       <p className="text-center text-[#bc4a17] text-lg sm:text-xl font-bold mb-6">
                         Product Details
                       </p>
@@ -732,7 +732,7 @@ function App() {
                       </div>
                     </div>
 
-                   <div className="p-4 bg-white rounded-xl shadow-md mt-6">
+                   <div className="p-4 bg-white rounded-xl border border-gray-300 shadow-md mt-6">
   <p className="text-center text-[#bc4a17] text-lg sm:text-xl font-bold mb-6">
     Price Details
   </p>
@@ -788,7 +788,7 @@ function App() {
                   <div className="mt-6 w-full max-w-4xl mx-auto">
                     {Array.isArray(priceTableData) &&
                       priceTableData.length > 0 && (
-                        <div className="p-4 bg-white rounded-xl shadow-md w-full">
+                        <div className="p-4 bg-white rounded-xl border border-gray-300 shadow-md w-full">
                           <p className="text-center text-[#bc4a17] text-lg sm:text-xl font-bold mb-6">
                             Company Wise Price Details
                           </p>
@@ -807,7 +807,7 @@ function App() {
 
                     {Array.isArray(stockTableData) &&
                       priceTableData.length > 0 && (
-                        <div className="p-4 bg-white rounded-xl shadow-md mt-6 w-full">
+                        <div className="p-4 bg-white rounded-xl border border-gray-300 shadow-md mt-6 w-full">
                           <p className="text-center text-[#bc4a17] text-lg sm:text-xl font-bold mb-6">
                             Company Wise Stock Details
                           </p>
@@ -827,7 +827,7 @@ function App() {
 
                     {Array.isArray(colorWiseTableData) &&
                       colorWiseTableData.length > 0 && (
-                        <div className="p-4 bg-white rounded-xl shadow-md mt-6 w-full">
+                        <div className="p-4 bg-white rounded-xl border border-gray-300 shadow-md mt-6 w-full">
                           <p className="text-center text-[#bc4a17] text-lg sm:text-xl font-bold mb-6">
                             Color Wise Stock Details
                           </p>
@@ -845,7 +845,7 @@ function App() {
                         </div>
                       )}
 
-                    <div className="p-4 bg-white rounded-xl shadow-md mt-6 w-full">
+                    <div className="p-4 bg-white rounded-xl border border-gray-300 shadow-md mt-6 w-full">
                       <p className="text-center text-[#bc4a17] text-lg sm:text-xl font-bold mb-6">
                         Sales Details
                       </p>

@@ -514,7 +514,7 @@ setDisable(false);
             {(submitted || isChecked) && (
               <div className="flex flex-col w-full mt-10 space-y-5">
               <div className="overflow-x-auto">
-                <div className="bg-white p-4 border border-gray-300 rounded-md shadow-md min-w-[300px]">
+                <div className="bg-white p-4 border border-gray-300 rounded-md border border-gray-300 min-w-[300px]">
                   <NestedDynamicTable
                     data={tableRecords}
                     mainHeadings={tableHeadings}
@@ -523,10 +523,12 @@ setDisable(false);
                   />
                                           <div>
                             {Array.isArray(newTableData) && newTableData.length > 0 && (
-          <div className="mt-5 overflow-x-auto">
-            <p className="text-center text-[#bc4a17] text-lg sm:text-xl font-bold mt-5">
+                              <div>
+                                <p className="text-center text-[#bc4a17] text-lg sm:text-xl font-bold mt-10">
                             {departmentName ? `${departmentName}` : ""}
                           </p>
+          <div className="mt-5 overflow-x-auto">
+            
             <div className="mx-auto w-max"> 
               <Table
                 headers={newTableHeaders}
@@ -537,6 +539,7 @@ setDisable(false);
                 bin={true}
               />
             </div>
+          </div>
           </div>
         )}
                           </div>

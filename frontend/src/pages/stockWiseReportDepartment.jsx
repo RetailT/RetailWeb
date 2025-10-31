@@ -398,7 +398,7 @@ const ProductDashboard = () => {
 
            {(submitted || isChecked) && (
           <div className="flex flex-col w-full space-y-5 mt-10">
-            <div className="overflow-x-auto bg-white p-4 rounded-md shadow-md min-w-[300px]">
+            <div className="overflow-x-auto bg-white p-4 rounded-md border border-gray-300 min-w-[300px]">
               <div className="flex flex-col sm:flex-row justify-between gap-4 mb-10">
                 <div className="relative w-full sm:w-1/2">
                   <input type="text" placeholder="Search Product" value={searchInput} onChange={(e) => handleInputChange(e, true)} className="border px-3 py-2 w-full rounded-md" />

@@ -117,7 +117,7 @@ const NestedDynamicTable = ({ data, mainHeadings, title, onRowSelect }) => {
   };
 
   const renderDropdown = () => (
-    <div className="relative flex flex-col gap-2 w-full md:w-60 lg:w-96 mb-5 pl-0 md:pl-44">
+    <div className="relative flex flex-col gap-2 w-full md:w-60 lg:w-96 mb-5 pl-0 md:pl-10">
       <label className="block text-sm font-medium text-gray-700 w-full mb-3">
         Select File Type:
       </label>

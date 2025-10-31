@@ -362,8 +362,7 @@ const HourlyReportDashboard = () => {
 
     {(submitted || isChecked) && tableRecords?.length > 0 && tableHeadings?.length > 0 && (
       <div className="flex flex-col w-full mt-10 space-y-5">
-        <div className="overflow-x-auto">
-          <div className="bg-white p-4 border border-gray-300 rounded-md shadow-md min-w-[300px]">
+          <div className="bg-white p-4 border border-gray-300 rounded-md min-w-[300px]">
             <ScrollableTable
               headers={tableHeadings}
               data={tableRecords}
@@ -373,7 +372,7 @@ const HourlyReportDashboard = () => {
               rightAlignedColumns={[4]} // Total Sales column (index 4) right aligned
             />
           </div>
-        </div>
+
       </div>
     )}
 

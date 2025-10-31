@@ -768,12 +768,12 @@ setDisable(false);
             )}
           <div className="flex flex-col w-full max-w-full mx-auto mt-5">
             <div className="flex flex-col w-full lg:flex-row">
-              <div className="flex flex-col w-full p-4 mb-4 border border-gray-300 rounded-md shadow-md lg:w-1/3 sm:p-5 lg:mb-0 lg:mr-5">
+              <div className="flex flex-col w-full p-4 mb-4 border border-gray-300 rounded-md lg:w-1/3 sm:p-5 lg:mb-0 lg:mr-5">
                 {renderKeyValuePairs(rearrangedLabels.slice(1), data)}
               </div>
 
               <div className="flex flex-col w-full space-y-4 lg:w-2/3">
-                <div className="flex flex-col w-full p-4 space-y-4 border border-gray-300 rounded-md shadow-md sm:flex-row sm:space-y-0 sm:space-x-3 sm:p-5">
+                <div className="flex flex-col w-full p-4 space-y-4 border border-gray-300 rounded-md sm:flex-row sm:space-y-0 sm:space-x-3 sm:p-5">
                   <div className="w-full md:w-1/2 p-4 min-h-[400px]">
                     {renderPieChart(salesData, labels, colors)}
                   </div>
@@ -782,7 +782,7 @@ setDisable(false);
                   </div>
                 </div>
 
-                <div className="flex-1 p-4 border border-gray-300 rounded-md shadow-md sm:p-5">
+                <div className="flex-1 p-4 border border-gray-300 rounded-md sm:p-5">
                   {renderTable(tableLabels, tableData, handleRowClick)}
                 </div>
               </div>

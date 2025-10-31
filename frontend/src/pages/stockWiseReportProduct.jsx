@@ -419,9 +419,8 @@ const ProductDashboard = () => {
           )}
 
           {(submitted || isChecked) && (
-            <div className="flex flex-col w-full space-y-5 mt-10">
-              <div className="overflow-x-auto">
-                <div className="bg-white p-4 border border-gray-300 rounded-md shadow-md min-w-[300px]">
+            <div className="flex flex-col w-full mt-10 space-y-5">
+          <div className="bg-white p-4 border border-gray-300 rounded-md min-w-[300px]">
                   {/* ✅ Search Input with Suggestions */}
                   <div className="relative mb-4 w-full max-w-sm mb-10">
                     <input
@@ -452,17 +451,17 @@ const ProductDashboard = () => {
                     )}
                   </div>
 
-                  <div className="flex items-center mt-5 mb-10">
+                  <div className="flex items-center mb-10">
                     <input
                       type="checkbox"
                       checked={isValuationChecked}
                       onChange={handleValuationCheckboxChange}
                       id="checkbox"
-                      className="h-3 w-3 text-blue-600 focus:ring-blue-500 mt-4 md:mt-0"
+                      className="h-3 w-3 px-3 text-blue-600 focus:ring-blue-500 mt-4 md:mt-10"
                     />
                     <label
                       htmlFor="checkbox"
-                      className="ml-2 text-md mt-4 md:mt-0"
+                      className="ml-2 text-md mt-4 md:mt-10"
                     >
                       With Stock Valuation
                     </label>
@@ -477,7 +476,7 @@ const ProductDashboard = () => {
 
                 </div>
               </div>
-            </div>
+            
           )}
         </div>
       </div>

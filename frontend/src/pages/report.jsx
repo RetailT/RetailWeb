@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext } from "react";
+import React, { useEffect, useState, useContext, useMemo } from "react";
 import Navbar from "../components/NavBar";
 import Heading from "../components/Heading";
 import { Navigate } from "react-router-dom";
@@ -24,6 +24,8 @@ const Report = () => {
   const [invoiceData, setInvoiceData] = useState([]);
   const [invoiceHeaders, setInvoiceHeaders] = useState([]);
   const [currentSale, setCurrentSale] = useState(true);
+   const [submitted, setSubmitted] = useState(false);
+  const [unitFilter, setUnitFilter] = useState("");
 
   const customLabels = [
     { key: "COMPANY_CODE", label: "Company Code" },
@@ -237,10 +239,7 @@ const Report = () => {
         });
         setTimeout(() => setAlert(null), 3000);
       }
-      // if (response.data.invoiceData && response.data.invoiceData.length !== 0) {
-      // const invoiceData = response.data.invoiceData;
-
-      // }
+      
 
       setDisable(false);
     } catch (error) {
@@ -255,10 +254,57 @@ const Report = () => {
     }
   };
 
+  const unitOptions = useMemo(() => {
+  if (!reportData || reportData.length === 0) return [];
+
+  // `reportData` is an array of arrays:  reportData[row][col]
+  // Find the column index that holds UNITNO
+  const unitColIdx = customLabels.findIndex(({ key }) => key === 'UNITNO');
+
+  if (unitColIdx === -1) return [];   // no UNITNO column
+
+  const units = new Set();
+  reportData.forEach(row => {
+    const val = row[unitColIdx];
+    if (val) units.add(String(val).trim());
+  });
+
+  return Array.from(units).sort((a, b) => a.localeCompare(b));
+}, [reportData]);   // recompute only when reportData changes
+
+const filteredReportData = useMemo(() => {
+  if (!unitFilter) return reportData;               // no filter → show everything
+  const unitColIdx = customLabels.findIndex(({ key }) => key === 'UNITNO');
+  if (unitColIdx === -1) return reportData;
+
+  return reportData.filter(row => String(row[unitColIdx]).trim() === unitFilter);
+}, [reportData, unitFilter]);
+
   // Redirect to login if the user is not authenticated
   if (!authToken) {
     return <Navigate to="/login" replace />;
   }
+
+   const formatDate = (date) => {
+    const localDate = new Date(date);
+    localDate.setHours(0, 0, 0, 0);
+    const year = localDate.getFullYear();
+    const month = (localDate.getMonth() + 1).toString().padStart(2, "0"); // Months are 0-based
+    const day = localDate.getDate().toString().padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+   const now = new Date();
+   const formattedDate = formatDate(now);
+
+  const displayDate =
+    submitted && selectedDates.fromDate && selectedDates.toDate
+      ? `Date: ${selectedDates.fromDate} - ${selectedDates.toDate}`
+      : submitted && selectedDates.fromDate
+      ? `Date: ${formatDate(selectedDates.fromDate)}`
+      : submitted && selectedDates.toDate
+      ? `Date: ${formatDate(selectedDates.toDate)}`
+      : `Date: ${formattedDate}`;
 
   const handleDateChange = (dates) => {
     setSelectedDates(dates);
@@ -271,102 +317,6 @@ const Report = () => {
   const handleDropdownChange = (options) => {
     setSelectedOptions(options);
   };
-
-  //   const fetchData = async (invoiceNo) => {
-  //     setDisable(true);
-  //     const token = localStorage.getItem("authToken");
-  //     try {
-  //       const response = await axios.get(`${process.env.REACT_APP_BACKEND_URL}report-data`, {
-  //         headers: {
-  //           Authorization: `Bearer ${token}`,
-  //         },
-  //          params: {
-  //         fromDate: selectedDates.fromDate,
-  //         toDate: selectedDates.toDate,
-  //         invoiceNo: invoiceNo,
-  //         selectedOptions: selectedOptions.map((option) => option.code),
-  //       },
-  //       });
-  // console.log("Raw response data (fetchData):", response.data); // Added for debugging
-  //       if (response.data.message === "Invoice data found") {
-  //         const data = response.data.reportData;
-
-  //         if (data.length === 0) {
-  //           setAlert({
-  //             message: "No records available",
-  //             type: "error",
-  //           });
-  //           setTimeout(() => setAlert(null), 3000);
-  //         }
-
-  //         const headers = customLabels.map(({ label }) => label);
-
-  //        const formattedData = data.map((item) =>
-  //         customLabels.map(({ key }) => {
-  //           if (!item[key]) return ""; // Handle missing keys
-  //           if (key === "SALESDATE") {
-  //             return item[key].split("T")[0];
-  //           }
-  //           if (key === "AMOUNT") {
-  //             return Number(item[key]).toFixed(2);
-  //           }
-  //           return item[key];
-  //         })
-  //       );
-
-  //         setReportHeaders(headers);
-  //         setReportData(formattedData);
-  //         setDisable(false);
-  //       }
-  //       else{
-
-  //           setAlert({
-  //             message: "No records available",
-  //             type: "error",
-  //           });
-  //           setTimeout(() => setAlert(null), 3000);
-
-  //       }
-  //       if (response.data.invoiceData.length !== 0) {
-  //         const invoiceData = response.data.invoiceData;
-
-  //       console.log("Raw invoiceData from backend (fetchData):", invoiceData); // Added for debugging
-
-  //       const invoiceHeaders = invoiceHeadings.map(({ label }) => label);
-
-  //       const formattedInvoiceData = invoiceData.map((item) =>
-  //         invoiceHeadings.map(({ key }) => {
-  //           if (!item[key]) return ""; // Handle missing keys
-  //           if (
-  //             key === "AMOUNT" ||
-  //             key === "COSTPRICE" ||
-  //             key === "UNITPRICE" ||
-  //             key === "DISCOUNT"
-  //           ) {
-  //             return Number(item[key]).toFixed(2);
-  //           }
-  //           if (key === "QTY") {
-  //             return Number(item[key]).toFixed(3);
-  //           }
-  //           return item[key];
-  //         })
-  //       );
-
-  //       console.log("Formatted invoiceData (fetchData):", formattedInvoiceData); // Added for debugging
-  //         setInvoiceHeaders(invoiceHeaders);
-  //         setInvoiceData(formattedInvoiceData);
-  //       }
-
-  //       setDisable(false);
-  //     } catch (err) {
-  //       setAlert({
-  //         message: "Error sending data",
-  //         type: "error",
-  //       });
-  //       setTimeout(() => setAlert(null), 3000);
-  //       setDisable(false);
-  //     }
-  //   };
 
   const handleRowClick = (headers, rowData) => {
     setInvoiceData([]);
@@ -435,6 +385,9 @@ const Report = () => {
         type: "error",
       });
       setTimeout(() => setAlert(null), 3000);
+    }
+    if (selectedDates.fromDate !== null && selectedDates.toDate !== null && selectedOptions.length > 0) {
+      setSubmitted(true);
     }
     if (valid) {
       const newRowClicked = false;
@@ -515,6 +468,7 @@ const Report = () => {
         )}
 
         {!isChecked && (
+          <div>
           <div
             className="bg-white p-4 sm:p-6 mt-6 rounded-lg shadow-md mt-10"
             style={{ backgroundColor: "#d8d8d8" }}
@@ -560,16 +514,55 @@ const Report = () => {
               </div>
             </div>
           </div>
+          <div
+              className="bg-white p-4 sm:p-5 rounded-md shadow-md mt-3 mb-5"
+              style={{ backgroundColor: "#d8d8d8" }}
+            >
+              <div className="flex justify-center text-xl sm:text-2xl font-bold text-black">
+                Invoice Report
+              </div>
+
+              <div className="flex justify-center font-bold mt-4">
+                <p>{displayDate}</p>
+              </div>
+            </div>
+          </div>
         )}
+<div className="flex-1 p-4 border border-gray-300 rounded-md sm:p-5 mt-10">
+<div className="mb-4 flex items-center gap-3 mt-10">
+  <label>
+    Unit No:
+  </label>
+
+  <select
+    id="unit-filter"
+    value={unitFilter}
+    onChange={(e) => setUnitFilter(e.target.value)}
+    className="
+      px-3 py-2 sm:w-[270px] md:w-[300px] lg:w-[300px]
+      border border-gray-300 rounded-md 
+      focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-transparent
+      transition-all duration-200
+    "
+  >
+    <option value="">All Units</option>
+    {unitOptions.map((unit) => (
+      <option key={unit} value={unit}>
+        {unit}
+      </option>
+    ))}
+  </select>
+</div>
+
 
         {reportData.length > 0 && (
           <div className="mt-6">
-            <ScrollableTable
-              headers={reportHeaders}
-              data={reportData}
-              onRowClick={handleRowClick}
-              rightAlignedColumns={rightAlignedColumns}
-            />
+           <ScrollableTable
+  headers={reportHeaders}
+  data={filteredReportData}          
+  onRowClick={handleRowClick}
+  rightAlignedColumns={rightAlignedColumns}
+/>
           </div>
         )}
 
@@ -583,7 +576,7 @@ const Report = () => {
             />
           </div>
         )}
-        {/* </div> */}
+        </div>
       </div>
     </div>
   );

@@ -449,7 +449,7 @@ const CategoryDashboard = () => {
           {(submitted || isChecked) && (
             <div className="flex flex-col w-full space-y-5 mt-10">
               <div className="overflow-x-auto">
-                <div className="bg-white p-4 border border-gray-300 rounded-md shadow-md min-w-[300px]">
+                <div className="bg-white p-4 border border-gray-300 rounded-md min-w-[300px]">
                   <NestedDynamicTable
                     data={tableRecords}
                     mainHeadings={tableHeadings}
@@ -459,7 +459,7 @@ const CategoryDashboard = () => {
               </div>
 
               <div className="overflow-x-auto">
-                <div className="w-full bg-white p-4 border border-gray-300 rounded-md shadow-md">
+                <div className="w-full bg-white p-4 border border-gray-300 rounded-md">
                   <BarChart
                     data={amountBarChartRecords}
                     labels={amountBarChartLabels}
@@ -470,7 +470,7 @@ const CategoryDashboard = () => {
               </div>
 
               <div className="overflow-x-auto">
-                <div className="w-full bg-white p-4 border border-gray-300 rounded-md shadow-md">
+                <div className="w-full bg-white p-4 border border-gray-300 rounded-md">
                   <BarChart
                     data={quantityBarChartRecords}
                     labels={quantityBarChartLabels}

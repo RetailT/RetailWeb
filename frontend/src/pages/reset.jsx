@@ -156,7 +156,7 @@ useEffect(() => {
       isValid = false;
       setDisable(false);
     }
-   
+
     if(!ip || !port || !companyName || !startDate || !endDate ) {
       setAlert({ message: "All fields are required.", type: "error" });
       setTimeout(() => setAlert(null), 3000);
@@ -513,7 +513,7 @@ const autoFill = (customerID) => {
           <div className="flex justify-center mt-2 sm:mt-8 md:mt-10 ml-2 sm:ml-4 md:ml-0">
             <div className="w-full max-w-7xl px-2 sm:px-4 md:px-8">
               <form className="space-y-6 sm:space-y-8" onSubmit={handleSubmit}>
-                <div className="bg-white p-4 sm:p-6 md:p-6 rounded-md shadow-md flex flex-col lg:flex-row lg:justify-between items-center gap-2 sm:gap-4">
+                <div className="bg-white p-4 sm:p-6 md:p-6 rounded-md shadow-md border border-gray-300 flex flex-col lg:flex-row lg:justify-between items-center gap-2 sm:gap-4">
                   {/* Username Field */}
                   <div className="flex flex-col w-full lg:w-auto">
                     <label
@@ -561,7 +561,7 @@ const autoFill = (customerID) => {
                   </div>
                 </div>
 
-                <div className="bg-white p-4 sm:p-6 md:p-6 rounded-md shadow-md flex flex-col lg:flex-row lg:justify-between items-start gap-2 sm:gap-4 overflow-x-auto">
+                <div className="bg-white p-4 sm:p-6 md:p-6 rounded-md shadow-md border border-gray-300 flex flex-col lg:flex-row lg:justify-between items-start gap-2 sm:gap-4 overflow-x-auto">
                   {/* Card 1 */}
                   <div className="bg-white p-2 sm:p-4 rounded-md shadow-md w-full md:w-[calc(50%-0.5rem)] min-w-[500px] mb-2 sm:mb-4">
                     <h2 className="text-sm sm:text-lg font-semibold text-gray-800 mb-2 sm:mb-4">
@@ -636,7 +636,7 @@ const autoFill = (customerID) => {
                           Port
                         </label>
                         <input
-                          type="text"
+                          type="number"
                           id="port"
                           value={port}
                           onChange={(e) => setPort(e.target.value)}
@@ -1046,18 +1046,24 @@ const autoFill = (customerID) => {
             </div>
           </div>
 
-          <div className="w-full md:w-2/3 mt-10 px-2 sm:px-4 md:px-8 mx-auto">
-  <div className="overflow-x-auto">
-    <Table
-      headers={newTableHeaders}
-      data={newTableData}
-      formatColumns={[]}
-      editableColumns={[]}
-      bin={true}
-      className="min-w-full bg-white rounded-md shadow-md"
-    />
+          {/* <div className="w-full md:w-2/3 mt-10 px-2 sm:px-4 md:px-8 mx-auto">
+  <div className="overflow-x-auto"> */}
+  <div className="mt-2 sm:mt-8 md:mt-10">
+  <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 md:px-8">
+    <div className="overflow-hidden rounded-lg bg-white shadow-md border border-gray-300 mb-5">
+      <Table
+        headers={newTableHeaders}
+        data={newTableData} 
+        formatColumns={[]}
+        editableColumns={[]}
+        bin={true}
+        className="min-w-full"
+      />
+    </div>
   </div>
 </div>
+  {/* </div>
+</div> */}
         </div>
       </div>
     </div>

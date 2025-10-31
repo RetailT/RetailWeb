@@ -538,7 +538,7 @@ const ProductDashboard = () => {
 
           {(submitted || isChecked) && (
             <div className="flex flex-col w-full space-y-5 mt-10">
-              <div className="overflow-x-auto bg-white p-4 rounded-md shadow-md min-w-[300px]">
+              <div className="overflow-x-auto bg-white p-4 rounded-md border border-gray-300 min-w-[300px]">
                 <div className="flex flex-col sm:flex-row justify-between gap-4 mb-10">
                   <div className="relative w-full sm:w-1/2">
                     <input
@@ -628,10 +628,12 @@ const ProductDashboard = () => {
                 </div>
 
                 {Array.isArray(rowTableData) && rowTableData.length > 0 && isRowSelect && (
-                  <div className="mt-5 overflow-x-auto">
-                    <p className="text-center text-[#bc4a17] text-lg sm:text-xl font-bold mt-5">
+                  <div>
+                    <p className="text-center text-[#bc4a17] text-lg sm:text-xl font-bold mt-10">
                       {rowName ? `${rowName}` : ""}
                     </p>
+                  <div className="mt-5 overflow-x-auto">
+                    
                     <div className="w-max mx-auto">
                       <Table
                         headers={rowTableHeaders}
@@ -660,6 +662,7 @@ const ProductDashboard = () => {
                         Next
                       </button>
                     </div>
+                  </div>
                   </div>
                 )}
               </div>

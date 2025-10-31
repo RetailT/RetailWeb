@@ -1177,7 +1177,7 @@ function App() {
                   )}
 
                  
-                    <div className="bg-white p-2 sm:p-4 rounded-md shadow-md mb-2 sm:mb-4 mt-4 sm:mt-6 sm:w-full md:w-2/5 max-w-full">
+                    <div className="bg-white p-2 sm:p-4 rounded-md shadow-md border border-gray-300 mb-2 sm:mb-4 mt-4 sm:mt-6 sm:w-full md:w-2/5 max-w-full">
                     <div className="text-sm sm:text-lg font-semibold mb-2 sm:mb-4 text-[#f17e21]">
                       Product Details
                     </div>
@@ -1384,8 +1384,8 @@ function App() {
                 </div>
 
                 {/* Scrollable Table Container */}
-                <div className="overflow-x-auto w-full">
-                  <div className="w-full max-w-full">
+                <div className="w-full max-w-full px-4 sm:px-6 md:px-8">
+    <div className="overflow-hidden rounded-lg bg-white shadow-md border border-gray-300 mb-5">
                     <Table
                       headers={headers}
                       data={filteredTableData.map((item) => item.rowData)}
@@ -1404,6 +1404,7 @@ function App() {
                     />
                   </div>
                 </div>
+                
               </div>
             )}
         </div>

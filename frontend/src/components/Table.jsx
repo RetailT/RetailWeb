@@ -120,7 +120,7 @@ const ScrollableTable = ({ headers, data, onRowClick, rightAlignedColumns = [] }
 
   return (
     <div className="space-y-4">
-  <div className="flex flex-col sm:flex-row items-center gap-4">
+  <div className="flex flex-col sm:flex-row items-center gap-4 mb-10">
     {/* Wrapper for label and dropdown */}
     <div className="w-full sm:w-auto flex flex-col gap-2">
       <label className="block text-sm font-medium text-gray-700 w-full mt-5">
@@ -135,12 +135,12 @@ const ScrollableTable = ({ headers, data, onRowClick, rightAlignedColumns = [] }
     </div>
     <button
       onClick={handleDataSubmit}
-      className="bg-[#f17e21] hover:bg-[#efa05f] text-white px-4 py-2 rounded-md shadow-md w-full sm:w-auto mt-0 md:mt-6"
+      className="bg-[#f17e21] hover:bg-[#efa05f] text-white px-4 py-2 rounded-md shadow-md w-full sm:w-auto mt-0 md:mt-6 "
     >
       Export
     </button>
   </div>
-  <div className="overflow-x-auto my-5 mx-auto rounded-lg border border-gray-400">
+  <div className="overflow-x-auto my-5 mx-auto rounded-lg border border-gray-400 ">
     <div
       className={`overflow-y-auto ${shouldScroll ? "max-h-64" : ""}`}
       style={shouldScroll ? { maxHeight: "350px" } : {}}
