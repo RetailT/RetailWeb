@@ -17,7 +17,7 @@ const Profile = () => {
     if (token) {
       try {
         const decodedToken = jwtDecode(token);
-console.log('decodedToken.companyName',decodedToken.companyName)
+
         // Set user details
         setDetails({
           username: decodedToken.username || "Unknown",
