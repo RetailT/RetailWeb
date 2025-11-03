@@ -594,6 +594,7 @@ exports.login = async (req, res) => {
         d_scategory: user.d_scategory,
         d_vendor: user.d_vendor,
         d_hourlyReport: user.d_hourly_report,
+        d_sales_comparison: user.d_sales_comparison,
         d_invoice: user.d_invoice,
         d_productView: user.d_productView,
         t_scan: user.t_scan,
@@ -2984,6 +2985,111 @@ try {
   }
 };
 
+//sales comparison
+exports.salesComparisonData = async (req, res) => {
+  try {
+    // 🔹 1. Token validation
+    const authHeader = req.headers.authorization;
+    if (!authHeader)
+      return res.status(403).json({ message: "No authorization token provided" });
+
+    const token = authHeader.split(" ")[1];
+    if (!token) return res.status(403).json({ message: "Token is missing" });
+
+    // 🔹 2. Parse query parameters
+    let { months, username } = req.query;
+
+     if (!months || isNaN(months) || !username) {
+      return res.status(400).json({ message: "Invalid or missing parameters" });
+    }
+
+    // 🔹 3. Establish connection
+    if (mssql.connected) {
+      await mssql.close();
+      console.log("✅ Closed previous connection");
+    }
+
+    const user_ip = String(req.user.ip).trim();
+    const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+    if (!pool || !pool.connected)
+      return res.status(500).json({ message: "Database connection failed" });
+
+    console.log("✅ Connected to user database");
+
+ const newMonths = parseInt(months, 10) || months;
+
+const request = pool.request();
+
+const query = `
+USE [${rtweb}];
+IF OBJECT_ID('dbo.vw_SALES_COMPARISON', 'V') IS NOT NULL
+    DROP VIEW dbo.vw_SALES_COMPARISON;
+
+EXEC('CREATE VIEW dbo.vw_SALES_COMPARISON AS
+    SELECT 
+        DATENAME(MONTH, S.SALESDATE) AS MONTH,
+        YEAR(S.SALESDATE) AS YEAR,
+        SUM(
+            CASE 
+                WHEN S.ID = ''SL'' THEN S.Amount 
+                WHEN S.ID IN (''RF'', ''SD'') THEN -S.Amount 
+                ELSE 0 
+            END
+        ) AS NETSALES,
+        S.COMPANY_CODE,
+        C.COMPANY_NAME,
+        ''${username}'' AS REPUSER
+    FROM ${posback}.dbo.tb_SALES AS S
+    INNER JOIN ${posback}.dbo.tb_COMPANY AS C ON S.COMPANY_CODE = C.COMPANY_CODE
+    WHERE 
+        S.SALESDATE >= DATEADD(MONTH, -${newMonths}, DATEADD(MONTH, DATEDIFF(MONTH, 0, GETDATE()), 0))
+        AND S.ID IN (''SL'', ''RF'')
+    GROUP BY 
+        YEAR(S.SALESDATE),
+        MONTH(S.SALESDATE),
+        DATENAME(MONTH, S.SALESDATE),
+        S.COMPANY_CODE,
+        C.COMPANY_NAME;
+    
+');
+`;
+
+const result = await request.query(query);
+
+if (result.rowsAffected && result.rowsAffected.length >= 0) {
+    console.log("✅ View vw_SALES_COMPARISON created successfully!");
+  } else {
+    console.warn("⚠️ Query executed but no rows were affected or no result returned.");
+    return res.status(500).json({ message: "Couldn't execute view query" });
+  }
+
+
+const data = await pool.request().query(`
+  USE [${rtweb}];
+  SELECT * FROM dbo.vw_SALES_COMPARISON WHERE REPUSER = '${username}' ORDER BY 
+        COMPANY_CODE,
+        YEAR,
+        MONTH;
+`);
+
+if (data.recordset.length === 0) {
+    return res.status(404).json({ message: "No sales comparison data found" });
+  }
+
+
+    return res.status(200).json({
+      message: "Data found successfully",
+      success: true,
+      records: data.recordset || [],
+    });
+  } catch (error) {
+    console.error("❌ Unhandled error in sales comparison:", error);
+    return res
+      .status(500)
+      .json({ message: "Failed to load sales comparison", error: error.message });
+  }
+};
+
 //color size sales product dashboard data
 exports.colorSizeSalesProductDashboard = async (req, res) => {
   try {
@@ -3578,6 +3684,7 @@ exports.colorSizeStockProductDashboard = async (req, res) => {
       // -------------------------
       const user_ip = String(req.user.ip).trim();
       const user_port = String(req.user.port).trim();
+      const username = decoded.username.trim();
 
       if (mssql.connected) {
       await mssql.close();
@@ -3610,7 +3717,8 @@ exports.colorSizeStockProductDashboard = async (req, res) => {
                 ISNULL(SUM(S.STOCK), 0) AS QTY, 
                 P.PRODUCT_NAMELONG,
                 P.COSTPRICE, 
-                P.SCALEPRICE 
+                P.SCALEPRICE, 
+                ''${username}'' AS REPUSER
             FROM ${posback}.dbo.tb_STOCK S
             INNER JOIN ${posback}.dbo.tb_PRODUCT P
                 ON P.PRODUCT_CODE = S.PRODUCT_CODE
@@ -3621,7 +3729,8 @@ exports.colorSizeStockProductDashboard = async (req, res) => {
                 LTRIM(RTRIM(S.SERIALNO)),
                 P.COSTPRICE, 
                 P.SCALEPRICE,
-                P.PRODUCT_NAMELONG');
+                P.PRODUCT_NAMELONG,
+                REPUSER');
         `;
       } else {
         query = `
@@ -3636,7 +3745,8 @@ exports.colorSizeStockProductDashboard = async (req, res) => {
                 ISNULL(SUM(S.STOCK), 0) AS QTY, 
                 P.PRODUCT_NAMELONG,
                 P.COSTPRICE, 
-                P.SCALEPRICE 
+                P.SCALEPRICE, 
+                ''${username}'' AS REPUSER 
             FROM ${posback}.dbo.tb_STOCK S
             INNER JOIN ${posback}.dbo.tb_PRODUCT P
                 ON P.PRODUCT_CODE = S.PRODUCT_CODE
@@ -3648,7 +3758,8 @@ exports.colorSizeStockProductDashboard = async (req, res) => {
                 LTRIM(RTRIM(S.SERIALNO)),
                 P.COSTPRICE, 
                 P.SCALEPRICE,
-                P.PRODUCT_NAMELONG');
+                P.PRODUCT_NAMELONG,
+                REPUSER');
         `;
       }
 
@@ -3686,10 +3797,12 @@ exports.colorSizeStockProductDashboard = async (req, res) => {
                 SUM(QTY * COSTPRICE) AS COST_VALUE,
                 SUM(QTY * SCALEPRICE) AS SALES_VALUE,
                 COSTPRICE,
-                SCALEPRICE
+                SCALEPRICE,
+                REPUSER
               FROM dbo.vw_STOCK_BALANCE
-              WHERE COMPANY_CODE IN (${inClause}) AND PRODUCT_CODE = '${productCode}'
-              GROUP BY COMPANY_CODE, PRODUCT_CODE, COSTPRICE, SCALEPRICE, SERIALNO;
+              WHERE COMPANY_CODE IN (${inClause}) AND PRODUCT_CODE = '${productCode}' AND REPUSER = '${username}'
+              GROUP BY COMPANY_CODE, PRODUCT_CODE, COSTPRICE, SCALEPRICE, SERIALNO,
+                REPUSER;
             `;
             const result = await pool.request().query(rowQuery);
             rowRecords = result.recordset || [];
@@ -3707,10 +3820,12 @@ exports.colorSizeStockProductDashboard = async (req, res) => {
               SUM(QTY * COSTPRICE) AS COST_VALUE,
               SUM(QTY * SCALEPRICE) AS SALES_VALUE,
               COSTPRICE,
-              SCALEPRICE
+              SCALEPRICE,
+              REPUSER
             FROM dbo.vw_STOCK_BALANCE
-            WHERE COMPANY_CODE IN (${inClause})
-            GROUP BY COMPANY_CODE, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE, SERIALNO;
+            WHERE COMPANY_CODE IN (${inClause}) AND REPUSER = '${username}'
+            GROUP BY COMPANY_CODE, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE, SERIALNO,
+                REPUSER;
           `;
           const result = await pool.request().query(tableQuery);
           tableRecords = result.recordset || [];
@@ -3725,10 +3840,12 @@ exports.colorSizeStockProductDashboard = async (req, res) => {
                 SERIALNO,
                 SUM(QTY) AS QUANTITY,
                 COSTPRICE,
-                SCALEPRICE
+                SCALEPRICE,
+                REPUSER
               FROM dbo.vw_STOCK_BALANCE
-              WHERE COMPANY_CODE IN (${inClause}) AND PRODUCT_CODE = '${productCode}'
-              GROUP BY COMPANY_CODE, PRODUCT_CODE, COSTPRICE, SCALEPRICE, SERIALNO;
+              WHERE COMPANY_CODE IN (${inClause}) AND PRODUCT_CODE = '${productCode}' AND REPUSER = '${username}'
+              GROUP BY COMPANY_CODE, PRODUCT_CODE, COSTPRICE, SCALEPRICE, SERIALNO,
+                REPUSER;
             `;
             const result = await pool.request().query(rowQuery);
             rowRecords = result.recordset || [];
@@ -3744,10 +3861,12 @@ exports.colorSizeStockProductDashboard = async (req, res) => {
               SERIALNO,
               SUM(QTY) AS QUANTITY,
               COSTPRICE,
-              SCALEPRICE
+              SCALEPRICE,
+                REPUSER
             FROM dbo.vw_STOCK_BALANCE
-            WHERE COMPANY_CODE IN (${inClause})
-            GROUP BY COMPANY_CODE, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE, SERIALNO;
+            WHERE COMPANY_CODE IN (${inClause}) AND REPUSER = '${username}'
+            GROUP BY COMPANY_CODE, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE, SERIALNO,
+                REPUSER;
           `;
           const result = await pool.request().query(tableQuery);
           tableRecords = result.recordset || [];
@@ -3843,6 +3962,7 @@ exports.colorSizeStockDepartmentDashboard = async (req, res) => {
       // -------------------------
       const formattedCurrentDate = formatDate(currentDate);
       const formattedDate = formatDate(date);
+      const username = decoded.username.trim();
       // -------------------------
       // 5️⃣ Create/Update View
       // -------------------------
@@ -3861,7 +3981,8 @@ exports.colorSizeStockDepartmentDashboard = async (req, res) => {
                 P.PRODUCT_NAMELONG,
                 P.DEPTCODE,
                 P.COSTPRICE, 
-                P.SCALEPRICE 
+                P.SCALEPRICE, 
+                ''${username}'' AS REPUSER 
             FROM ${posback}.dbo.tb_STOCK S
             INNER JOIN ${posback}.dbo.tb_PRODUCT P
                 ON P.PRODUCT_CODE = S.PRODUCT_CODE
@@ -3873,7 +3994,8 @@ exports.colorSizeStockDepartmentDashboard = async (req, res) => {
                 P.DEPTCODE,
                 P.COSTPRICE, 
                 P.SCALEPRICE,
-                P.PRODUCT_NAMELONG');`;
+                P.PRODUCT_NAMELONG,
+                REPUSER');`;
       } else {
         viewQuery = `
           USE [${rtweb}];
@@ -3888,7 +4010,8 @@ exports.colorSizeStockDepartmentDashboard = async (req, res) => {
                 P.PRODUCT_NAMELONG,
                 P.DEPTCODE,
                 P.COSTPRICE, 
-                P.SCALEPRICE 
+                P.SCALEPRICE, 
+                ''${username}'' AS REPUSER  
             FROM ${posback}.dbo.tb_STOCK S
             INNER JOIN ${posback}.dbo.tb_PRODUCT P
                 ON P.PRODUCT_CODE = S.PRODUCT_CODE
@@ -3901,7 +4024,8 @@ exports.colorSizeStockDepartmentDashboard = async (req, res) => {
                 P.DEPTCODE,
                 P.COSTPRICE, 
                 P.SCALEPRICE,
-                P.PRODUCT_NAMELONG');
+                P.PRODUCT_NAMELONG,
+                REPUSER');
         `;
       }
 
@@ -3938,16 +4062,17 @@ exports.colorSizeStockDepartmentDashboard = async (req, res) => {
                   SUM(s.QTY * s.COSTPRICE) AS COST_VALUE,
                   SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,
                   s.COSTPRICE,
-                  s.SCALEPRICE
+                  s.SCALEPRICE,
+                REPUSER
               FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
               LEFT JOIN [${posback}].dbo.tb_DEPARTMENT d
                   ON LTRIM(RTRIM(s.DEPTCODE)) = LTRIM(RTRIM(d.DEPTCODE))
               WHERE s.COMPANY_CODE IN (${inClause}) 
-                AND s.DEPTCODE = '${departmentCode}'
+                AND s.DEPTCODE = '${departmentCode}' AND REPUSER = '${username}'
               GROUP BY 
                   s.COMPANY_CODE, s.PRODUCT_CODE, s.DEPTCODE, 
                   LTRIM(RTRIM(s.SERIALNO)), d.DEPTNAME, 
-                  s.PRODUCT_NAMELONG, s.COSTPRICE, s.SCALEPRICE;
+                  s.PRODUCT_NAMELONG, s.COSTPRICE, s.SCALEPRICE, REPUSER;
             `);
             rowDataStatus = true;
           }
@@ -3965,15 +4090,16 @@ exports.colorSizeStockDepartmentDashboard = async (req, res) => {
                 SUM(s.QTY * s.COSTPRICE) AS COST_VALUE,
                 SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,
                 s.COSTPRICE,
-                s.SCALEPRICE
+                s.SCALEPRICE,
+                REPUSER
             FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
             LEFT JOIN [${posback}].dbo.tb_DEPARTMENT d
                 ON LTRIM(RTRIM(s.DEPTCODE)) = LTRIM(RTRIM(d.DEPTCODE))
-            WHERE s.COMPANY_CODE IN (${inClause})
+            WHERE s.COMPANY_CODE IN (${inClause}) AND REPUSER = '${username}'
             GROUP BY 
                 s.COMPANY_CODE, s.PRODUCT_CODE, s.DEPTCODE, 
                 LTRIM(RTRIM(s.SERIALNO)), d.DEPTNAME, 
-                s.PRODUCT_NAMELONG, s.COSTPRICE, s.SCALEPRICE;
+                s.PRODUCT_NAMELONG, s.COSTPRICE, s.SCALEPRICE, REPUSER;
           `);
         } else {
           // Without cost/sales value
@@ -3989,16 +4115,17 @@ exports.colorSizeStockDepartmentDashboard = async (req, res) => {
                   LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
                   SUM(s.QTY) AS QUANTITY,
                   s.COSTPRICE,
-                  s.SCALEPRICE
+                  s.SCALEPRICE,
+                REPUSER
               FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
               LEFT JOIN [${posback}].dbo.tb_DEPARTMENT d
                   ON LTRIM(RTRIM(s.DEPTCODE)) = LTRIM(RTRIM(d.DEPTCODE))
               WHERE s.COMPANY_CODE IN (${inClause}) 
-                AND s.DEPTCODE = '${departmentCode}'
+                AND s.DEPTCODE = '${departmentCode}' AND REPUSER = '${username}'
               GROUP BY 
                   s.COMPANY_CODE, s.PRODUCT_CODE, s.DEPTCODE, 
                   LTRIM(RTRIM(s.SERIALNO)), d.DEPTNAME, 
-                  s.PRODUCT_NAMELONG, s.COSTPRICE, s.SCALEPRICE;
+                  s.PRODUCT_NAMELONG, s.COSTPRICE, s.SCALEPRICE, REPUSER;
             `);
             rowDataStatus = true;
           }
@@ -4014,15 +4141,16 @@ exports.colorSizeStockDepartmentDashboard = async (req, res) => {
                 LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
                 SUM(s.QTY) AS QUANTITY,
                 s.COSTPRICE,
-                s.SCALEPRICE
+                s.SCALEPRICE,
+                REPUSER
             FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
             LEFT JOIN [${posback}].dbo.tb_DEPARTMENT d
                 ON LTRIM(RTRIM(s.DEPTCODE)) = LTRIM(RTRIM(d.DEPTCODE))
-            WHERE s.COMPANY_CODE IN (${inClause})
+            WHERE s.COMPANY_CODE IN (${inClause}) AND REPUSER = '${username}'
             GROUP BY 
                 s.COMPANY_CODE, s.PRODUCT_CODE, s.DEPTCODE, 
                 LTRIM(RTRIM(s.SERIALNO)), d.DEPTNAME, 
-                s.PRODUCT_NAMELONG, s.COSTPRICE, s.SCALEPRICE;
+                s.PRODUCT_NAMELONG, s.COSTPRICE, s.SCALEPRICE, REPUSER;
           `);
         }
 
@@ -4103,6 +4231,7 @@ exports.colorSizeStockCategoryDashboard = async (req, res) => {
       // 4️⃣ Build stock view
       const formattedCurrentDate = formatDate(currentDate);
       const formattedDate = formatDate(date);
+      const username = decoded.username.trim();
 
       const viewQuery =
         formattedCurrentDate === formattedDate
@@ -4120,7 +4249,8 @@ exports.colorSizeStockCategoryDashboard = async (req, res) => {
                 P.DEPTCODE,
                 P.CATCODE,
                 P.COSTPRICE, 
-                P.SCALEPRICE 
+                P.SCALEPRICE, 
+                ''${username}'' AS REPUSER 
             FROM ${posback}.dbo.tb_STOCK S
             INNER JOIN ${posback}.dbo.tb_PRODUCT P
                 ON P.PRODUCT_CODE = S.PRODUCT_CODE
@@ -4133,7 +4263,8 @@ exports.colorSizeStockCategoryDashboard = async (req, res) => {
                 P.CATCODE,
                 P.COSTPRICE, 
                 P.SCALEPRICE,
-                P.PRODUCT_NAMELONG');`
+                P.PRODUCT_NAMELONG,
+                REPUSER');`
           : `
           USE [${rtweb}];
           IF OBJECT_ID('dbo.vw_STOCK_BALANCE', 'V') IS NOT NULL
@@ -4148,7 +4279,8 @@ exports.colorSizeStockCategoryDashboard = async (req, res) => {
                 P.DEPTCODE,
                 P.CATCODE,
                 P.COSTPRICE, 
-                P.SCALEPRICE 
+                P.SCALEPRICE, 
+                ''${username}'' AS REPUSER 
             FROM ${posback}.dbo.tb_STOCK S
             INNER JOIN ${posback}.dbo.tb_PRODUCT P
                 ON P.PRODUCT_CODE = S.PRODUCT_CODE
@@ -4162,7 +4294,8 @@ exports.colorSizeStockCategoryDashboard = async (req, res) => {
                 P.CATCODE,
                 P.COSTPRICE, 
                 P.SCALEPRICE,
-                P.PRODUCT_NAMELONG');`;
+                P.PRODUCT_NAMELONG,
+                REPUSER');`;
 
       try {
         await request.query(viewQuery);
@@ -4191,15 +4324,17 @@ exports.colorSizeStockCategoryDashboard = async (req, res) => {
                 SUM(s.QTY) AS QUANTITY,
                 SUM(s.QTY * s.COSTPRICE) AS COST_VALUE,
                 SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,
-                s.COSTPRICE, s.SCALEPRICE
+                s.COSTPRICE, s.SCALEPRICE,
+                REPUSER
               FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
               LEFT JOIN [${posback}].dbo.tb_CATEGORY c
                 ON LTRIM(RTRIM(s.CATCODE)) = LTRIM(RTRIM(c.CATCODE))
-              WHERE s.COMPANY_CODE IN (${inClause}) AND s.CATCODE = '${categoryCode}'
+              WHERE s.COMPANY_CODE IN (${inClause}) AND s.CATCODE = '${categoryCode}' AND REPUSER = '${username}'
               GROUP BY 
                 s.COMPANY_CODE, s.PRODUCT_CODE, s.CATCODE, c.CATNAME,
                 LTRIM(RTRIM(s.SERIALNO)), s.PRODUCT_NAMELONG,
-                s.COSTPRICE, s.SCALEPRICE;
+                s.COSTPRICE, s.SCALEPRICE,
+                REPUSER;
             `);
             rowDataStatus = true;
           }
@@ -4216,15 +4351,17 @@ exports.colorSizeStockCategoryDashboard = async (req, res) => {
               SUM(s.QTY) AS QUANTITY,
               SUM(s.QTY * s.COSTPRICE) AS COST_VALUE,
               SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,
-              s.COSTPRICE, s.SCALEPRICE
+              s.COSTPRICE, s.SCALEPRICE,
+                REPUSER
             FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
             LEFT JOIN [${posback}].dbo.tb_CATEGORY c
               ON LTRIM(RTRIM(s.CATCODE)) = LTRIM(RTRIM(c.CATCODE))
-            WHERE s.COMPANY_CODE IN (${inClause})
+            WHERE s.COMPANY_CODE IN (${inClause}) AND REPUSER = '${username}'
             GROUP BY 
               s.COMPANY_CODE, s.PRODUCT_CODE, s.CATCODE, c.CATNAME,
               LTRIM(RTRIM(s.SERIALNO)), s.PRODUCT_NAMELONG,
-              s.COSTPRICE, s.SCALEPRICE;
+              s.COSTPRICE, s.SCALEPRICE,
+                REPUSER;
           `);
         } else {
           if (rowSelect) {
@@ -4238,15 +4375,17 @@ exports.colorSizeStockCategoryDashboard = async (req, res) => {
                 s.PRODUCT_NAMELONG AS PRODUCT_NAME,
                 LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
                 SUM(s.QTY) AS QUANTITY,
-                s.COSTPRICE, s.SCALEPRICE
+                s.COSTPRICE, s.SCALEPRICE,
+                REPUSER
               FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
               LEFT JOIN [${posback}].dbo.tb_CATEGORY c
                 ON LTRIM(RTRIM(s.CATCODE)) = LTRIM(RTRIM(c.CATCODE))
-              WHERE s.COMPANY_CODE IN (${inClause}) AND s.CATCODE = '${categoryCode}'
+              WHERE s.COMPANY_CODE IN (${inClause}) AND s.CATCODE = '${categoryCode}' AND REPUSER = '${username}'
               GROUP BY 
                 s.COMPANY_CODE, s.PRODUCT_CODE, s.CATCODE, c.CATNAME,
                 LTRIM(RTRIM(s.SERIALNO)), s.PRODUCT_NAMELONG,
-                s.COSTPRICE, s.SCALEPRICE;
+                s.COSTPRICE, s.SCALEPRICE,
+                REPUSER;
             `);
             rowDataStatus = true;
           }
@@ -4261,15 +4400,17 @@ exports.colorSizeStockCategoryDashboard = async (req, res) => {
               s.PRODUCT_NAMELONG AS PRODUCT_NAME,
               LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
               SUM(s.QTY) AS QUANTITY,
-              s.COSTPRICE, s.SCALEPRICE
+              s.COSTPRICE, s.SCALEPRICE,
+                REPUSER
             FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
             LEFT JOIN [${posback}].dbo.tb_CATEGORY c
               ON LTRIM(RTRIM(s.CATCODE)) = LTRIM(RTRIM(c.CATCODE))
-            WHERE s.COMPANY_CODE IN (${inClause})
+            WHERE s.COMPANY_CODE IN (${inClause}) AND REPUSER = '${username}'
             GROUP BY 
               s.COMPANY_CODE, s.PRODUCT_CODE, s.CATCODE, c.CATNAME,
               LTRIM(RTRIM(s.SERIALNO)), s.PRODUCT_NAMELONG,
-              s.COSTPRICE, s.SCALEPRICE;
+              s.COSTPRICE, s.SCALEPRICE,
+                REPUSER;
           `);
         }
 
@@ -4351,6 +4492,7 @@ exports.colorSizeStockSubCategoryDashboard = async (req, res) => {
       // -------------------------
       const formattedCurrentDate = formatDate(currentDate);
       const formattedDate = formatDate(date);
+      const username = decoded.username.trim();
 
       let viewQuery;
 
@@ -4370,7 +4512,8 @@ exports.colorSizeStockSubCategoryDashboard = async (req, res) => {
                 P.CATCODE,
                 P.SCATCODE,
                 P.COSTPRICE, 
-                P.SCALEPRICE 
+                P.SCALEPRICE, 
+                ''${username}'' AS REPUSER 
             FROM ${posback}.dbo.tb_STOCK S
             INNER JOIN ${posback}.dbo.tb_PRODUCT P
                 ON P.PRODUCT_CODE = S.PRODUCT_CODE
@@ -4384,7 +4527,8 @@ exports.colorSizeStockSubCategoryDashboard = async (req, res) => {
                 P.SCATCODE,
                 P.COSTPRICE, 
                 P.SCALEPRICE,
-                P.PRODUCT_NAMELONG');
+                P.PRODUCT_NAMELONG,
+                REPUSER');
         `;
       } else {
         viewQuery = `
@@ -4402,7 +4546,8 @@ exports.colorSizeStockSubCategoryDashboard = async (req, res) => {
                 P.CATCODE,
                 P.SCATCODE,
                 P.COSTPRICE, 
-                P.SCALEPRICE 
+                P.SCALEPRICE, 
+                ''${username}'' AS REPUSER  
             FROM ${posback}.dbo.tb_STOCK S
             INNER JOIN ${posback}.dbo.tb_PRODUCT P
                 ON P.PRODUCT_CODE = S.PRODUCT_CODE
@@ -4417,7 +4562,8 @@ exports.colorSizeStockSubCategoryDashboard = async (req, res) => {
                 P.SCATCODE,
                 P.COSTPRICE, 
                 P.SCALEPRICE,
-                P.PRODUCT_NAMELONG');
+                P.PRODUCT_NAMELONG,
+                REPUSER');
         `;
       }
 
@@ -4450,12 +4596,13 @@ exports.colorSizeStockSubCategoryDashboard = async (req, res) => {
                   SUM(s.QTY * s.COSTPRICE) AS COST_VALUE,
                   SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,
                   s.COSTPRICE,
-                  s.SCALEPRICE
+                  s.SCALEPRICE,
+                REPUSER
               FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
               LEFT JOIN [${posback}].dbo.tb_SUBCATEGORY c
                   ON LTRIM(RTRIM(s.SCATCODE)) = LTRIM(RTRIM(c.SCATCODE))
               WHERE s.COMPANY_CODE IN (${inClause}) 
-                AND s.SCATCODE = '${subCategoryCode}'
+                AND s.SCATCODE = '${subCategoryCode}'  AND REPUSER = '${username}'
               GROUP BY 
                   s.COMPANY_CODE, 
                   s.PRODUCT_CODE, 
@@ -4464,7 +4611,8 @@ exports.colorSizeStockSubCategoryDashboard = async (req, res) => {
                   c.SCATNAME,
                   s.PRODUCT_NAMELONG, 
                   s.COSTPRICE, 
-                  s.SCALEPRICE;
+                  s.SCALEPRICE,
+                REPUSER;
             `);
             rowDataStatus = true;
           }
@@ -4481,11 +4629,12 @@ exports.colorSizeStockSubCategoryDashboard = async (req, res) => {
                 SUM(s.QTY * s.COSTPRICE) AS COST_VALUE,
                 SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,
                 s.COSTPRICE,
-                s.SCALEPRICE
+                s.SCALEPRICE,
+                REPUSER
             FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
             LEFT JOIN [${posback}].dbo.tb_SUBCATEGORY c
                 ON LTRIM(RTRIM(s.SCATCODE)) = LTRIM(RTRIM(c.SCATCODE))
-            WHERE s.COMPANY_CODE IN (${inClause})
+            WHERE s.COMPANY_CODE IN (${inClause}) AND REPUSER = '${username}'
             GROUP BY 
                 s.COMPANY_CODE, 
                 s.PRODUCT_CODE, 
@@ -4493,7 +4642,8 @@ exports.colorSizeStockSubCategoryDashboard = async (req, res) => {
                 c.SCATNAME,
                 s.PRODUCT_NAMELONG, 
                 s.COSTPRICE, 
-                s.SCALEPRICE;
+                s.SCALEPRICE,
+                REPUSER;
           `);
         } else {
           if (rowSelect) {
@@ -4508,12 +4658,13 @@ exports.colorSizeStockSubCategoryDashboard = async (req, res) => {
                   LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
                   SUM(s.QTY) AS QUANTITY,
                   s.COSTPRICE,
-                  s.SCALEPRICE
+                  s.SCALEPRICE,
+                REPUSER
               FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
               LEFT JOIN [${posback}].dbo.tb_SUBCATEGORY c
                   ON LTRIM(RTRIM(s.SCATCODE)) = LTRIM(RTRIM(c.SCATCODE))
               WHERE s.COMPANY_CODE IN (${inClause}) 
-                AND s.SCATCODE = '${subCategoryCode}'
+                AND s.SCATCODE = '${subCategoryCode}' AND REPUSER = '${username}'
               GROUP BY 
                   s.COMPANY_CODE, 
                   s.PRODUCT_CODE, 
@@ -4522,7 +4673,8 @@ exports.colorSizeStockSubCategoryDashboard = async (req, res) => {
                   c.SCATNAME,
                   s.PRODUCT_NAMELONG, 
                   s.COSTPRICE, 
-                  s.SCALEPRICE;
+                  s.SCALEPRICE,
+                REPUSER;
             `);
             rowDataStatus = true;
           }
@@ -4538,11 +4690,12 @@ exports.colorSizeStockSubCategoryDashboard = async (req, res) => {
                 LTRIM(RTRIM(s.SERIALNO)) AS SERIALNO,
                 SUM(s.QTY) AS QUANTITY,
                 s.COSTPRICE,
-                s.SCALEPRICE
+                s.SCALEPRICE,
+                REPUSER
             FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
             LEFT JOIN [${posback}].dbo.tb_SUBCATEGORY c
                 ON LTRIM(RTRIM(s.SCATCODE)) = LTRIM(RTRIM(c.SCATCODE))
-            WHERE s.COMPANY_CODE IN (${inClause})
+            WHERE s.COMPANY_CODE IN (${inClause}) AND REPUSER = '${username}'
             GROUP BY 
                 s.COMPANY_CODE, 
                 s.PRODUCT_CODE, 
@@ -4551,7 +4704,8 @@ exports.colorSizeStockSubCategoryDashboard = async (req, res) => {
                 c.SCATNAME,
                 s.PRODUCT_NAMELONG, 
                 s.COSTPRICE, 
-                s.SCALEPRICE;
+                s.SCALEPRICE,
+                REPUSER;
           `);
         }
 
@@ -4607,6 +4761,7 @@ exports.colorSizeStockVendorDashboard = async (req, res) => {
 
       const formattedCurrentDate = formatDate(currentDate);
       const formattedDate = formatDate(date);
+      const username = decoded.username.trim();
 
       // 4️⃣ Build View Query
       const viewQuery = `
@@ -4621,7 +4776,8 @@ exports.colorSizeStockVendorDashboard = async (req, res) => {
             P.PRODUCT_NAMELONG,
             P.VENDORCODE,
             P.COSTPRICE,
-            P.SCALEPRICE
+            P.SCALEPRICE, 
+                ''${username}'' AS REPUSER 
           FROM ${posback}.dbo.tb_STOCK S
           INNER JOIN ${posback}.dbo.tb_PRODUCT P ON P.PRODUCT_CODE = S.PRODUCT_CODE
           WHERE ((BIN = ''F'') OR (BIN IS NULL)) 
@@ -4633,7 +4789,8 @@ exports.colorSizeStockVendorDashboard = async (req, res) => {
             P.VENDORCODE,
             P.COSTPRICE,
             P.SCALEPRICE,
-            P.PRODUCT_NAMELONG');
+            P.PRODUCT_NAMELONG,
+                REPUSER');
       `;
 
       try { await request.query(viewQuery); } 
@@ -4659,14 +4816,16 @@ exports.colorSizeStockVendorDashboard = async (req, res) => {
                 SUM(s.QTY * s.COSTPRICE) AS COST_VALUE,
                 SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,
                 s.COSTPRICE,
-                s.SCALEPRICE
+                s.SCALEPRICE,
+                REPUSER
               FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
               LEFT JOIN [${posback}].dbo.tb_VENDOR v
                 ON LTRIM(RTRIM(s.VENDORCODE)) = LTRIM(RTRIM(v.VENDORCODE))
-              WHERE s.COMPANY_CODE IN (${inClause}) AND s.VENDORCODE = '${vendorCode}'
+              WHERE s.COMPANY_CODE IN (${inClause}) AND s.VENDORCODE = '${vendorCode}' AND REPUSER = '${username}'
               GROUP BY 
                 s.COMPANY_CODE, s.PRODUCT_CODE, s.VENDORCODE, v.VENDORNAME, 
-                LTRIM(RTRIM(s.SERIALNO)), s.PRODUCT_NAMELONG, s.COSTPRICE, s.SCALEPRICE;
+                LTRIM(RTRIM(s.SERIALNO)), s.PRODUCT_NAMELONG, s.COSTPRICE, s.SCALEPRICE,
+                REPUSER;
             `);
             rowDataStatus = true;
           }
@@ -4684,12 +4843,14 @@ exports.colorSizeStockVendorDashboard = async (req, res) => {
               SUM(s.QTY * s.COSTPRICE) AS COST_VALUE,
               SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,
               s.COSTPRICE,
-              s.SCALEPRICE
+              s.SCALEPRICE,
+                REPUSER
             FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
             LEFT JOIN [${posback}].dbo.tb_VENDOR v
               ON LTRIM(RTRIM(s.VENDORCODE)) = LTRIM(RTRIM(v.VENDORCODE))
-            WHERE s.COMPANY_CODE IN (${inClause})
-            GROUP BY s.COMPANY_CODE, s.PRODUCT_CODE, s.VENDORCODE, LTRIM(RTRIM(s.SERIALNO)), v.VENDORNAME, s.PRODUCT_NAMELONG, s.COSTPRICE, s.SCALEPRICE;
+            WHERE s.COMPANY_CODE IN (${inClause}) AND REPUSER = '${username}'
+            GROUP BY s.COMPANY_CODE, s.PRODUCT_CODE, s.VENDORCODE, LTRIM(RTRIM(s.SERIALNO)), v.VENDORNAME, 
+            s.PRODUCT_NAMELONG, s.COSTPRICE, s.SCALEPRICE, REPUSER;
           `);
         } else {
           if (rowSelect) {
@@ -4704,12 +4865,13 @@ exports.colorSizeStockVendorDashboard = async (req, res) => {
                 s.PRODUCT_NAMELONG AS PRODUCT_NAME,
                 SUM(s.QTY) AS QUANTITY,
                 s.COSTPRICE,
-                s.SCALEPRICE
+                s.SCALEPRICE,
+                REPUSER
               FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
               LEFT JOIN [${posback}].dbo.tb_VENDOR v
                 ON LTRIM(RTRIM(s.VENDORCODE)) = LTRIM(RTRIM(v.VENDORCODE))
-              WHERE s.COMPANY_CODE IN (${inClause}) AND s.VENDORCODE = '${vendorCode}'
-              GROUP BY s.COMPANY_CODE, s.PRODUCT_CODE, LTRIM(RTRIM(s.SERIALNO)), s.VENDORCODE, v.VENDORNAME, s.PRODUCT_NAMELONG, s.COSTPRICE, s.SCALEPRICE;
+              WHERE s.COMPANY_CODE IN (${inClause}) AND s.VENDORCODE = '${vendorCode}' AND REPUSER = '${username}'
+              GROUP BY s.COMPANY_CODE, s.PRODUCT_CODE, LTRIM(RTRIM(s.SERIALNO)), s.VENDORCODE, v.VENDORNAME, s.PRODUCT_NAMELONG, s.COSTPRICE, s.SCALEPRICE, REPUSER;
             `);
             rowDataStatus = true;
           }
@@ -4725,12 +4887,13 @@ exports.colorSizeStockVendorDashboard = async (req, res) => {
               s.PRODUCT_NAMELONG AS PRODUCT_NAME,
               SUM(s.QTY) AS QUANTITY,
               s.COSTPRICE,
-              s.SCALEPRICE
+              s.SCALEPRICE,
+                REPUSER
             FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
             LEFT JOIN [${posback}].dbo.tb_VENDOR v
               ON LTRIM(RTRIM(s.VENDORCODE)) = LTRIM(RTRIM(v.VENDORCODE))
-            WHERE s.COMPANY_CODE IN (${inClause})
-            GROUP BY s.COMPANY_CODE, s.PRODUCT_CODE, LTRIM(RTRIM(s.SERIALNO)), s.VENDORCODE, v.VENDORNAME, s.PRODUCT_NAMELONG, s.COSTPRICE, s.SCALEPRICE;
+            WHERE s.COMPANY_CODE IN (${inClause}) AND REPUSER = '${username}'
+            GROUP BY s.COMPANY_CODE, s.PRODUCT_CODE, LTRIM(RTRIM(s.SERIALNO)), s.VENDORCODE, v.VENDORNAME, s.PRODUCT_NAMELONG, s.COSTPRICE, s.SCALEPRICE, REPUSER;
           `);
         }
 
@@ -4803,6 +4966,7 @@ exports.stockProductDashboard = async (req, res) => {
       // -------------------------
       const user_ip = String(req.user.ip).trim();
       const user_port = req.user.port.trim();
+      const username = decoded.username.trim();
       pool = await connectToUserDatabase(user_ip, user_port);
 
       if (!pool || !pool.connected) {
@@ -4831,7 +4995,8 @@ exports.stockProductDashboard = async (req, res) => {
                 ISNULL(SUM(S.STOCK), 0) AS QTY, 
                 P.PRODUCT_NAMELONG,
                 P.COSTPRICE, 
-                P.SCALEPRICE 
+                P.SCALEPRICE, 
+                ''${username}'' AS REPUSER  
             FROM ${posback}.dbo.tb_STOCK S
             INNER JOIN ${posback}.dbo.tb_PRODUCT P
                 ON P.PRODUCT_CODE = S.PRODUCT_CODE
@@ -4841,7 +5006,7 @@ exports.stockProductDashboard = async (req, res) => {
                 S.COMPANY_CODE,
                 P.COSTPRICE, 
                 P.SCALEPRICE,
-                P.PRODUCT_NAMELONG');
+                P.PRODUCT_NAMELONG, REPUSER');
         `;
       } else {
         query = `
@@ -4855,7 +5020,8 @@ exports.stockProductDashboard = async (req, res) => {
                 ISNULL(SUM(S.STOCK), 0) AS QTY, 
                 P.PRODUCT_NAMELONG,
                 P.COSTPRICE, 
-                P.SCALEPRICE 
+                P.SCALEPRICE, 
+                ''${username}'' AS REPUSER  
             FROM ${posback}.dbo.tb_STOCK S
             INNER JOIN ${posback}.dbo.tb_PRODUCT P
                 ON P.PRODUCT_CODE = S.PRODUCT_CODE
@@ -4866,7 +5032,8 @@ exports.stockProductDashboard = async (req, res) => {
                 S.COMPANY_CODE,
                 P.COSTPRICE, 
                 P.SCALEPRICE,
-                P.PRODUCT_NAMELONG');
+                P.PRODUCT_NAMELONG,
+                REPUSER');
         `;
       }
 
@@ -4898,10 +5065,11 @@ exports.stockProductDashboard = async (req, res) => {
             SUM(QTY * COSTPRICE) AS COST_VALUE,
             SUM(QTY * SCALEPRICE) AS SALES_VALUE,
             COSTPRICE,
-            SCALEPRICE
+            SCALEPRICE,
+                REPUSER
           FROM [${rtweb}].dbo.vw_STOCK_BALANCE
-          WHERE COMPANY_CODE IN (${inClause})
-          GROUP BY COMPANY_CODE, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE
+          WHERE COMPANY_CODE IN (${inClause}) AND REPUSER = '${username}'
+          GROUP BY COMPANY_CODE, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE, REPUSER
         `;
       } else {
         fetchQuery = `
@@ -4912,10 +5080,11 @@ exports.stockProductDashboard = async (req, res) => {
             PRODUCT_NAMELONG AS PRODUCT_NAME,
             SUM(QTY) AS QUANTITY,
             COSTPRICE,
-            SCALEPRICE
+            SCALEPRICE,
+                REPUSER
           FROM [${rtweb}].dbo.vw_STOCK_BALANCE
-          WHERE COMPANY_CODE IN (${inClause})
-          GROUP BY COMPANY_CODE, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE
+          WHERE COMPANY_CODE IN (${inClause}) AND REPUSER = '${username}'
+          GROUP BY COMPANY_CODE, PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, SCALEPRICE, REPUSER
         `;
       }
 
@@ -4996,6 +5165,7 @@ exports.stockDepartmentDashboard = async (req, res) => {
       // -------------------------
       const formattedCurrentDate = formatDate(currentDate);
       const formattedDate = formatDate(date);
+      const username = decoded.username.trim();
       const request = pool.request();
 
       const viewQuery =
@@ -5011,7 +5181,8 @@ exports.stockDepartmentDashboard = async (req, res) => {
                 P.PRODUCT_NAMELONG,
                 P.DEPTCODE,
                 P.COSTPRICE, 
-                P.SCALEPRICE 
+                P.SCALEPRICE, 
+                ''${username}'' AS REPUSER 
             FROM ${posback}.dbo.tb_STOCK S
             INNER JOIN ${posback}.dbo.tb_PRODUCT P
                 ON P.PRODUCT_CODE = S.PRODUCT_CODE
@@ -5022,7 +5193,8 @@ exports.stockDepartmentDashboard = async (req, res) => {
                 P.DEPTCODE,
                 P.COSTPRICE, 
                 P.SCALEPRICE,
-                P.PRODUCT_NAMELONG');`
+                P.PRODUCT_NAMELONG,
+                REPUSER');`
           : `
           USE ${rtweb};
           IF OBJECT_ID('dbo.vw_STOCK_BALANCE', 'V') IS NOT NULL DROP VIEW dbo.vw_STOCK_BALANCE;
@@ -5034,7 +5206,8 @@ exports.stockDepartmentDashboard = async (req, res) => {
                 P.PRODUCT_NAMELONG,
                 P.DEPTCODE,
                 P.COSTPRICE, 
-                P.SCALEPRICE 
+                P.SCALEPRICE, 
+                ''${username}'' AS REPUSER  
             FROM ${posback}.dbo.tb_STOCK S
             INNER JOIN ${posback}.dbo.tb_PRODUCT P
                 ON P.PRODUCT_CODE = S.PRODUCT_CODE
@@ -5046,7 +5219,8 @@ exports.stockDepartmentDashboard = async (req, res) => {
                 P.DEPTCODE,
                 P.COSTPRICE, 
                 P.SCALEPRICE,
-                P.PRODUCT_NAMELONG');`;
+                P.PRODUCT_NAMELONG,
+                REPUSER');`;
 
       try {
         await request.query(viewQuery);
@@ -5076,11 +5250,12 @@ exports.stockDepartmentDashboard = async (req, res) => {
               SUM(s.QTY * s.COSTPRICE) AS COST_VALUE,
               SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,
               s.COSTPRICE,
-              s.SCALEPRICE
+              s.SCALEPRICE,
+                REPUSER
           FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
           LEFT JOIN [${posback}].dbo.tb_DEPARTMENT d
               ON LTRIM(RTRIM(s.DEPTCODE)) = LTRIM(RTRIM(d.DEPTCODE))
-          WHERE s.COMPANY_CODE IN (${inClause})
+          WHERE s.COMPANY_CODE IN (${inClause}) AND REPUSER = '${username}'
           GROUP BY 
               s.COMPANY_CODE, 
               s.PRODUCT_CODE, 
@@ -5088,7 +5263,8 @@ exports.stockDepartmentDashboard = async (req, res) => {
               d.DEPTNAME,
               s.PRODUCT_NAMELONG, 
               s.COSTPRICE, 
-              s.SCALEPRICE;
+              s.SCALEPRICE,
+                REPUSER;
         `;
       } else {
         query = `
@@ -5101,11 +5277,12 @@ exports.stockDepartmentDashboard = async (req, res) => {
               s.PRODUCT_NAMELONG AS PRODUCT_NAME,
               SUM(s.QTY) AS QUANTITY,
               s.COSTPRICE,
-              s.SCALEPRICE
+              s.SCALEPRICE,
+                REPUSER
           FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
           LEFT JOIN [${posback}].dbo.tb_DEPARTMENT d
               ON LTRIM(RTRIM(s.DEPTCODE)) = LTRIM(RTRIM(d.DEPTCODE))
-          WHERE s.COMPANY_CODE IN (${inClause})
+          WHERE s.COMPANY_CODE IN (${inClause}) AND REPUSER = '${username}'
           GROUP BY 
               s.COMPANY_CODE, 
               s.PRODUCT_CODE, 
@@ -5113,7 +5290,8 @@ exports.stockDepartmentDashboard = async (req, res) => {
               d.DEPTNAME,
               s.PRODUCT_NAMELONG, 
               s.COSTPRICE, 
-              s.SCALEPRICE;
+              s.SCALEPRICE,
+                REPUSER;
         `;
       }
 
@@ -5189,6 +5367,7 @@ exports.stockCategoryDashboard = async (req, res) => {
       // -------------------------
       const formattedCurrentDate = formatDate(currentDate);
       const formattedDate = formatDate(date);
+      const username = decoded.username.trim();
       const request = pool.request();
 
       // -------------------------
@@ -5208,7 +5387,8 @@ exports.stockCategoryDashboard = async (req, res) => {
                 P.DEPTCODE,
                 P.CATCODE,
                 P.COSTPRICE, 
-                P.SCALEPRICE 
+                P.SCALEPRICE, 
+                ''${username}'' AS REPUSER  
             FROM ${posback}.dbo.tb_STOCK S
             INNER JOIN ${posback}.dbo.tb_PRODUCT P
                 ON P.PRODUCT_CODE = S.PRODUCT_CODE
@@ -5220,7 +5400,7 @@ exports.stockCategoryDashboard = async (req, res) => {
                 P.CATCODE,
                 P.COSTPRICE, 
                 P.SCALEPRICE,
-                P.PRODUCT_NAMELONG');`
+                P.PRODUCT_NAMELONG, REPUSER');`
           : `
           USE ${rtweb};
           IF OBJECT_ID('dbo.vw_STOCK_BALANCE', 'V') IS NOT NULL DROP VIEW dbo.vw_STOCK_BALANCE;
@@ -5233,7 +5413,8 @@ exports.stockCategoryDashboard = async (req, res) => {
                 P.DEPTCODE,
                 P.CATCODE,
                 P.COSTPRICE, 
-                P.SCALEPRICE 
+                P.SCALEPRICE, 
+                ''${username}'' AS REPUSER 
             FROM ${posback}.dbo.tb_STOCK S
             INNER JOIN ${posback}.dbo.tb_PRODUCT P
                 ON P.PRODUCT_CODE = S.PRODUCT_CODE
@@ -5246,7 +5427,8 @@ exports.stockCategoryDashboard = async (req, res) => {
                 P.CATCODE,
                 P.COSTPRICE, 
                 P.SCALEPRICE,
-                P.PRODUCT_NAMELONG');`;
+                P.PRODUCT_NAMELONG,
+                REPUSER');`;
 
       try {
         await request.query(viewQuery);
@@ -5276,11 +5458,12 @@ exports.stockCategoryDashboard = async (req, res) => {
               SUM(s.QTY * s.COSTPRICE) AS COST_VALUE,
               SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,
               s.COSTPRICE,
-              s.SCALEPRICE
+              s.SCALEPRICE,
+                REPUSER
           FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
           LEFT JOIN [${posback}].dbo.tb_CATEGORY c
               ON LTRIM(RTRIM(s.CATCODE)) = LTRIM(RTRIM(c.CATCODE))
-          WHERE s.COMPANY_CODE IN (${inClause})
+          WHERE s.COMPANY_CODE IN (${inClause}) AND REPUSER = '${username}'
           GROUP BY 
               s.COMPANY_CODE, 
               s.PRODUCT_CODE, 
@@ -5288,7 +5471,8 @@ exports.stockCategoryDashboard = async (req, res) => {
               c.CATNAME,
               s.PRODUCT_NAMELONG, 
               s.COSTPRICE, 
-              s.SCALEPRICE;
+              s.SCALEPRICE,
+                REPUSER;
         `;
       } else {
         query = `
@@ -5301,11 +5485,12 @@ exports.stockCategoryDashboard = async (req, res) => {
               s.PRODUCT_NAMELONG AS PRODUCT_NAME,
               SUM(s.QTY) AS QUANTITY,
               s.COSTPRICE,
-              s.SCALEPRICE
+              s.SCALEPRICE,
+                REPUSER
           FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
           LEFT JOIN [${posback}].dbo.tb_CATEGORY c
               ON LTRIM(RTRIM(s.CATCODE)) = LTRIM(RTRIM(c.CATCODE))
-          WHERE s.COMPANY_CODE IN (${inClause})
+          WHERE s.COMPANY_CODE IN (${inClause}) AND REPUSER = '${username}'
           GROUP BY 
               s.COMPANY_CODE, 
               s.PRODUCT_CODE, 
@@ -5313,7 +5498,8 @@ exports.stockCategoryDashboard = async (req, res) => {
               c.CATNAME,
               s.PRODUCT_NAMELONG, 
               s.COSTPRICE, 
-              s.SCALEPRICE;
+              s.SCALEPRICE,
+                REPUSER;
         `;
       }
 
@@ -5389,6 +5575,7 @@ if (mssql.connected) {
       // -------------------------
       const formattedCurrentDate = formatDate(currentDate);
       const formattedDate = formatDate(date);
+      const username = decoded.username.trim();
 
       const request = pool.request();
 
@@ -5412,7 +5599,8 @@ if (mssql.connected) {
                 P.CATCODE,
                 P.SCATCODE,
                 P.COSTPRICE, 
-                P.SCALEPRICE 
+                P.SCALEPRICE, 
+                ''${username}'' AS REPUSER 
             FROM ${posback}.dbo.tb_STOCK S
             INNER JOIN ${posback}.dbo.tb_PRODUCT P
                 ON P.PRODUCT_CODE = S.PRODUCT_CODE
@@ -5425,7 +5613,8 @@ if (mssql.connected) {
                 P.SCATCODE,
                 P.COSTPRICE, 
                 P.SCALEPRICE,
-                P.PRODUCT_NAMELONG');`;
+                P.PRODUCT_NAMELONG,
+                REPUSER');`;
       } else {
         query = `
           USE ${rtweb};
@@ -5441,7 +5630,8 @@ if (mssql.connected) {
                 P.CATCODE,
                 P.SCATCODE,
                 P.COSTPRICE, 
-                P.SCALEPRICE 
+                P.SCALEPRICE, 
+                ''${username}'' AS REPUSER  
             FROM ${posback}.dbo.tb_STOCK S
             INNER JOIN ${posback}.dbo.tb_PRODUCT P
                 ON P.PRODUCT_CODE = S.PRODUCT_CODE
@@ -5455,7 +5645,8 @@ if (mssql.connected) {
                 P.SCATCODE,
                 P.COSTPRICE, 
                 P.SCALEPRICE,
-                P.PRODUCT_NAMELONG');
+                P.PRODUCT_NAMELONG,
+                REPUSER');
         `;
       }
 
@@ -5489,11 +5680,12 @@ if (mssql.connected) {
                  SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,`
               : ``}
             s.COSTPRICE,
-            s.SCALEPRICE
+            s.SCALEPRICE,
+                REPUSER
         FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
         LEFT JOIN [${posback}].dbo.tb_SUBCATEGORY c
             ON LTRIM(RTRIM(s.SCATCODE)) = LTRIM(RTRIM(c.SCATCODE))
-        WHERE s.COMPANY_CODE IN (${inClause})
+        WHERE s.COMPANY_CODE IN (${inClause}) AND REPUSER = '${username}'
         GROUP BY 
             s.COMPANY_CODE, 
             s.PRODUCT_CODE, 
@@ -5501,7 +5693,7 @@ if (mssql.connected) {
             c.SCATNAME,
             s.PRODUCT_NAMELONG, 
             s.COSTPRICE, 
-            s.SCALEPRICE;
+            s.SCALEPRICE, REPUSER;
       `;
 
       const result = await fetchRequest.query(fetchQuery);
@@ -5576,6 +5768,7 @@ if (mssql.connected) {
       // -------------------------
       const formattedCurrentDate = formatDate(currentDate);
       const formattedDate = formatDate(date);
+      const username = decoded.username.trim();
 
       const request = pool.request();
 
@@ -5597,7 +5790,8 @@ if (mssql.connected) {
                 P.PRODUCT_NAMELONG,
                 P.VENDORCODE,
                 P.COSTPRICE, 
-                P.SCALEPRICE 
+                P.SCALEPRICE, 
+                ''${username}'' AS REPUSER  
             FROM ${posback}.dbo.tb_STOCK S
             INNER JOIN ${posback}.dbo.tb_PRODUCT P
                 ON P.PRODUCT_CODE = S.PRODUCT_CODE
@@ -5608,7 +5802,8 @@ if (mssql.connected) {
                 P.VENDORCODE,
                 P.COSTPRICE, 
                 P.SCALEPRICE,
-                P.PRODUCT_NAMELONG');`;
+                P.PRODUCT_NAMELONG,
+                REPUSER');`;
       } else {
         query = `
           USE ${rtweb};
@@ -5622,7 +5817,8 @@ if (mssql.connected) {
                 P.PRODUCT_NAMELONG,
                 P.VENDORCODE,
                 P.COSTPRICE, 
-                P.SCALEPRICE 
+                P.SCALEPRICE, 
+                ''${username}'' AS REPUSER  
             FROM ${posback}.dbo.tb_STOCK S
             INNER JOIN ${posback}.dbo.tb_PRODUCT P
                 ON P.PRODUCT_CODE = S.PRODUCT_CODE
@@ -5634,7 +5830,7 @@ if (mssql.connected) {
                 P.VENDORCODE,
                 P.COSTPRICE, 
                 P.SCALEPRICE,
-                P.PRODUCT_NAMELONG');
+                P.PRODUCT_NAMELONG, REPUSER');
         `;
       }
 
@@ -5668,11 +5864,12 @@ if (mssql.connected) {
                  SUM(s.QTY * s.SCALEPRICE) AS SALES_VALUE,`
               : ``}
             s.COSTPRICE,
-            s.SCALEPRICE
+            s.SCALEPRICE,
+                REPUSER
         FROM [${rtweb}].dbo.vw_STOCK_BALANCE s
         LEFT JOIN [${posback}].dbo.tb_VENDOR v
             ON LTRIM(RTRIM(s.VENDORCODE)) = LTRIM(RTRIM(v.VENDORCODE))
-        WHERE s.COMPANY_CODE IN (${inClause})
+        WHERE s.COMPANY_CODE IN (${inClause}) AND REPUSER = '${username}'
         GROUP BY 
             s.COMPANY_CODE, 
             s.PRODUCT_CODE, 
@@ -5680,7 +5877,8 @@ if (mssql.connected) {
             v.VENDORNAME,
             s.PRODUCT_NAMELONG, 
             s.COSTPRICE, 
-            s.SCALEPRICE;
+            s.SCALEPRICE,
+                REPUSER;
       `;
 
       const result = await fetchRequest.query(fetchQuery);
@@ -6459,6 +6657,7 @@ exports.findUserConnection = async (req, res) => {
         u.[d_scategory], 
         u.[d_vendor],
         u.[d_hourly_report], 
+        u.[d_sales_comparison],
         u.[d_invoice],
         u.[d_productView], 
         u.[t_scan], 
@@ -6754,7 +6953,7 @@ exports.resetDatabaseConnection = async (req, res) => {
       serverRequest.input("trimmedPort", mssql.Int, trimmedPort || 0);
       serverRequest.input("newCustomerID", mssql.Int, parsedNewCustomerID);
       serverRequest.input("startDate", mssql.Date, startDate ? new Date(startDate) : null);
-      serverRequest.input( "endDate", mssql.Date, endDate ? new Date(endDate) : null);
+      serverRequest.input("endDate", mssql.Date, endDate ? new Date(endDate) : null);
       serverRequest.input("customerID", mssql.Int, parsedCustomerID);
 
       serverResult = await serverRequest.query(`
@@ -6806,6 +7005,7 @@ exports.resetDatabaseConnection = async (req, res) => {
         "d_scategory",
         "d_vendor",
         "d_hourly_report",
+        "d_sales_comparison",
         "d_invoice",
         "d_productView",
         "t_scan",

@@ -31,9 +31,8 @@ app.get('/category-data', authenticateToken, authController.categoryDashboard);
 app.get('/sub-category-data', authenticateToken, authController.subCategoryDashboard);
 app.get('/vendor-data', authenticateToken, authController.vendorDashboard);
 app.get('/hourly-report-data', authenticateToken, authController.hourlyReportDashboard);
-
+app.get('/sales-comparison-data', authenticateToken, authController.salesComparisonData);
 app.get('/report-data', authenticateToken, authController.reportData);
-// app.get('/current-report-data', authenticateToken, authController.currentReportData);
 
 app.get('/color-size-sales-product-dashboard', authenticateToken, authController.colorSizeSalesProductDashboard);
 app.get('/color-size-sales-product-data', authenticateToken, authController.colorSizeSalesProduct);
@@ -86,7 +85,7 @@ app.delete('/grnprn-delete', authenticateToken, authController.grnprnDelete);
 app.put('/reset-database-connection', authenticateToken, authController.resetDatabaseConnection);
 
 
-// // // for local development -- comment out in production
+// // for local development -- comment out in production
 // if (process.env.NODE_ENV !== "production") {
 //   app.listen(5000, () => {
 //     console.log(`Server is running on http://localhost:5000`);
