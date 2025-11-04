@@ -1820,7 +1820,7 @@ exports.dashboardOptions = async (req, res) => {
     console.error("Error retrieving dashboard data:", error);
     return res
       .status(500)
-      .json({ message: "Failed to retrieve dashboard data" });
+      .json({ message: "Failed to retrieve company names" });
   }
 };
 
@@ -2027,7 +2027,7 @@ exports.reportData = async (req, res) => {
 
   } catch (error) {
     console.error("Error generating report:", error);
-    res.status(500).json({ message: "Failed to generate report" });
+    res.status(500).json({ message: "Failed to find report data" });
   }
 };
 
@@ -4162,8 +4162,8 @@ exports.colorSizeStockDepartmentDashboard = async (req, res) => {
           rowDataStatus,
         });
       } catch (fetchErr) {
-        console.error("❌ Error fetching product data:", fetchErr);
-        return res.status(500).json({ message: "Failed to fetch product data" });
+        console.error("❌ Error fetching data:", fetchErr);
+        return res.status(500).json({ message: "Failed to fetch data" });
       } finally {
         await pool.close();
         console.log("✅ MSSQL pool closed successfully");
@@ -4171,7 +4171,7 @@ exports.colorSizeStockDepartmentDashboard = async (req, res) => {
     });
   } catch (error) {
     console.error("🔥 Unhandled error in colorSizeStockDepartmentDashboard:", error);
-    return res.status(500).json({ message: "Failed to load product dashboard" });
+    return res.status(500).json({ message: "Failed to load data" });
   }
 };
 
@@ -4423,12 +4423,12 @@ exports.colorSizeStockCategoryDashboard = async (req, res) => {
         });
       } catch (fetchErr) {
         console.error("❌ Error fetching product data:", fetchErr);
-        return res.status(500).json({ message: "Failed to fetch product data" });
+        return res.status(500).json({ message: "Failed to fetch data" });
       }
     });
   } catch (error) {
     console.error("❌ Unhandled error in colorSizeStockCategoryDashboard:", error);
-    return res.status(500).json({ message: "Failed to load product dashboard" });
+    return res.status(500).json({ message: "Failed to load data" });
   }
 };
 
@@ -4718,12 +4718,12 @@ exports.colorSizeStockSubCategoryDashboard = async (req, res) => {
         });
       } catch (fetchErr) {
         console.error("❌ Error fetching product data:", fetchErr);
-        return res.status(500).json({ message: "Failed to fetch product data" });
+        return res.status(500).json({ message: "Failed to fetch data" });
       }
     });
   } catch (error) {
     console.error("❌ Unhandled error in subCategoryDashboard:", error);
-    return res.status(500).json({ message: "Failed to load sub category dashboard" });
+    return res.status(500).json({ message: "Failed to load data" });
   }
 };
 
@@ -4906,12 +4906,12 @@ exports.colorSizeStockVendorDashboard = async (req, res) => {
         });
       } catch (fetchErr) {
         console.error("Error fetching vendor data:", fetchErr);
-        return res.status(500).json({ message: "Failed to fetch vendor data" });
+        return res.status(500).json({ message: "Failed to fetch data" });
       }
     });
   } catch (error) {
     console.error("Unhandled error in vendorDashboard:", error);
-    return res.status(500).json({ message: "Failed to load vendor dashboard" });
+    return res.status(500).json({ message: "Failed to load data" });
   }
 };
 
@@ -5101,7 +5101,7 @@ exports.stockProductDashboard = async (req, res) => {
     });
   } catch (error) {
     console.error("❌ Unhandled error in stockProductDashboard:", error);
-    return res.status(500).json({ message: "Failed to load product dashboard" });
+    return res.status(500).json({ message: "Failed to load data" });
   } finally {
     if (pool && pool.connected) {
       await pool.close();
@@ -5304,12 +5304,12 @@ exports.stockDepartmentDashboard = async (req, res) => {
         });
       } catch (fetchErr) {
         console.error("❌ Error fetching product data:", fetchErr);
-        return res.status(500).json({ message: "Failed to fetch product data" });
+        return res.status(500).json({ message: "Failed to fetch data" });
       }
     });
   } catch (error) {
     console.error("❌ Unhandled error in stockDepartmentDashboard:", error);
-    return res.status(500).json({ message: "Failed to load stock department dashboard" });
+    return res.status(500).json({ message: "Failed to load data" });
   }
 };
 
@@ -5512,12 +5512,12 @@ exports.stockCategoryDashboard = async (req, res) => {
         });
       } catch (fetchErr) {
         console.error("❌ Error fetching product data:", fetchErr);
-        return res.status(500).json({ message: "Failed to fetch product data" });
+        return res.status(500).json({ message: "Failed to fetch data" });
       }
     });
   } catch (error) {
     console.error("❌ Unhandled error in stockCategoryDashboard:", error);
-    return res.status(500).json({ message: "Failed to load category dashboard" });
+    return res.status(500).json({ message: "Failed to load data" });
   }
 };
 
@@ -5706,7 +5706,7 @@ if (mssql.connected) {
     });
   } catch (error) {
     console.error("Unhandled error in stockSubCategoryDashboard:", error);
-    return res.status(500).json({ message: "Failed to load stock subcategory dashboard" });
+    return res.status(500).json({ message: "Failed to load data" });
   }
 };
 
@@ -6326,7 +6326,7 @@ exports.productView = async (req, res) => {
     });
   } catch (error) {
     console.error("❌ Error retrieving product view:", error);
-    return res.status(500).json({ message: "Failed to fetch product view data" });
+    return res.status(500).json({ message: "Failed to fetch data" });
   } finally {
     // 10. Close pool safely
     if (pool && pool.connected) {
