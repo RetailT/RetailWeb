@@ -229,7 +229,6 @@ const CategoryDashboard = () => {
         const aggregatedResults = aggregateData(transformedData);
 
         setTableRecords(aggregatedResults);
-        console.log("tableData", tableRecords);
         setDisable(false);
         }
         else{

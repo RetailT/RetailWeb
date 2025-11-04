@@ -13,13 +13,8 @@ import ScrollableTable from "../components/Table";
 const HourlyReportDashboard = () => {
   const { authToken } = useContext(AuthContext);
   const [userData, setUserData] = useState(null);
-  const [amountBarChartRecords, setAmountBarChartRecords] = useState([]);
-  const [quantityBarChartRecords, setQuantityBarChartRecords] = useState([]);
-  const [amountBarChartLabels, setAmountBarChartLabels] = useState([]);
-  const [quantityBarChartLabels, setQuantityBarChartLabels] = useState([]);
   const [disable, setDisable] = useState(true);
   const [error, setError] = useState(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [selectedDates, setSelectedDates] = useState({});
   const [selectedOptions, setSelectedOptions] = useState([]);
   const [firstOption, setFirstOption] = useState(null);
@@ -143,7 +138,7 @@ const HourlyReportDashboard = () => {
                   setTableHeadings(headings);
                   setTableRecords(transformedData);
                 } else {
-                  setAlert({ message: "No data found for the selected criteria", type: "error" });
+                  setAlert({ message: "No data found", type: "error" });
                   setTimeout(() => setAlert(null), 3000);
                 }
                 

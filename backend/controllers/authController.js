@@ -2966,7 +2966,7 @@ try {
       SELECT 
           TYPE, DATE, COMPANY_CODE, COMPANY_NAME, TOTAL_SALES, REPUSER
       FROM dbo.vw_HOURLY_SALES_VIEW WHERE REPUSER = '${username}'
-      ORDER BY DATE, TYPE;
+      ORDER BY COMPANY_CODE, DATE, TYPE;
     `;
 
     const tableRecords = await executeWithRetry(() => pool.request().query(table_query));
@@ -2978,10 +2978,10 @@ try {
       tableRecords: tableRecords.recordset || [],
     });
   } catch (error) {
-    console.error("❌ Unhandled error in departmentDashboard:", error);
+    console.error("❌ Unhandled error: ", error);
     return res
       .status(500)
-      .json({ message: "Failed to load department dashboard", error: error.message });
+      .json({ message: "Failed to load data", error: error.message });
   }
 };
 
