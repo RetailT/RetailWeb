@@ -470,10 +470,10 @@ exports.syncDatabases = async (req, res) => {
 
 //login
 exports.login = async (req, res) => {
-  if (mssql.connected) {
-    await mssql.close();
-    console.log("✅ Database connection closed successfully");
-  }
+  // if (mssql.connected) {
+  //   await mssql.close();
+  //   console.log("✅ Database connection closed successfully");
+  // }
   let pool;
   
   try {
@@ -481,6 +481,7 @@ exports.login = async (req, res) => {
     if (!pool.connected) {
       return res.status(500).json({ message: "Database connection failed" });
     }
+
 
     const { username, password, ip } = req.body;
     const date = moment().format("YYYY-MM-DD HH:mm:ss");
@@ -558,19 +559,24 @@ exports.login = async (req, res) => {
     }
 
     // Close old connection
-    await mssql.close();
+  //    if (pool.connected) {
+  //   await pool.close();
+  //   console.log("✅ Database connection closed successfully");
+  // }
 
     const user_ip = String(ip_address).trim();
       const dynamicPool = await connectToUserDatabase(user_ip, port.trim());
       if (!dynamicPool.connected) {
         return res.status(500).json({ message: "Database connection failed" });
       }
-    
+
+
     const companyResult = await dynamicPool
       .request()
       .input("CUSTOMER_ID", mssql.Int, CUSTOMERID)
       .query(
-        `USE [${rtweb}]; SELECT * FROM tb_COMPANY WHERE CUSTOMERID = @CUSTOMER_ID`
+        `USE [${rtweb}]; 
+        SELECT * FROM tb_COMPANY WHERE CUSTOMERID = @CUSTOMER_ID`
       );
 
     if (companyResult.recordset.length === 0) {
@@ -629,9 +635,24 @@ exports.login = async (req, res) => {
     if (!res.headersSent) {
       return res.status(500).json({ message: "Failed to log in" });
     }
-  } finally {
+  } 
+  // finally {
     // Ensure connection is closed in case of error
-    if (mssql.connected) await mssql.close();
+    // if (mssql.connected) await mssql.close();
+  // }
+};
+
+//log out
+exports.closeConnection = async (req, res) => {
+  try {
+    // if (mssql.connected) {
+    //   await mssql.close();
+    // }
+console.log('logout')
+    res.status(200).json({ message: "Connection Closed successfully" });
+  } catch (err) {
+    console.error("Error during connection closing:", err);
+    res.status(500).json({ message: "Failed to close the connection" });
   }
 };
 
@@ -828,20 +849,6 @@ exports.forgotPassword = async (req, res) => {
     }
   } finally {
     if (mssql.connected) await mssql.close();
-  }
-};
-
-//log out
-exports.closeConnection = async (req, res) => {
-  try {
-    if (mssql.connected) {
-      await mssql.close();
-    }
-
-    res.status(200).json({ message: "Connection Closed successfully" });
-  } catch (err) {
-    console.error("Error during connection closing:", err);
-    res.status(500).json({ message: "Failed to close the connection" });
   }
 };
 
@@ -6632,7 +6639,7 @@ exports.findUserConnection = async (req, res) => {
 
     // Define posmain (e.g., from query parameter, body, or environment variable)
     const posmain =
-      req.query.posmain || process.env.DB_DATABASE1 || "your_default_database";
+      req.query.posmain || posmain || process.env.DB_DATABASE1 || "your_default_database";
     if (!posmain) {
       return res
         .status(400)

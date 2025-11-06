@@ -7,6 +7,7 @@ const app = express();
 
 // Import your controllers and middleware here
 const authController = require("../controllers/authController");
+const debugRoutes = require('../routes/debug');
 
 app.use(
   cors({
@@ -15,7 +16,7 @@ app.use(
   })
 );
 app.use(express.json());
-
+app.use('/debug', debugRoutes);
 // Define routes
 app.get("/", (req: Request, res: Response) => {
   res.send("Hello from Nodejs and Express!");

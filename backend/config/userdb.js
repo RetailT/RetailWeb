@@ -1,46 +1,36 @@
-const mssql = require("mssql");
-require("dotenv").config();
+const mssql = require('mssql');
+require('dotenv').config();
 
-// Cache object for multiple server pools (keyed by ip+port)
-let cachedPools = {};
+const cachedPools = {};  // key: ip:port
 
 const connectToUserDatabase = async (ip, port) => {
-  const cacheKey = `${ip}:${port}`;
+  const key = `${ip}:${port}`;
 
-  // If we already have a live pool for this ip:port, reuse it
-  if (cachedPools[cacheKey]) {
+  if (cachedPools[key] && cachedPools[key].connected) {
     try {
-      await cachedPools[cacheKey].request().query("SELECT 1"); // ping
-      return cachedPools[cacheKey];
+      await cachedPools[key].request().query('SELECT 1');
+      return cachedPools[key];
     } catch (err) {
-      console.warn(`⚠️ Stale pool for ${cacheKey}. Reconnecting...`);
-      delete cachedPools[cacheKey];
+      console.warn(`User pool stale for ${key}, reconnecting...`);
+      await cachedPools[key].close();
+      delete cachedPools[key];
     }
   }
 
-  const dbConfig = {
+  const config = {
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     server: ip.trim(),
-    database: process.env.DB_DATABASE2,
-    options: {
-      encrypt: false,
-      trustServerCertificate: true,
-    },
-    port: parseInt(port.trim(), 10) || 1433, // default to 1433 if missing
-    connectionTimeout: 5000,
-    requestTimeout: 5000,
+    database: process.env.DB_DATABASE2,  // RT_WEB
+    port: parseInt(port.trim(), 10) || 1433,
+    options: { encrypt: false, trustServerCertificate: true },
+    requestTimeout: 15000,
   };
 
-  try {
-    const pool = await mssql.connect(dbConfig);
-    console.log(`✅ Connected to MSSQL at ${cacheKey}`);
-    cachedPools[cacheKey] = pool;
-    return pool;
-  } catch (err) {
-    console.error(`❌ Failed to connect to MSSQL at ${cacheKey}:`, err);
-    throw err;
-  }
+  const pool = await new mssql.ConnectionPool(config).connect();
+  cachedPools[key] = pool;
+  console.log(`Connected to USER DB: ${ip}:${port}`);
+  return pool;
 };
 
-module.exports = { connectToUserDatabase, mssql };
+module.exports = { connectToUserDatabase };

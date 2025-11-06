@@ -1,44 +1,34 @@
 const mssql = require('mssql');
 require('dotenv').config();
 
-const dbConfig = {
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  server: process.env.DB_SERVER,
-  database: process.env.DB_DATABASE1,
-  options: {
-    encrypt: false,
-    trustServerCertificate: true,
-  },
-  port: 1443,
-  connectionTimeout: 5000,
-  requestTimeout: 5000,
-};
-
-// Global for reuse across serverless invocations
 let cachedPool = null;
 
 const connectToDatabase = async () => {
-  if (cachedPool) {
+  if (cachedPool && cachedPool.connected) {
     try {
-      // Ping the DB to ensure it's still alive
       await cachedPool.request().query('SELECT 1');
       return cachedPool;
-    } catch (pingError) {
-      console.warn('Stale MSSQL pool found. Reconnecting...');
+    } catch (err) {
+      console.warn('Main pool stale, reconnecting...');
+      await cachedPool.close();
       cachedPool = null;
     }
   }
 
-  try {
-    const pool = await mssql.connect(dbConfig);
-    console.log('✅ Connected to MSSQL database');
-    cachedPool = pool;
-    return pool;
-  } catch (err) {
-    console.error('❌ Failed to connect to MSSQL:', err);
-    throw err;
-  }
+  const config = {
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    server: process.env.DB_SERVER,  // 173.208.167.190
+    database: process.env.DB_DATABASE1,  // RTPOS_MAIN
+    port: 1443,
+    options: { encrypt: false, trustServerCertificate: true },
+    requestTimeout: 15000,
+  };
+
+  const pool = await new mssql.ConnectionPool(config).connect();
+  cachedPool = pool;
+  console.log('Connected to MAIN DB:', config.server, config.port);
+  return pool;
 };
 
-module.exports = { connectToDatabase, mssql };
+module.exports = { connectToDatabase };
