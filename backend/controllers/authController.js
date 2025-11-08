@@ -67,8 +67,13 @@ function currentDateTime() {
 async function syncDBConnection() {
   try {
     // If your pool is already connected, you can do:
-    const request = new mssql.Request();
-    const query = "SELECT * FROM tb_SYNCDB_USERS"; // Assuming db is set in connection config
+    const pool = await connectToDatabase();
+    if (!pool || !pool.connected) {
+      console.log('Database connection failed');
+      return [];
+    }
+    const request = pool.request();
+    const query = `USE [${posmain}]; SELECT * FROM tb_SYNCDB_USERS`; // Assuming db is set in connection config
 
     const result = await request.query(query);
 
@@ -84,10 +89,14 @@ async function syncDBConnection() {
   }
 }
 
-async function userItemsDetails(ReceiptDate, ReceiptNo) {
+async function userItemsDetails(ReceiptDate, ReceiptNo,connection) {
   try {
     // Create a new request object from the existing global connection or pool
-    const request = new mssql.Request();
+     if (!connection || !connection.connected) {
+      console.log('Database connection failed');
+      return [];
+    }
+    const request = connection.request();
 
     // Query only the SELECT statement (db should be set in config)
     const result = await request.query`
@@ -110,9 +119,13 @@ async function userItemsDetails(ReceiptDate, ReceiptNo) {
   }
 }
 
-async function userPaymentDetails() {
+async function userPaymentDetails(connection) {
   try {
-    const request = new mssql.Request();
+     if (!connection || !connection.connected) {
+      console.log('Database connection failed');
+      return [];
+    }
+    const request = connection.request();
 
     const result = await request.query`
       SELECT 
@@ -151,9 +164,13 @@ async function userPaymentDetails() {
   }
 }
 
-async function userDetails() {
+async function userDetails(connection) {
   try {
-    const request = new mssql.Request();
+    if (!connection || !connection.connected) {
+      console.log('Database connection failed');
+      return [];
+    }
+    const request = connection.request();
 
     const result = await request.query`
       SELECT 
@@ -214,12 +231,17 @@ async function getAccessToken(user) {
   }
 }
 
-async function updateTables() {
-  const transaction = new mssql.Transaction();
+async function updateTables(pool) {
+  if (!pool || !pool.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
+    const transaction = pool.transaction();
+    
   try {
+    
     await transaction.begin();
 
-    const request = new mssql.Request(transaction);
+    const request = transaction.request();
 
     const updatePayment = await request.query(`
       UPDATE tb_OGFPAYMENT
@@ -252,7 +274,12 @@ async function updateTables() {
       itemsRowsAffected: itemsRows,
     };
   } catch (error) {
-    await transaction.rollback();
+    try {
+      await transaction.rollback();
+    } catch (rollbackError) {
+      console.error("Rollback failed:", rollbackError);
+    }
+
     return {
       message: "Could not update tables",
       error: error.message,
@@ -262,7 +289,7 @@ async function updateTables() {
 
 async function syncDB() {
   try {
-    await mssql.close();
+    // await mssql.close();
     // await mssql.connect(dbConnection);
     await connectToDatabase()
 
@@ -293,16 +320,16 @@ async function syncDB() {
       }
 
       try {
-        await mssql.close();
+        // await mssql.close();
 
         const user_ip = (customer.IP).trim();      
-        await connectToUserDatabase(user_ip, customer.PORT.trim());
-        
+        const connection = await connectToUserDatabase(user_ip, customer.PORT.trim());
+        console.log('ip,port',user_ip, customer.PORT.trim())
         console.log(
           `Successfully connected to sync database at ${syncdbIp}:${syncdbPort}`
         );
 
-        const users = await userDetails();
+        const users = await userDetails(connection);
 
         if (!users || users.length === 0) {
           const msg = `No users found for IP: ${syncdbIp}`;
@@ -311,7 +338,7 @@ async function syncDB() {
           continue;
         }
 
-        const payments = await userPaymentDetails();
+        const payments = await userPaymentDetails(connection);
 
         if (payments.error) {
           errors.push(payments.error);
@@ -360,7 +387,8 @@ async function syncDB() {
 
             const items = await userItemsDetails(
               payment.ReceiptDate,
-              payment.ReceiptNo
+              payment.ReceiptNo,
+              connection
             );
 
             if (items.error) {
@@ -436,13 +464,41 @@ async function syncDB() {
 //sync db
 exports.syncDatabases = async (req, res) => {
   try {
+
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res
+        .status(403)
+        .json({ message: "No authorization token provided" });
+    }
+
+    const token = authHeader.split(" ")[1];
+
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (err) {
+      return res.status(403).json({ message: "Invalid or expired token" });
+    }
+
+
     const responses = await syncDB();
+
+    const user_ip = String(decoded.ip).trim(); 
+     if (mssql.connected) {
+    await mssql.close();
+    console.log("✅ Database connection closed successfully");
+  }
+      const pool = await connectToUserDatabase(user_ip, decoded.port.trim());
+     
+
 
     if (
       Array.isArray(responses.responses) &&
       responses.responses[0]?.returnStatus === "Success"
     ) {
-      const updateTableResult = await updateTables();
+      const updateTableResult = await updateTables(pool);
       return res.status(200).json({
         success: true,
         message: "Database sync completed successfully.",
