@@ -267,7 +267,7 @@ async function updateTables(pool) {
         itemsRowsAffected: itemsRows,
       };
     }
-
+console.log('TABLES UPDATED')
     return {
       message: "Tables updated successfully",
       paymentRowsAffected: paymentRows,
