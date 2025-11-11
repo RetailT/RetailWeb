@@ -7,7 +7,7 @@ import ClusteredBarChart from "../components/ClusteredBarChart";
 import Table from "../components/Table";
 import Loader from "../components/Loader";
 import Alert from "../components/Alert";
-import axios, { all } from "axios";
+import axios from "axios";
 import { jwtDecode } from "jwt-decode";
 
 function SalesComparison() {

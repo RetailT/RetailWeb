@@ -1,10 +1,10 @@
-import React, { useEffect, useState, useContext } from "react"; // Add useContext here
+import { useEffect, useState, useContext } from "react"; // Add useContext here
 import AuthCard from "../components/AuthCard";
 import Alert from '../components/Alert';
 import axios from 'axios';
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 import { useNavigate } from 'react-router-dom';
-import Cookies from "js-cookie";
+// import Cookies from "js-cookie";
 import { AuthContext } from "../AuthContext"; 
 
 const Login = ({ setAuthToken }) => {

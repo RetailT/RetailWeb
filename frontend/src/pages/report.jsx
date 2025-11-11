@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext, useMemo } from "react";
+import { useEffect, useState, useContext, useMemo } from "react";
 import Navbar from "../components/NavBar";
 import Heading from "../components/Heading";
 import { Navigate } from "react-router-dom";

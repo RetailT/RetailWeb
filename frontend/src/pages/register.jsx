@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import AuthCard from "../components/AuthCard";
 import Alert from '../components/Alert';
 import axios from "axios";

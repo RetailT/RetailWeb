@@ -59,7 +59,7 @@ const ProductDashboard = () => {
 
   const token = localStorage.getItem("authToken");
   const now = new Date();
-  let rowDataStatus = false;
+  // let rowDataStatus = false;
 
   const formatDate = (date) => {
     const localDate = new Date(date);

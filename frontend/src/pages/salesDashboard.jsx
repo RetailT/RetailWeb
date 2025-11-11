@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext, useRef } from "react";
+import { useEffect, useState, useContext, useRef } from "react";
 import Navbar from "../components/NavBar";
 import Heading from "../components/Heading";
 import DatePicker from "../components/DatePicker";
@@ -32,7 +32,7 @@ const Dashboard = () => {
   const now = new Date();
   const [alert, setAlert] = useState(null);
   const [salesData, setSalesData] = useState(null);
-  const intervalRef = useRef(null);
+  // const intervalRef = useRef(null);
   const [labels, setLabels] = useState(null);
   const [tableData, setTableData] = useState(null);
   const [tableLabels, setTableLabels] = useState(null);

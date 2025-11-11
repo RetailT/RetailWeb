@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { Chart, ArcElement, Tooltip, Legend, PieController, Title } from 'chart.js';
 
 // Register necessary elements and controller

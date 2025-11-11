@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext, useRef } from "react";
+import { useEffect, useState, useContext } from "react";
 import Navbar from "../components/NavBar";
 import Heading from "../components/Heading";
 import DatePicker from "../components/DatePicker";
@@ -20,7 +20,7 @@ const CategoryDashboard = () => {
   const [quantityBarChartLabels, setQuantityBarChartLabels] = useState([]);
   const [disable, setDisable] = useState(true);
   const [error, setError] = useState(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  // const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [selectedDates, setSelectedDates] = useState({});
   const [selectedOptions, setSelectedOptions] = useState([]);
   const [firstOption, setFirstOption] = useState(null);

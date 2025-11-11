@@ -1,5 +1,5 @@
 // Heading.jsx
-import React from 'react';
+// import React from 'react';
 
 const Heading = ({ text }) => {
   return (

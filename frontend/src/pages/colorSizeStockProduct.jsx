@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext } from "react";
+import { useEffect, useState, useContext } from "react";
 import Navbar from "../components/NavBar";
 import Heading from "../components/Heading";
 import DatePicker from "../components/DatePicker";
@@ -14,7 +14,7 @@ import NestedDynamicTable from "../components/DynamicTable";
 const ProductDashboard = () => {
   const { authToken } = useContext(AuthContext);
   const [userData, setUserData] = useState(null);
-  const [productName, setProductName] = useState("");
+  // const [productName, setProductName] = useState("");
   const [disable, setDisable] = useState(true);
   const [error, setError] = useState(null);
   const [selectedDate, setSelectedDate] = useState({});

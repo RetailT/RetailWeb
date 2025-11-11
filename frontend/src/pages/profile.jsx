@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useContext } from "react";
+import { useEffect, useState, useContext } from "react";
 import Navbar from "../components/NavBar";
-import Sidebar from "../components/SideBar";
+// import Sidebar from "../components/SideBar";
 import { Navigate } from "react-router-dom";
 import { AuthContext } from "../AuthContext";
 import Alert from "../components/Alert";

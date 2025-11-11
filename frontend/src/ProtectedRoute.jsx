@@ -1,4 +1,4 @@
-import React, { useContext } from "react"; // Import useContext
+import { useContext } from "react"; // Import useContext
 import { Navigate } from "react-router-dom"; // Import Navigate
 import  {AuthContext} from "./AuthContext.jsx"; // Import AuthContext
 

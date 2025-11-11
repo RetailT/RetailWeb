@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext } from "react";
+import { useEffect, useState, useContext } from "react";
 import RTLogo from "../assets/images/rt.png";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";

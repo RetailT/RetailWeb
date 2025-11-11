@@ -7,7 +7,7 @@ import { AuthContext } from "../AuthContext";
 import Heading from "../components/Heading";
 import Alert from "../components/Alert";
 import { CameraOff } from "lucide-react";
-import axios, { all } from "axios";
+import axios from "axios";
 import Table from "../components/EditableTable";
 import { jwtDecode } from "jwt-decode";
 

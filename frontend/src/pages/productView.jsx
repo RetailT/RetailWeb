@@ -32,7 +32,7 @@ function App() {
   const [salesHeaders, setSalesHeaders] = useState([]);
   const [selectedDates, setSelectedDates] = useState({});
   const [stockHeaders, setStockHeaders] = useState([]);
-  const [repUserFilter, setRepUserFilter] = useState("");
+  // const [repUserFilter, setRepUserFilter] = useState("");
   const [isData, setIsData] = useState(false);
   const codeRef = useRef(null);
   const streamRef = useRef(null);

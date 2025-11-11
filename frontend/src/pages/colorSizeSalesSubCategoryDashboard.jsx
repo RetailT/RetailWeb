@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext, useRef } from "react";
+import { useEffect, useState, useContext} from "react";
 import Navbar from "../components/NavBar";
 import Heading from "../components/Heading";
 import DatePicker from "../components/DatePicker";
@@ -10,15 +10,15 @@ import { AuthContext } from "../AuthContext";
 import CircleBounceLoader from "../components/Loader";
 import axios from "axios";
 import NestedDynamicTable from "../components/DynamicTable";
-import BarChart from "../components/BarChart";
+// import BarChart from "../components/BarChart";
 
 const SubCategoryDashboard = () => {
   const { authToken } = useContext(AuthContext);
   const [userData, setUserData] = useState(null);
-  const [amountBarChartRecords, setAmountBarChartRecords] = useState([]);
-  const [quantityBarChartRecords, setQuantityBarChartRecords] = useState([]);
-  const [amountBarChartLabels, setAmountBarChartLabels] = useState([]);
-  const [quantityBarChartLabels, setQuantityBarChartLabels] = useState([]);
+  // const [amountBarChartRecords, setAmountBarChartRecords] = useState([]);
+  // const [quantityBarChartRecords, setQuantityBarChartRecords] = useState([]);
+  // const [amountBarChartLabels, setAmountBarChartLabels] = useState([]);
+  // const [quantityBarChartLabels, setQuantityBarChartLabels] = useState([]);
   const [departmentName, setDepartmentName] = useState("");
     const [newTableHeaders, setNewTableHeaders] = useState([]);
     const [newTableData, setNewTableData] = useState([]);

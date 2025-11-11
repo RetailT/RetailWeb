@@ -1,4 +1,4 @@
-import React from 'react';
+// import React from 'react';
 
 const Alert = ({ message, type = "info", onClose }) => {
   // Determine the background color based on the alert type
