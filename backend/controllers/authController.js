@@ -657,6 +657,7 @@ exports.login = async (req, res) => {
         d_productView: user.d_productView,
         t_scan: user.t_scan,
         t_stock: user.t_stock,
+        t_invoice: user.t_invoice,
         t_grn: user.t_grn,
         t_prn: user.t_prn,
         t_tog: user.t_tog,
@@ -716,6 +717,7 @@ exports.register = async (req, res) => {
   }
   let pool;
 
+
   try {
     pool = await connectToDatabase();
     if (!pool.connected) {
@@ -756,8 +758,8 @@ exports.register = async (req, res) => {
       .input("password", mssql.VarChar, hashedPassword).query(`
         USE [${posmain}];
         INSERT INTO tb_USERS (username, email, password, resetToken, resetTokenExpiry, ip_address, port, CUSTOMERID, a_permission,
-        a_sync, d_company, d_department, d_category, d_scategory, d_vendor, d_invoice, d_productView, t_scan, t_stock, t_grn, t_prn, t_tog, t_stock_update)
-        VALUES (@username, @email, @password, '', '', '', '', NULL, 'F', 'F', 'F', 'F','F', 'F','F', 'F','F', 'F','F', 'F','F', 'F', 'F')
+        a_sync, d_company, d_department, d_category, d_scategory, d_vendor, d_invoice, d_productView, t_scan, t_invoice, t_stock, t_grn, t_prn, t_tog, t_stock_update)
+        VALUES (@username, @email, @password, '', '', '', '', NULL, 'F', 'F', 'F', 'F','F', 'F','F', 'F','F', 'F','F', 'F','F', 'F', 'F' , 'F')
       `);
 
     return res.status(201).json({ message: "User added successfully" });
@@ -954,7 +956,8 @@ exports.updateTempSalesTable = async (req, res) => {
     // }
     // Switch DB manually using a USE statement
 
-    await mssql.query(`USE [${rtweb}];`);
+    // await mssql.query(`USE [${rtweb}];`);
+    await pool.request().query(`USE [${rtweb}]`);
 
     let result;
 
@@ -1236,7 +1239,8 @@ exports.updateTempTogTable = async (req, res) => {
       return res.status(500).json({ message: "Database connection failed" });
     }
     // ✅ Switch database explicitly
-    await mssql.query(`USE [${rtweb}];`);
+    // await mssql.query(`USE [${rtweb}];`);
+    await pool.request().query(`USE [${rtweb}]`);
 
     let result;
 
@@ -1924,7 +1928,7 @@ exports.finalGrnPrnUpdate = async (req, res) => {
   }
 };
 
-// Get dashboard data function
+// Get dashboard data function - COMPANIES
 exports.dashboardOptions = async (req, res) => {
   try {
     const user_ip = String(req.user.ip).trim();
@@ -1937,7 +1941,8 @@ exports.dashboardOptions = async (req, res) => {
     if (!pool.connected) {
       return res.status(500).json({ message: "Database connection failed" });
     }
-    // Switch database context
+    
+    // Switch database context to rtweb for COMPANY table
     await pool.request().query(`USE [${rtweb}];`);
 
     const result = await pool.request().query(`
@@ -1965,6 +1970,51 @@ exports.dashboardOptions = async (req, res) => {
     return res
       .status(500)
       .json({ message: "Failed to retrieve company names" });
+  }
+};
+
+// Get dashboard Customer data function
+exports.dashboardCustomerOptions = async (req, res) => { 
+  try {
+    const user_ip = String(req.user.ip).trim();
+    if (mssql.connected) {
+      await mssql.close();
+      console.log("✅ Database connection closed successfully");
+    }
+    const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+
+    if (!pool.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
+    
+    // Switch database context to posback for CUSTOMER table
+    await pool.request().query(`USE [${posback}];`);
+
+    const result = await pool.request().query(`
+      SELECT CUSTOMER, CUSTOMER_NAME 
+      FROM tb_CUSTOMER;
+    `);
+
+    const records = result.recordset || [];
+
+    if (records.length === 0) {
+      return res.status(404).json({ message: "No customers found" });
+    }
+
+    const userData = records.map(({ CUSTOMER, CUSTOMER_NAME }) => ({
+      CUSTOMER: CUSTOMER?.trim(),
+      CUSTOMER_NAME: CUSTOMER_NAME?.trim(),
+    }));
+
+    return res.status(200).json({
+      message: "Dashboard data retrieved successfully",
+      userData,
+    });
+  } catch (error) {
+    console.error("Error retrieving dashboard data:", error);
+    return res
+      .status(500)
+      .json({ message: "Failed to retrieve customer names" });
   }
 };
 
@@ -3133,9 +3183,8 @@ GROUP BY TYPE, DATE, COMPANY_CODE, COMPANY_NAME, REPUSER;
       ORDER BY COMPANY_CODE, DATE, TYPE;
     `;
 
-    const tableRecords = await executeWithRetry(() =>
-      pool.request().query(table_query)
-    );
+    const tableRecords = await executeWithRetry(() => pool.request().query(table_query));
+   
 
     return res.status(200).json({
       message: "Processed parameters for company codes",
@@ -3183,7 +3232,7 @@ exports.salesComparisonData = async (req, res) => {
 
     console.log("✅ Connected to user database");
 
-    const newMonths = parseInt(months, 10) || months;
+ const newMonths = parseInt(months, 10) || months;
 
     const request = pool.request();
 
@@ -6728,6 +6777,8 @@ exports.stockUpdate = async (req, res) => {
   const type = String(selectedType).trim();
 
   try {
+     
+
     await mssql.query(`USE [${rtweb}];`); // ✅ Explicit DB switch
 
     let query;
@@ -6765,33 +6816,463 @@ exports.stockUpdate = async (req, res) => {
 
     // const user_ip = String(req.user.ip).trim();
     // const pool = await mssql.connect(dbConnection(user_ip, req.user.port));
-    const user_ip = String(req.user.ip).trim();
+    const user_ip = String(req.user.ip).trim(); 
     if (mssql.connected) {
-      await mssql.close();
-      console.log("✅ Database connection closed successfully");
-    }
-    const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
-    if (!pool || !pool.connected) {
+    await mssql.close();
+    console.log("✅ Database connection closed successfully");
+  }
+  const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+  if (!pool || !pool.connected) {
       return res.status(500).json({ message: "Database connection failed" });
     }
+
+    // NOW switch to the correct database AFTER connection
+    const rtweb = process.env.DB_DATABASE2;
+    if (rtweb) {
+      await pool.request().query(`USE [${rtweb}];`);
+    }
+
+    // Query all invoice-related data for this company
+    const query_invoice = `
+      SELECT IDX, COMPANY_CODE, VENDOR_CODE, VENDOR_NAME, INVOICE_NO, TYPE, 
+             PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE, 
+             CUR_STOCK, PHY_STOCK, REPUSER, SERIALNO, COLORCODE, SIZECODE
+      FROM tb_GRN_TEMP
+      WHERE COMPANY_CODE = @company
+      UNION
+      SELECT IDX, COMPANY_CODE, VENDOR_CODE, VENDOR_NAME, INVOICE_NO, TYPE, 
+             PRODUCT_CODE, PRODUCT_NAMELONG, COSTPRICE, UNITPRICE, 
+             CUR_STOCK, PHY_STOCK, REPUSER, SERIALNO, COLORCODE, SIZECODE
+      FROM tb_PRN_TEMP
+      WHERE COMPANY_CODE = @company;
+    `;
+
     const request = pool.request();
     request.input("company", mssql.NChar(10), company);
 
-    const stockData = await request.query(query);
-
+    const stockData = await request.query(query_invoice);
     const records = stockData.recordset;
 
+    console.log("Records found:", records?.length || 0); // Debug log
+
     if (!records || records.length === 0) {
-      return res.status(404).json({ message: "Stock data not found" });
+      return res.status(404).json({ message: "Invoice data not found" });
     }
 
     return res.status(200).json({
-      message: "Stock data Found Successfully",
+      message: "Invoice data found successfully",
       stockData: records,
     });
+    
   } catch (error) {
-    console.error("Error retrieving stock data:", error);
-    return res.status(500).json({ message: "Failed to retrieve stock data" });
+    console.error("Error retrieving invoice data:", error.message);
+    
+    return res.status(500).json({ 
+      message: "Failed to retrieve invoice data",
+      error: error.message
+    });
+  }
+};
+
+
+// GET - Invoice temp data
+exports.getInvoiceTempData = async (req, res) => {
+  try {
+    const { company, customer } = req.query;
+    const user_ip = String(req.user.ip).trim();
+    
+    if (mssql.connected) {
+      await mssql.close();
+    }
+    
+    const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+    
+    if (!pool || !pool.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
+
+    const result = await pool.request()
+    .input('company', mssql.NChar(10), company)
+    .input('customer', mssql.NChar(10), customer)  // Added customer input
+    .query(`
+      USE [rtweb];
+      SELECT * FROM tb_InvoiceTemp
+      WHERE COMPANY_CODE = @company
+      AND CUSTOMER_CODE = @customer 
+      ORDER BY PRODUCT_CODE DESC
+    `);
+
+    const invoiceData = result.recordset;
+    return res.status(200).json({ 
+      success: true,
+      invoiceData: invoiceData
+    });
+    
+  } catch (error) {
+    console.error("Error fetching invoice temp data:", error);
+    return res.status(500).json({ 
+      message: "Failed to fetch invoice data",
+      error: error.message 
+    });
+  }
+};
+
+// POST - Insert invoice temp item
+exports.insertInvoiceTemp = async (req, res) => {
+  try {
+    console.log("=== INSERT INVOICE TEMP START ===");
+    console.log("Request Body:", req.body);
+    
+    const {
+      company,
+      companyName,
+      productCode,
+      productName,
+      costPrice,
+      unitPrice,
+      stock,
+      quantity,
+      discount,
+      discountAmount,
+      total,
+      customer,
+      customerName
+    } = req.body;
+
+    // Validate required fields
+    if (!company || !productCode || !customer) {
+      console.log("Validation failed:", { company, productCode, customer });
+      return res.status(400).json({ 
+        message: "Missing required fields: company, productCode, or customer" 
+      });
+    }
+
+    const user_ip = String(req.user.ip).trim();
+
+    if (mssql.connected) {
+      await mssql.close();
+    }
+    
+    const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+    
+    if (!pool || !pool.connected) {
+      console.log("Database connection failed");
+      return res.status(500).json({ message: "Database connection failed" });
+    }
+
+    // Check if rtweb database exists
+    try {
+      const dbCheck = await pool.request().query(`
+        SELECT name FROM sys.databases WHERE name = 'rtweb'
+      `);
+      
+      if (dbCheck.recordset.length === 0) {
+        console.log("rtweb database does not exist, creating it...");
+        
+        // Create the database if it doesn't exist
+        await pool.request().query(`
+          CREATE DATABASE rtweb
+        `);
+        console.log("rtweb database created successfully");
+      }
+    } catch (dbError) {
+      console.error("Error checking/creating database:", dbError);
+      return res.status(500).json({ 
+        message: "Database setup failed",
+        error: dbError.message 
+      });
+    }
+
+    // Check if table exists, if not create it
+    try {
+      const tableCheck = await pool.request().query(`
+        USE rtweb;
+        IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='tb_InvoiceTemp' AND xtype='U')
+        CREATE TABLE tb_InvoiceTemp (
+          IDX INT IDENTITY(1,1) PRIMARY KEY,
+          COMPANY_CODE NVARCHAR(10),
+          COMPANY_NAME NVARCHAR(50),
+          PRODUCT_CODE NVARCHAR(30),
+          PRODUCT_NAME NVARCHAR(100),
+          COSTPRICE MONEY,
+          UNITPRICE MONEY,
+          STOCK FLOAT,
+          QUANTITY INT,
+          DISCOUNT MONEY,
+          DISCOUNT_AMOUNT DECIMAL(10,2),
+          TOTAL MONEY,
+          CUSTOMER_CODE NVARCHAR(10),
+          CUSTOMER_NAME NVARCHAR(50),
+          CREATED_DATE DATETIME DEFAULT GETDATE()
+        )
+      `);
+      console.log("Table check/creation completed");
+    } catch (tableError) {
+      console.error("Error creating table:", tableError);
+      return res.status(500).json({ 
+        message: "Table setup failed",
+        error: tableError.message 
+      });
+    }
+
+    // SAFE NUMBER PARSING
+    const qty = parseInt(quantity) || 0;
+    const safeCost = parseFloat(costPrice) || 0;
+    const safePrice = parseFloat(unitPrice) || 0;
+    const safeStock = parseFloat(stock) || 0;
+    const safeDiscount = parseFloat(discount) || 0;
+    const safeDiscountAmount = parseFloat(discountAmount) || 0;
+    const safeTotal = parseFloat(total) || 0;
+
+    console.log("Parsed values:", {
+      company, 
+      companyName,
+      productCode, 
+      customer, 
+      qty,
+      safeCost,
+      safePrice,
+      safeStock,
+      safeDiscount,
+      safeDiscountAmount,
+      safeTotal
+    });
+
+    // Execute INSERT query
+    const result = await pool.request()
+      .input('company', mssql.NChar(10), company)
+      .input('companyName', mssql.NVarChar(50), companyName || '')
+      .input('productCode', mssql.NChar(30), productCode)
+      .input('productName', mssql.NVarChar(100), productName || '')
+      .input('costPrice', mssql.Money, safeCost)
+      .input('unitPrice', mssql.Money, safePrice)
+      .input('stock', mssql.Float, safeStock)
+      .input('quantity', mssql.Int, qty)
+      .input('discount', mssql.Money, safeDiscount)
+      .input('discountAmount', mssql.Decimal(10, 2), safeDiscountAmount)
+      .input('total', mssql.Money, safeTotal)
+      .input('customer', mssql.NChar(10), customer)
+      .input('customerName', mssql.NVarChar(50), customerName || '')
+      .query(`
+        USE rtweb;
+        INSERT INTO tb_InvoiceTemp 
+        (COMPANY_CODE, COMPANY_NAME, PRODUCT_CODE, PRODUCT_NAME, 
+        COSTPRICE, UNITPRICE, STOCK, QUANTITY, DISCOUNT, DISCOUNT_AMOUNT, TOTAL, CUSTOMER_CODE, CUSTOMER_NAME)
+        VALUES (@company, @companyName, @productCode, @productName, 
+                @costPrice, @unitPrice, @stock, @quantity, @discount, @discountAmount, @total, @customer, @customerName)
+      `);
+
+    console.log("Insert successful, rows affected:", result.rowsAffected);
+    
+    return res.status(201).json({ 
+      message: "Invoice item added successfully" 
+    });
+    
+  } catch (error) {
+    console.error("=== INSERT INVOICE TEMP ERROR ===");
+    console.error("Error:", error.message);
+    console.error("Stack:", error.stack);
+    return res.status(500).json({ 
+      message: "Failed to add invoice item",
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+};
+
+// POST - Save invoice (move from temp to final table)
+exports.saveInvoice = async (req, res) => {
+  try {
+    console.log("=== SAVE INVOICE START ===");
+    const { company, customer } = req.body;
+    
+    console.log("Request body:", { company, customer });
+    
+    if (!company || !customer) {
+      return res.status(400).json({ 
+        message: "Company and Customer are required" 
+      });
+    }
+
+    const user_ip = String(req.user.ip).trim();
+    
+    if (mssql.connected) {
+      await mssql.close();
+    }
+    
+    const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+    
+    if (!pool || !pool.connected) {
+      console.error("Database connection failed");
+      return res.status(500).json({ message: "Database connection failed" });
+    }
+
+    console.log("Database connected successfully");
+
+    // Check if rtweb database exists
+    try {
+      const dbCheck = await pool.request().query(`
+        SELECT name FROM sys.databases WHERE name = 'rtweb'
+      `);
+      
+      if (dbCheck.recordset.length === 0) {
+        console.log("Creating rtweb database...");
+        await pool.request().query(`CREATE DATABASE rtweb`);
+        console.log("Database created");
+      }
+    } catch (dbError) {
+      console.error("Database check/create error:", dbError.message);
+    }
+
+    // Create tb_INVOICE_DETAILS table if not exists
+    try {
+      await pool.request().query(`
+        USE rtweb;
+        IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='tb_INVOICE_DETAILS' AND xtype='U')
+        BEGIN
+          CREATE TABLE tb_INVOICE_DETAILS (
+            IDX INT IDENTITY(1,1) PRIMARY KEY,
+            COMPANY_CODE NVARCHAR(10),
+            COMPANY_NAME NVARCHAR(50),
+            CUSTOMER_CODE NVARCHAR(10),
+            CUSTOMER_NAME NVARCHAR(50),
+            PRODUCT_CODE NVARCHAR(30),
+            PRODUCT_NAME NVARCHAR(100),
+            COSTPRICE MONEY,
+            UNITPRICE MONEY,
+            STOCK FLOAT,
+            QUANTITY INT,
+            DISCOUNT MONEY,
+            DISCOUNT_AMOUNT DECIMAL(10,2),
+            TOTAL MONEY,
+            CREATED_DATE DATETIME DEFAULT GETDATE()
+          )
+          PRINT 'Table tb_INVOICE_DETAILS created successfully'
+        END
+      `);
+      console.log("Table check/create completed");
+    } catch (tableError) {
+      console.error("Table creation error:", tableError.message);
+      return res.status(500).json({ 
+        message: "Failed to create invoice table",
+        error: tableError.message 
+      });
+    }
+
+    // Check if there are items in temp table
+    const tempCheck = await pool.request()
+      .input('company', mssql.NChar(10), company)
+      .input('customer', mssql.NChar(10), customer)
+      .query(`
+        USE rtweb;
+        SELECT COUNT(*) as count FROM tb_InvoiceTemp
+        WHERE COMPANY_CODE = @company AND CUSTOMER_CODE = @customer
+      `);
+
+    const itemCount = tempCheck.recordset[0].count;
+    console.log(`Temp table item count: ${itemCount}`);
+
+    if (itemCount === 0) {
+      return res.status(400).json({ 
+        message: "No items found to save" 
+      });
+    }
+
+    // Get the actual temp data for verification
+    const tempData = await pool.request()
+      .input('company', mssql.NChar(10), company)
+      .input('customer', mssql.NChar(10), customer)
+      .query(`
+        USE rtweb;
+        SELECT * FROM tb_InvoiceTemp
+        WHERE COMPANY_CODE = @company AND CUSTOMER_CODE = @customer
+      `);
+
+    console.log("Sample temp data:", tempData.recordset[0]);
+
+    // Move data from tb_InvoiceTemp to tb_INVOICE_DETAILS
+    const insertResult = await pool.request()
+      .input('company', mssql.NChar(10), company)
+      .input('customer', mssql.NChar(10), customer)
+      .query(`
+        USE rtweb;
+        INSERT INTO tb_INVOICE_DETAILS 
+        (COMPANY_CODE, COMPANY_NAME, CUSTOMER_CODE, CUSTOMER_NAME,
+         PRODUCT_CODE, PRODUCT_NAME, COSTPRICE, UNITPRICE, 
+         STOCK, QUANTITY, DISCOUNT, DISCOUNT_AMOUNT, TOTAL)
+        SELECT 
+          COMPANY_CODE, 
+          COMPANY_NAME, 
+          CUSTOMER_CODE, 
+          CUSTOMER_NAME,
+          PRODUCT_CODE, 
+          PRODUCT_NAME, 
+          COSTPRICE, 
+          UNITPRICE,
+          STOCK, 
+          QUANTITY, 
+          DISCOUNT, 
+          DISCOUNT_AMOUNT, 
+          TOTAL
+        FROM tb_InvoiceTemp
+        WHERE COMPANY_CODE = @company AND CUSTOMER_CODE = @customer
+      `);
+
+    console.log(`Rows inserted: ${insertResult.rowsAffected[0]}`);
+
+    // Verify insertion
+    const verifyInsert = await pool.request()
+      .input('company', mssql.NChar(10), company)
+      .input('customer', mssql.NChar(10), customer)
+      .query(`
+        USE rtweb;
+        SELECT COUNT(*) as count FROM tb_INVOICE_DETAILS
+        WHERE COMPANY_CODE = @company AND CUSTOMER_CODE = @customer
+      `);
+
+    console.log(`Total rows in INVOICE_DETAILS: ${verifyInsert.recordset[0].count}`);
+
+    // Clear the temp table for this company and customer
+    const deleteResult = await pool.request()
+      .input('company', mssql.NChar(10), company)
+      .input('customer', mssql.NChar(10), customer)
+      .query(`
+        USE rtweb;
+        DELETE FROM tb_InvoiceTemp
+        WHERE COMPANY_CODE = @company AND CUSTOMER_CODE = @customer
+      `);
+
+    console.log(`Temp rows deleted: ${deleteResult.rowsAffected[0]}`);
+
+    // Final verification - temp table should be empty
+    const finalCheck = await pool.request()
+      .input('company', mssql.NChar(10), company)
+      .input('customer', mssql.NChar(10), customer)
+      .query(`
+        USE rtweb;
+        SELECT COUNT(*) as count FROM tb_InvoiceTemp
+        WHERE COMPANY_CODE = @company AND CUSTOMER_CODE = @customer
+      `);
+
+    console.log(`Remaining temp items: ${finalCheck.recordset[0].count}`);
+    console.log("=== SAVE INVOICE COMPLETED SUCCESSFULLY ===");
+
+    return res.status(200).json({ 
+      message: "Invoice saved successfully",
+      itemsSaved: insertResult.rowsAffected[0]
+    });
+    
+  } catch (error) {
+    console.error("=== SAVE INVOICE ERROR ===");
+    console.error("Error message:", error.message);
+    console.error("Error stack:", error.stack);
+    console.error("Error details:", error);
+    
+    return res.status(500).json({ 
+      message: "Failed to save invoice",
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 };
 
@@ -6864,7 +7345,8 @@ exports.grnprnTableData = async (req, res) => {
 // product name
 exports.productName = async (req, res) => {
   try {
-    const user_ip = String(req.user.ip).trim();
+   
+    const user_ip = String(req.user.ip).trim(); 
     if (mssql.connected) {
       await mssql.close();
       console.log("✅ Database connection closed successfully");
@@ -6935,10 +7417,7 @@ exports.findUserConnection = async (req, res) => {
 
     // Define posmain (e.g., from query parameter, body, or environment variable)
     const posmain =
-      req.query.posmain ||
-      posmain ||
-      process.env.DB_DATABASE1 ||
-      "your_default_database";
+      req.query.posmain || posmain || process.env.DB_DATABASE1 || "your_default_database";
     if (!posmain) {
       return res
         .status(400)
@@ -6966,7 +7445,8 @@ exports.findUserConnection = async (req, res) => {
         u.[d_sales_comparison],
         u.[d_invoice],
         u.[d_productView], 
-        u.[t_scan], 
+        u.[t_scan],
+        u.[t_invoice],
         u.[t_stock], 
         u.[t_grn], 
         u.[t_prn], 
@@ -7346,6 +7826,7 @@ exports.resetDatabaseConnection = async (req, res) => {
           "Could not update or insert into the server details table"
         );
       }
+     
     }
     console.log("Table updates successful");
 
@@ -7370,6 +7851,7 @@ exports.resetDatabaseConnection = async (req, res) => {
         "d_invoice",
         "d_productView",
         "t_scan",
+        "t_invoice",
         "t_stock",
         "t_stock_update",
         "t_grn",

@@ -35,6 +35,7 @@ const Reset = () => {
   const [hourlyReport, setHourlyReport] = useState(false);
   const [salesComparison, setSalesComparison] = useState(false);
   const [invoice, setInvoice] = useState(false);
+  const [transInvoice, setTransInvoice] = useState(false);
   const [productView, setProductView] = useState(false);
   const [scan, setScan] = useState(false);
   const [stock, setStock] = useState(false);
@@ -207,6 +208,7 @@ useEffect(() => {
             t_grn: grn,
             t_prn: prn,
             t_tog: tog,
+            t_invoice: transInvoice,
           },
         ],
         colorSize_stock: [
@@ -340,6 +342,7 @@ setNewCustomerID("");
             setInvoice(user.d_invoice === "T");
             setProductView(user.d_productView === "T");
             setScan(user.t_scan === "T");
+            setTransInvoice(user.t_invoice === "T");
             setStock(user.t_stock === "T");
             setStockUpdate(user.t_stock_update === "T");
             setGRN(user.t_grn === "T");
@@ -381,6 +384,7 @@ setNewCustomerID("");
             setHourlyReport(false);
             setSalesComparison(false);
             setInvoice(false);
+            setTransInvoice(false);
             setProductView(false);
             setScan(false);
             setStock(false);
@@ -424,6 +428,7 @@ setNewCustomerID("");
             setHourlyReport(false);
             setSalesComparison(false);
             setInvoice(false);
+            setTransInvoice(false);
             setProductView(false);
             setScan(false);
             setStock(false);
@@ -500,12 +505,12 @@ const autoFill = (customerID) => {
     <div>
       <Navbar />
       <div className="flex flex-col min-h-screen">
-        <div className="flex-1 p-2 sm:p-4 md:p-6 ml-2 sm:ml-4 md:ml-5 mr-2 sm:mr-4">
-          <div className="mt-24 sm:mt-20 md:mt-24 mb-2 sm:mb-6 md:mb-10 ml-2 sm:ml-4">
+        <div className="flex-1 p-2 ml-2 mr-2 sm:p-4 md:p-6 sm:ml-4 md:ml-5 sm:mr-4">
+          <div className="mt-24 mb-2 ml-2 sm:mt-20 md:mt-24 sm:mb-6 md:mb-10 sm:ml-4">
             <Heading text="Permission Setting" />
           </div>
 
-          <div className="ml-2 sm:ml-4 mt-2 sm:mt-4">
+          <div className="mt-2 ml-2 sm:ml-4 sm:mt-4">
             {alert && (
               <Alert
                 message={alert.message}
@@ -515,10 +520,10 @@ const autoFill = (customerID) => {
             )}
           </div>
 
-          <div className="flex justify-center mt-2 sm:mt-8 md:mt-10 ml-2 sm:ml-4 md:ml-0">
-            <div className="w-full max-w-7xl px-2 sm:px-4 md:px-8">
+          <div className="flex justify-center mt-2 ml-2 sm:mt-8 md:mt-10 sm:ml-4 md:ml-0">
+            <div className="w-full px-2 max-w-7xl sm:px-4 md:px-8">
               <form className="space-y-6 sm:space-y-8" onSubmit={handleSubmit}>
-                <div className="bg-white p-4 sm:p-6 md:p-6 rounded-md shadow-md border border-gray-300 flex flex-col lg:flex-row lg:justify-between items-center gap-2 sm:gap-4">
+                <div className="flex flex-col items-center gap-2 p-4 bg-white border border-gray-300 rounded-md shadow-md sm:p-6 md:p-6 lg:flex-row lg:justify-between sm:gap-4">
                   {/* Username Field */}
                   <div className="flex flex-col w-full lg:w-auto">
                     <label
@@ -532,16 +537,16 @@ const autoFill = (customerID) => {
                       id="name"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      className="mt-1 w-full lg:w-64 px-2 sm:px-4 py-1 sm:py-2 bg-gray-100 border border-gray-300 rounded-md text-gray-700 text-sm"
+                      className="w-full px-2 py-1 mt-1 text-sm text-gray-700 bg-gray-100 border border-gray-300 rounded-md lg:w-64 sm:px-4 sm:py-2"
                       placeholder="Enter Username"
                     />
                     {nameError && (
-                      <p className="text-red-500 text-sm mt-1">{nameError}</p>
+                      <p className="mt-1 text-sm text-red-500">{nameError}</p>
                     )}
                   </div>
 
                   {/* Buttons Container */}
-                  <div className="flex flex-col md:flex-row gap-2 sm:gap-4 w-full justify-center items-center mt-2 sm:mt-4">
+                  <div className="flex flex-col items-center justify-center w-full gap-2 mt-2 md:flex-row sm:gap-4 sm:mt-4">
                     {/* Find User Button */}
                     <button
                       onClick={handleButtonClick}
@@ -566,14 +571,14 @@ const autoFill = (customerID) => {
                   </div>
                 </div>
 
-                <div className="bg-white p-4 sm:p-6 md:p-6 rounded-md shadow-md border border-gray-300 flex flex-col lg:flex-row lg:justify-between items-start gap-2 sm:gap-4 overflow-x-auto">
+                <div className="flex flex-col items-start gap-2 p-4 overflow-x-auto bg-white border border-gray-300 rounded-md shadow-md sm:p-6 md:p-6 lg:flex-row lg:justify-between sm:gap-4">
                   {/* Card 1 */}
                   <div className="bg-white p-2 sm:p-4 rounded-md shadow-md w-full md:w-[calc(50%-0.5rem)] min-w-[500px] mb-2 sm:mb-4">
-                    <h2 className="text-sm sm:text-lg font-semibold text-gray-800 mb-2 sm:mb-4">
+                    <h2 className="mb-2 text-sm font-semibold text-gray-800 sm:text-lg sm:mb-4">
                       Connection
                     </h2>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-4">
+                    <div className="grid grid-cols-1 gap-2 md:grid-cols-2 sm:gap-4">
                       {/* Company name */}
                       <div>
                         <label
@@ -587,7 +592,7 @@ const autoFill = (customerID) => {
                           id="name"
                           value={companyName}
                           onChange={(e) => setCompanyName(e.target.value)}
-                          className="mt-1 block w-full px-2 sm:px-4 py-1 sm:py-2 bg-gray-100 border border-gray-300 rounded-md text-gray-700 text-sm"
+                          className="block w-full px-2 py-1 mt-1 text-sm text-gray-700 bg-gray-100 border border-gray-300 rounded-md sm:px-4 sm:py-2"
                           placeholder="Enter Company Name"
                         />
                       </div>
@@ -609,7 +614,7 @@ const autoFill = (customerID) => {
                             autoFill(e.target.value);    // call your function
                           }}
 
-                          className="mt-1 block w-full px-2 sm:px-4 py-1 sm:py-2 bg-gray-100 border border-gray-300 rounded-md text-gray-700 text-sm"
+                          className="block w-full px-2 py-1 mt-1 text-sm text-gray-700 bg-gray-100 border border-gray-300 rounded-md sm:px-4 sm:py-2"
                           placeholder="Enter Customer ID"
                         />
                       </div>
@@ -627,7 +632,7 @@ const autoFill = (customerID) => {
                           id="ip"
                           value={ip}
                           onChange={(e) => setIp(e.target.value)}
-                          className="mt-1 block w-full px-2 sm:px-4 py-1 sm:py-2 bg-gray-100 border border-gray-300 rounded-md text-gray-700 text-sm"
+                          className="block w-full px-2 py-1 mt-1 text-sm text-gray-700 bg-gray-100 border border-gray-300 rounded-md sm:px-4 sm:py-2"
                           placeholder="Enter IP Address"
                         />
                       </div>
@@ -645,7 +650,7 @@ const autoFill = (customerID) => {
                           id="port"
                           value={port}
                           onChange={(e) => setPort(e.target.value)}
-                          className="mt-1 block w-full px-2 sm:px-4 py-1 sm:py-2 bg-gray-100 border border-gray-300 rounded-md text-gray-700 text-sm"
+                          className="block w-full px-2 py-1 mt-1 text-sm text-gray-700 bg-gray-100 border border-gray-300 rounded-md sm:px-4 sm:py-2"
                           placeholder="Enter Port"
                         />
                       </div>
@@ -663,7 +668,7 @@ const autoFill = (customerID) => {
                           id="startDate"
                           value={startDate}
                           onChange={(e) => setStartDate(e.target.value)}
-                          className="mt-1 block w-full px-2 sm:px-4 py-1 sm:py-2 bg-gray-100 border border-gray-300 rounded-md text-gray-700 text-sm"
+                          className="block w-full px-2 py-1 mt-1 text-sm text-gray-700 bg-gray-100 border border-gray-300 rounded-md sm:px-4 sm:py-2"
                           placeholder="Select Start Date"
                         />
                       </div>
@@ -681,7 +686,7 @@ const autoFill = (customerID) => {
                           id="endDate"
                           value={endDate}
                           onChange={(e) => setEndDate(e.target.value)}
-                          className="mt-1 block w-full px-2 sm:px-4 py-1 sm:py-2 bg-gray-100 border border-gray-300 rounded-md text-gray-700 text-sm"
+                          className="block w-full px-2 py-1 mt-1 text-sm text-gray-700 bg-gray-100 border border-gray-300 rounded-md sm:px-4 sm:py-2"
                           placeholder="Select End Date"
                         />
                       </div>
@@ -690,7 +695,7 @@ const autoFill = (customerID) => {
 
                   {/* Card 2 */}
                   <div className="bg-white p-2 sm:p-4 rounded-md shadow-md w-full md:w-[calc(25%-0.5rem)] min-w-[250px] mb-2 sm:mb-4">
-                    <h2 className="text-sm sm:text-lg font-semibold text-gray-800 mb-2 sm:mb-4">
+                    <h2 className="mb-2 text-sm font-semibold text-gray-800 sm:text-lg sm:mb-4">
                       Dashboard
                     </h2>
                     <div className="flex flex-col gap-2 sm:gap-4">
@@ -701,7 +706,7 @@ const autoFill = (customerID) => {
                           onChange={(e) => setCompany(e.target.checked)}
                           className="w-4 h-4 sm:w-5 sm:h-5"
                         />
-                        <span className="text-gray-700 text-sm">Company</span>
+                        <span className="text-sm text-gray-700">Company</span>
                       </label>
                       <label className="flex items-center space-x-2">
                         <input
@@ -710,7 +715,7 @@ const autoFill = (customerID) => {
                           onChange={(e) => setDepartment(e.target.checked)}
                           className="w-4 h-4 sm:w-5 sm:h-5"
                         />
-                        <span className="text-gray-700 text-sm">
+                        <span className="text-sm text-gray-700">
                           Department
                         </span>
                       </label>
@@ -721,7 +726,7 @@ const autoFill = (customerID) => {
                           onChange={(e) => setCategory(e.target.checked)}
                           className="w-4 h-4 sm:w-5 sm:h-5"
                         />
-                        <span className="text-gray-700 text-sm">Category</span>
+                        <span className="text-sm text-gray-700">Category</span>
                       </label>
                       <label className="flex items-center space-x-2">
                         <input
@@ -730,7 +735,7 @@ const autoFill = (customerID) => {
                           onChange={(e) => setSubCategory(e.target.checked)}
                           className="w-4 h-4 sm:w-5 sm:h-5"
                         />
-                        <span className="text-gray-700 text-sm">
+                        <span className="text-sm text-gray-700">
                           Sub Category
                         </span>
                       </label>
@@ -741,7 +746,7 @@ const autoFill = (customerID) => {
                           onChange={(e) => setVendor(e.target.checked)}
                           className="w-4 h-4 sm:w-5 sm:h-5"
                         />
-                        <span className="text-gray-700 text-sm">Vendor</span>
+                        <span className="text-sm text-gray-700">Vendor</span>
                       </label>
                       <label className="flex items-center space-x-2">
                         <input
@@ -750,7 +755,7 @@ const autoFill = (customerID) => {
                           onChange={(e) => setHourlyReport(e.target.checked)}
                           className="w-4 h-4 sm:w-5 sm:h-5"
                         />
-                        <span className="text-gray-700 text-sm">Hourly Report</span>
+                        <span className="text-sm text-gray-700">Hourly Report</span>
                       </label>
                       <label className="flex items-center space-x-2">
                         <input
@@ -759,7 +764,7 @@ const autoFill = (customerID) => {
                           onChange={(e) => setSalesComparison(e.target.checked)}
                           className="w-4 h-4 sm:w-5 sm:h-5"
                         />
-                        <span className="text-gray-700 text-sm">Sales Comparison</span>
+                        <span className="text-sm text-gray-700">Sales Comparison</span>
                       </label>
                       <label className="flex items-center space-x-2">
                         <input
@@ -768,7 +773,7 @@ const autoFill = (customerID) => {
                           onChange={(e) => setInvoice(e.target.checked)}
                           className="w-4 h-4 sm:w-5 sm:h-5"
                         />
-                        <span className="text-gray-700 text-sm">Invoice</span>
+                        <span className="text-sm text-gray-700">Invoice</span>
                       </label>
                       <label className="flex items-center space-x-2">
                         <input
@@ -777,7 +782,7 @@ const autoFill = (customerID) => {
                           onChange={(e) => setProductView(e.target.checked)}
                           className="w-4 h-4 sm:w-5 sm:h-5"
                         />
-                        <span className="text-gray-700 text-sm">
+                        <span className="text-sm text-gray-700">
                           Product View
                         </span>
                       </label>
@@ -786,7 +791,7 @@ const autoFill = (customerID) => {
 
                   {/* Card 3 */}
                   <div className="bg-white p-2 sm:p-4 rounded-md shadow-md w-full md:w-[calc(25%-0.5rem)] min-w-[250px] mb-2 sm:mb-4">
-                    <h2 className="text-sm sm:text-lg font-semibold text-gray-800 mb-2 sm:mb-4">
+                    <h2 className="mb-2 text-sm font-semibold text-gray-800 sm:text-lg sm:mb-4">
                       Transaction
                     </h2>
                     <div className="flex flex-col gap-2 sm:gap-4">
@@ -797,7 +802,7 @@ const autoFill = (customerID) => {
                           onChange={(e) => setScan(e.target.checked)}
                           className="w-4 h-4 sm:w-5 sm:h-5"
                         />
-                        <span className="text-gray-700 text-sm">Scan</span>
+                        <span className="text-sm text-gray-700">Scan</span>
                       </label>
                       <label className="flex items-center space-x-2">
                         <input
@@ -806,7 +811,7 @@ const autoFill = (customerID) => {
                           onChange={(e) => setStock(e.target.checked)}
                           className="w-4 h-4 sm:w-5 sm:h-5"
                         />
-                        <span className="text-gray-700 text-sm">Stock</span>
+                        <span className="text-sm text-gray-700">Stock</span>
                       </label>
                       <label className="flex items-center space-x-2">
                         <input
@@ -815,7 +820,7 @@ const autoFill = (customerID) => {
                           onChange={(e) => setGRN(e.target.checked)}
                           className="w-4 h-4 sm:w-5 sm:h-5"
                         />
-                        <span className="text-gray-700 text-sm">GRN</span>
+                        <span className="text-sm text-gray-700">GRN</span>
                       </label>
                       <label className="flex items-center space-x-2">
                         <input
@@ -824,7 +829,7 @@ const autoFill = (customerID) => {
                           onChange={(e) => setPRN(e.target.checked)}
                           className="w-4 h-4 sm:w-5 sm:h-5"
                         />
-                        <span className="text-gray-700 text-sm">PRN</span>
+                        <span className="text-sm text-gray-700">PRN</span>
                       </label>
                       <label className="flex items-center space-x-2">
                         <input
@@ -833,7 +838,7 @@ const autoFill = (customerID) => {
                           onChange={(e) => setTOG(e.target.checked)}
                           className="w-4 h-4 sm:w-5 sm:h-5"
                         />
-                        <span className="text-gray-700 text-sm">TOG</span>
+                        <span className="text-sm text-gray-700">TOG</span>
                       </label>
                       <label className="flex items-center space-x-2">
                         <input
@@ -842,8 +847,19 @@ const autoFill = (customerID) => {
                           onChange={(e) => setStockUpdate(e.target.checked)}
                           className="w-4 h-4 sm:w-5 sm:h-5"
                         />
-                        <span className="text-gray-700 text-sm">
+                        <span className="text-sm text-gray-700">
                           Stock Update
+                        </span>
+                      </label>
+                      <label className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          checked={transInvoice}
+                          onChange={(e) => setTransInvoice(e.target.checked)}
+                          className="w-4 h-4 sm:w-5 sm:h-5"
+                        />
+                        <span className="text-sm text-gray-700">
+                          Invoice
                         </span>
                       </label>
                     </div>
@@ -851,7 +867,7 @@ const autoFill = (customerID) => {
 
                   {/* Card 4 */}
                   <div className="bg-white p-2 sm:p-4 rounded-md shadow-md w-full md:w-[calc(25%-0.5rem)] min-w-[250px] mb-2 sm:mb-4">
-                    <h2 className="text-sm sm:text-lg font-semibold text-gray-800 mb-2 sm:mb-4">
+                    <h2 className="mb-2 text-sm font-semibold text-gray-800 sm:text-lg sm:mb-4">
                       Stock Wise Report
                     </h2>
                     <div className="flex flex-col gap-2 sm:gap-4">
@@ -862,7 +878,7 @@ const autoFill = (customerID) => {
                           onChange={(e) => setSProduct(e.target.checked)}
                           className="w-4 h-4 sm:w-5 sm:h-5"
                         />
-                        <span className="text-gray-700 text-sm">Product</span>
+                        <span className="text-sm text-gray-700">Product</span>
                       </label>
                       <label className="flex items-center space-x-2">
                         <input
@@ -871,7 +887,7 @@ const autoFill = (customerID) => {
                           onChange={(e) => setSDepartment(e.target.checked)}
                           className="w-4 h-4 sm:w-5 sm:h-5"
                         />
-                        <span className="text-gray-700 text-sm">Department</span>
+                        <span className="text-sm text-gray-700">Department</span>
                       </label>
                       <label className="flex items-center space-x-2">
                         <input
@@ -880,7 +896,7 @@ const autoFill = (customerID) => {
                           onChange={(e) => setSCategory(e.target.checked)}
                           className="w-4 h-4 sm:w-5 sm:h-5"
                         />
-                        <span className="text-gray-700 text-sm">Category</span>
+                        <span className="text-sm text-gray-700">Category</span>
                       </label>
                       <label className="flex items-center space-x-2">
                         <input
@@ -889,7 +905,7 @@ const autoFill = (customerID) => {
                           onChange={(e) => setSSCategory(e.target.checked)}
                           className="w-4 h-4 sm:w-5 sm:h-5"
                         />
-                        <span className="text-gray-700 text-sm">Sub Category</span>
+                        <span className="text-sm text-gray-700">Sub Category</span>
                       </label>
                       <label className="flex items-center space-x-2">
                         <input
@@ -898,14 +914,14 @@ const autoFill = (customerID) => {
                           onChange={(e) => setSVendor(e.target.checked)}
                           className="w-4 h-4 sm:w-5 sm:h-5"
                         />
-                        <span className="text-gray-700 text-sm">Vendor</span>
+                        <span className="text-sm text-gray-700">Vendor</span>
                       </label>
                     </div>
                   </div>
 
                   {/* Card 5 */}
                   <div className="bg-white p-2 sm:p-4 rounded-md shadow-md w-full md:w-[calc(25%-0.5rem)] min-w-[250px] mb-2 sm:mb-4">
-                    <h2 className="text-sm sm:text-lg font-semibold text-gray-800 mb-2 sm:mb-4">
+                    <h2 className="mb-2 text-sm font-semibold text-gray-800 sm:text-lg sm:mb-4">
                       Color Size Stock
                     </h2>
                     <div className="flex flex-col gap-2 sm:gap-4">
@@ -916,7 +932,7 @@ const autoFill = (customerID) => {
                           onChange={(e) => setCStProductWise(e.target.checked)}
                           className="w-4 h-4 sm:w-5 sm:h-5"
                         />
-                        <span className="text-gray-700 text-sm">
+                        <span className="text-sm text-gray-700">
                           Product Wise
                         </span>
                       </label>
@@ -927,7 +943,7 @@ const autoFill = (customerID) => {
                           onChange={(e) => setCStDepartment(e.target.checked)}
                           className="w-4 h-4 sm:w-5 sm:h-5"
                         />
-                        <span className="text-gray-700 text-sm">
+                        <span className="text-sm text-gray-700">
                           Department
                         </span>
                       </label>
@@ -938,7 +954,7 @@ const autoFill = (customerID) => {
                           onChange={(e) => setCStCategory(e.target.checked)}
                           className="w-4 h-4 sm:w-5 sm:h-5"
                         />
-                        <span className="text-gray-700 text-sm">Category</span>
+                        <span className="text-sm text-gray-700">Category</span>
                       </label>
                       <label className="flex items-center space-x-2">
                         <input
@@ -947,7 +963,7 @@ const autoFill = (customerID) => {
                           onChange={(e) => setCStSCategory(e.target.checked)}
                           className="w-4 h-4 sm:w-5 sm:h-5"
                         />
-                        <span className="text-gray-700 text-sm">
+                        <span className="text-sm text-gray-700">
                           Sub Category
                         </span>
                       </label>
@@ -958,14 +974,14 @@ const autoFill = (customerID) => {
                           onChange={(e) => setCStVendor(e.target.checked)}
                           className="w-4 h-4 sm:w-5 sm:h-5"
                         />
-                        <span className="text-gray-700 text-sm">Vendor</span>
+                        <span className="text-sm text-gray-700">Vendor</span>
                       </label>
                     </div>
                   </div>
 
                   {/* Card 6 */}
                   <div className="bg-white p-2 sm:p-4 rounded-md shadow-md w-full md:w-[calc(25%-0.5rem)] min-w-[250px] mb-2 sm:mb-4">
-                    <h2 className="text-sm sm:text-lg font-semibold text-gray-800 mb-2 sm:mb-4">
+                    <h2 className="mb-2 text-sm font-semibold text-gray-800 sm:text-lg sm:mb-4">
                       Color Size Sales
                     </h2>
                     <div className="flex flex-col gap-2 sm:gap-4">
@@ -976,7 +992,7 @@ const autoFill = (customerID) => {
                           onChange={(e) => setCSaProductWise(e.target.checked)}
                           className="w-4 h-4 sm:w-5 sm:h-5"
                         />
-                        <span className="text-gray-700 text-sm">
+                        <span className="text-sm text-gray-700">
                           Product Wise
                         </span>
                       </label>
@@ -987,7 +1003,7 @@ const autoFill = (customerID) => {
                           onChange={(e) => setCSaDepartment(e.target.checked)}
                           className="w-4 h-4 sm:w-5 sm:h-5"
                         />
-                        <span className="text-gray-700 text-sm">
+                        <span className="text-sm text-gray-700">
                           Department
                         </span>
                       </label>
@@ -998,7 +1014,7 @@ const autoFill = (customerID) => {
                           onChange={(e) => setCSaCategory(e.target.checked)}
                           className="w-4 h-4 sm:w-5 sm:h-5"
                         />
-                        <span className="text-gray-700 text-sm">Category</span>
+                        <span className="text-sm text-gray-700">Category</span>
                       </label>
                       <label className="flex items-center space-x-2">
                         <input
@@ -1007,7 +1023,7 @@ const autoFill = (customerID) => {
                           onChange={(e) => setCSaSCategory(e.target.checked)}
                           className="w-4 h-4 sm:w-5 sm:h-5"
                         />
-                        <span className="text-gray-700 text-sm">
+                        <span className="text-sm text-gray-700">
                           Sub Category
                         </span>
                       </label>
@@ -1018,14 +1034,14 @@ const autoFill = (customerID) => {
                           onChange={(e) => setCSaVendor(e.target.checked)}
                           className="w-4 h-4 sm:w-5 sm:h-5"
                         />
-                        <span className="text-gray-700 text-sm">Vendor</span>
+                        <span className="text-sm text-gray-700">Vendor</span>
                       </label>
                     </div>
                   </div>
 
                   {/* Card 7 */}
                   <div className="bg-white p-2 sm:p-4 rounded-md shadow-md w-full md:w-[calc(25%-0.5rem)] min-w-[250px] mb-2 sm:mb-4">
-                    <h2 className="text-sm sm:text-lg font-semibold text-gray-800 mb-2 sm:mb-4">
+                    <h2 className="mb-2 text-sm font-semibold text-gray-800 sm:text-lg sm:mb-4">
                       Administration
                     </h2>
                     <div className="flex flex-col gap-2 sm:gap-4">
@@ -1038,7 +1054,7 @@ const autoFill = (customerID) => {
                           }
                           className="w-4 h-4 sm:w-5 sm:h-5"
                         />
-                        <span className="text-gray-700 text-sm">
+                        <span className="text-sm text-gray-700">
                           Permission Setting
                         </span>
                       </label>
@@ -1049,7 +1065,7 @@ const autoFill = (customerID) => {
                           onChange={(e) => setDatabaseSync(e.target.checked)}
                           className="w-4 h-4 sm:w-5 sm:h-5"
                         />
-                        <span className="text-gray-700 text-sm">
+                        <span className="text-sm text-gray-700">
                           Database Sync
                         </span>
                       </label>
@@ -1060,11 +1076,11 @@ const autoFill = (customerID) => {
             </div>
           </div>
 
-          {/* <div className="w-full md:w-2/3 mt-10 px-2 sm:px-4 md:px-8 mx-auto">
+          {/* <div className="w-full px-2 mx-auto mt-10 md:w-2/3 sm:px-4 md:px-8">
   <div className="overflow-x-auto"> */}
   <div className="mt-2 sm:mt-8 md:mt-10">
-  <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 md:px-8">
-    <div className="overflow-hidden rounded-lg bg-white shadow-md border border-gray-300 mb-5">
+  <div className="w-full px-4 mx-auto max-w-7xl sm:px-6 md:px-8">
+    <div className="mb-5 overflow-hidden bg-white border border-gray-300 rounded-lg shadow-md">
       <Table
         headers={newTableHeaders}
         data={newTableData} 

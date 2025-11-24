@@ -871,13 +871,13 @@ function App() {
     <div>
       <Navbar />
       {/* Main Layout */}
-      <div className="flex flex-col md:flex-row min-h-screen">
-        <div className="transition-all duration-300 flex-1 p-2 sm:p-4 md:p-6 md:ml-10 md:mr-10 ml-4 mr-4 mt-24 sm:mt-20 md:mt-24">
+      <div className="flex flex-col min-h-screen md:flex-row">
+        <div className="flex-1 p-2 mt-24 ml-4 mr-4 transition-all duration-300 sm:p-4 md:p-6 md:ml-10 md:mr-10 sm:mt-20 md:mt-24">
           <div className="w-full max-w-full ml-2 sm:ml-4 md:ml-0">
             <Heading text="Scan" />
           </div>
 
-          <div className="mt-4 sm:mt-6 md:mt-10 w-full ml-2 sm:ml-4 md:ml-0">
+          <div className="w-full mt-4 ml-2 sm:mt-6 md:mt-10 sm:ml-4 md:ml-0">
             {alert && (
               <Alert
                 message={alert.message}
@@ -890,16 +890,16 @@ function App() {
           {!initialData && (
             <div className="bg-[#d8d8d8] p-2 sm:p-4 rounded-md shadow-md mb-4 sm:mb-6 mt-10 w-full max-w-full">
               {/* Row 1: Company, Type, Conditional field */}
-              <div className="flex flex-col lg:flex-row gap-2 sm:gap-4 mb-2 sm:mb-4">
+              <div className="flex flex-col gap-2 mb-2 lg:flex-row sm:gap-4 sm:mb-4">
                 {/* Company */}
-                <div className="flex flex-col w-full lg:w-1/3 mb-2 sm:mb-0">
+                <div className="flex flex-col w-full mb-2 lg:w-1/3 sm:mb-0">
                   <label className="text-sm font-medium text-gray-700">
                     Select a Company
                   </label>
                   <select
                     value={selectedCompany}
                     onChange={handleCompanyChange}
-                    className="border border-gray-300 p-2 rounded-md shadow-sm bg-white w-full text-sm"
+                    className="w-full p-2 text-sm bg-white border border-gray-300 rounded-md shadow-sm"
                   >
                     <option value="" disabled>
                       Select a Company
@@ -911,19 +911,19 @@ function App() {
                     ))}
                   </select>
                   {companyError && (
-                    <p className="text-red-500 text-sm">{companyError}</p>
+                    <p className="text-sm text-red-500">{companyError}</p>
                   )}
                 </div>
 
                 {/* Type */}
-                <div className="flex flex-col w-full lg:w-1/3 mb-2 sm:mb-0">
+                <div className="flex flex-col w-full mb-2 lg:w-1/3 sm:mb-0">
                   <label className="text-sm font-medium text-gray-700">
                     Select a Type
                   </label>
                   <select
                     value={selectedType}
                     onChange={handleTypeChange}
-                    className="border border-gray-300 p-2 rounded-md shadow-sm bg-white w-full text-sm"
+                    className="w-full p-2 text-sm bg-white border border-gray-300 rounded-md shadow-sm"
                   >
                     <option value="" disabled>
                       Select a Type
@@ -935,20 +935,20 @@ function App() {
                     ))}
                   </select>
                   {typeError && (
-                    <p className="text-red-500 text-sm">{typeError}</p>
+                    <p className="text-sm text-red-500">{typeError}</p>
                   )}
                 </div>
 
                 {/* Conditional field */}
                 {(selectedType === "GRN" || selectedType === "PRN") && (
-                  <div className="flex flex-col w-full lg:w-1/3 mb-2 sm:mb-0">
+                  <div className="flex flex-col w-full mb-2 lg:w-1/3 sm:mb-0">
                     <label className="text-sm font-medium text-gray-700">
                       Select Vendor
                     </label>
                     <select
                       value={selectedVendor}
                       onChange={handleVendorChange}
-                      className="border border-gray-300 p-2 rounded-md shadow-sm bg-white w-full text-sm"
+                      className="w-full p-2 text-sm bg-white border border-gray-300 rounded-md shadow-sm"
                     >
                       <option value="" disabled>
                         Select Vendor
@@ -960,20 +960,20 @@ function App() {
                       ))}
                     </select>
                     {vendorError && (
-                      <p className="text-red-500 text-sm">{vendorError}</p>
+                      <p className="text-sm text-red-500">{vendorError}</p>
                     )}
                   </div>
                 )}
 
                 {selectedType === "TOG" && (
-                  <div className="flex flex-col w-full lg:w-1/3 mb-2 sm:mb-0">
+                  <div className="flex flex-col w-full mb-2 lg:w-1/3 sm:mb-0">
                     <label className="text-sm font-medium text-gray-700">
                       Company To
                     </label>
                     <select
                       value={selectedToCompany}
                       onChange={handleToCompanyChange}
-                      className="border border-gray-300 p-2 rounded-md shadow-sm bg-white w-full text-sm"
+                      className="w-full p-2 text-sm bg-white border border-gray-300 rounded-md shadow-sm"
                     >
                       <option value="" disabled>
                         Company To
@@ -985,20 +985,20 @@ function App() {
                       ))}
                     </select>
                     {companyToError && (
-                      <p className="text-red-500 text-sm">{companyToError}</p>
+                      <p className="text-sm text-red-500">{companyToError}</p>
                     )}
                   </div>
                 )}
 
                 {selectedType === "STOCK" && (
-                  <div className="flex flex-col w-full lg:w-1/3 mb-2 sm:mb-0">
+                  <div className="flex flex-col w-full mb-2 lg:w-1/3 sm:mb-0">
                     <label className="text-sm font-medium text-gray-700">
                       Select a Count
                     </label>
                     <select
                       value={selectedCount}
                       onChange={handleCountChange}
-                      className="border border-gray-300 p-2 rounded-md shadow-sm bg-white w-full text-sm"
+                      className="w-full p-2 text-sm bg-white border border-gray-300 rounded-md shadow-sm"
                     >
                       <option value="" disabled>
                         Select a Count
@@ -1010,16 +1010,16 @@ function App() {
                       ))}
                     </select>
                     {countError && (
-                      <p className="text-red-500 text-sm">{countError}</p>
+                      <p className="text-sm text-red-500">{countError}</p>
                     )}
                   </div>
                 )}
               </div>
 
               {/* Row 2: Invoice No + Submit button right aligned */}
-              <div className="flex flex-col lg:flex-row items-start lg:items-end gap-2 sm:gap-4">
+              <div className="flex flex-col items-start gap-2 lg:flex-row lg:items-end sm:gap-4">
                 {(selectedType === "GRN" || selectedType === "PRN") && (
-                  <div className="flex flex-col w-full lg:w-1/3 mb-2 sm:mb-0">
+                  <div className="flex flex-col w-full mb-2 lg:w-1/3 sm:mb-0">
                     <label className="text-sm font-medium text-gray-700">
                       Invoice No
                     </label>
@@ -1038,11 +1038,11 @@ function App() {
                           e.preventDefault();
                         }
                       }}
-                      className="border border-gray-300 p-2 rounded-md shadow-sm bg-white w-full text-sm"
+                      className="w-full p-2 text-sm bg-white border border-gray-300 rounded-md shadow-sm"
                       placeholder="Enter Invoice No"
                     />
                     {invoiceNoError && (
-                      <p className="text-red-500 text-sm">{invoiceNoError}</p>
+                      <p className="text-sm text-red-500">{invoiceNoError}</p>
                     )}
                   </div>
                 )}
@@ -1051,7 +1051,7 @@ function App() {
                 <div className="flex-grow" />
 
                 {/* Submit button aligned right always */}
-                <div className="w-full lg:w-auto flex justify-center lg:justify-end">
+                <div className="flex justify-center w-full lg:w-auto lg:justify-end">
                   <button
                     onClick={handleDataSubmit}
                     className={`bg-black hover:bg-gray-800 w-full lg:w-auto text-white font-semibold py-2 px-4 rounded-md shadow-md text-sm
@@ -1065,14 +1065,14 @@ function App() {
           )}
 
           {initialData && (
-            <div className="mt-4 sm:mt-6 md:mt-10 w-full max-w-full">
+            <div className="w-full max-w-full mt-4 sm:mt-6 md:mt-10">
               <div className="flex flex-col">
                 {/* Main Content */}
-                <div className="flex flex-col flex-grow justify-center items-center w-full max-w-full">
-                  <div className="flex items-center mb-2 sm:mb-3 w-full justify-center">
+                <div className="flex flex-col items-center justify-center flex-grow w-full max-w-full">
+                  <div className="flex items-center justify-center w-full mb-2 sm:mb-3">
                     <form
                       onSubmit={handleSubmit}
-                      className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-2 w-full lg:w-auto"
+                      className="flex flex-col items-center w-full space-y-2 sm:flex-row sm:space-y-0 sm:space-x-2 lg:w-auto"
                     >
                       <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 w-full lg:w-[600px]">
                         <input
@@ -1084,7 +1084,7 @@ function App() {
                             setCode(e.target.value);
                             setScannedCode(e.target.value);
                           }}
-                          className="px-2 sm:px-3 py-2 w-full lg:w-1/2 bg-gray-100 border border-gray-300 rounded-md text-gray-700 focus:outline-none text-sm"
+                          className="w-full px-2 py-2 text-sm text-gray-700 bg-gray-100 border border-gray-300 rounded-md sm:px-3 lg:w-1/2 focus:outline-none"
                           placeholder="Enter Code"
                         />
                         <input
@@ -1099,7 +1099,7 @@ function App() {
                           }
                           onFocus={() => inputValue && setShowSuggestions(true)}
                           placeholder="Enter Product Name"
-                          className="px-2 sm:px-3 py-2 w-full lg:w-1/2 bg-gray-100 border border-gray-300 rounded-md text-gray-700 focus:outline-none text-sm"
+                          className="w-full px-2 py-2 text-sm text-gray-700 bg-gray-100 border border-gray-300 rounded-md sm:px-3 lg:w-1/2 focus:outline-none"
                         />
                         {showSuggestions && filteredSuggestions.length > 0 && (
                           <ul className="absolute z-10 w-full lg:w-[calc(50%-0.5rem)] bg-white border border-gray-300 rounded-md mt-1 shadow-md max-h-40 sm:max-h-60 overflow-y-auto">
@@ -1107,7 +1107,7 @@ function App() {
                               <li
                                 key={index}
                                 onClick={() => handleSelect(name)}
-                                className="p-1 sm:p-2 hover:bg-gray-100 cursor-pointer text-sm"
+                                className="p-1 text-sm cursor-pointer sm:p-2 hover:bg-gray-100"
                               >
                                 {name}
                               </li>
@@ -1125,19 +1125,19 @@ function App() {
                     </form>
                   </div>
                   {codeError && (
-                    <p className="text-red-500 text-sm mt-1 mb-4 sm:mb-6">
+                    <p className="mt-1 mb-4 text-sm text-red-500 sm:mb-6">
                       {codeError}
                     </p>
                   )}
                   <Toaster position="top-right" reverseOrder={false} />
                   {cameraError && (
-                    <div className="text-red-500 text-sm">{cameraError}</div>
+                    <div className="text-sm text-red-500">{cameraError}</div>
                   )}
 
                   {hasCameraPermission ? (
-                    <div className="text-center mt-4 sm:mt-6">
+                    <div className="mt-4 text-center sm:mt-6">
                       <div
-                        className="scan border border-gray-400 rounded-lg bg-gray-200 flex justify-center items-center"
+                        className="flex items-center justify-center bg-gray-200 border border-gray-400 rounded-lg scan"
                         style={{
                           width: "min(240px, 90vw)",
                           height: "min(240px, 90vw)",
@@ -1147,7 +1147,7 @@ function App() {
                           <BarcodeScannerComponent
                             width={240}
                             height={240}
-                            className="w-full h-full object-cover"
+                            className="object-cover w-full h-full"
                             onUpdate={handleScan}
                             delay={1000}
                             onError={(error) => {
@@ -1158,7 +1158,7 @@ function App() {
                         ) : (
                           <CameraOff
                             size={40}
-                            className="text-gray-600 w-10 h-10 sm:w-15 sm:h-15"
+                            className="w-10 h-10 text-gray-600 sm:w-15 sm:h-15"
                           />
                         )}
                       </div>
@@ -1171,23 +1171,23 @@ function App() {
                       </button>
                     </div>
                   ) : (
-                    <div className="text-red-500 text-sm mt-4 sm:mt-6">
+                    <div className="mt-4 text-sm text-red-500 sm:mt-6">
                       Camera access is not granted. Please check permissions.
                     </div>
                   )}
 
                  
-                    <div className="bg-white p-2 sm:p-4 rounded-md shadow-md border border-gray-300 mb-2 sm:mb-4 mt-4 sm:mt-6 sm:w-full md:w-2/5 max-w-full">
+                    <div className="max-w-full p-2 mt-4 mb-2 bg-white border border-gray-300 rounded-md shadow-md sm:p-4 sm:mb-4 sm:mt-6 sm:w-full md:w-2/5">
                     <div className="text-sm sm:text-lg font-semibold mb-2 sm:mb-4 text-[#f17e21]">
                       Product Details
                     </div>
 
                     <div className="space-y-1 sm:space-y-2">
-                      <div className="border-t pt-1 sm:pt-2">
+                      <div className="pt-1 border-t sm:pt-2">
                         <p className="font-medium text-[#bc4a17] mb-1 sm:mb-2 text-sm sm:text-base">
                           Scanned Data
                         </p>
-                        <p className="text-gray-700 text-sm">
+                        <p className="text-sm text-gray-700">
                           {scannedCode ? (
                             <span>
                               <strong>Scanned Code:</strong> {scannedCode}
@@ -1201,23 +1201,23 @@ function App() {
                         </p>
                       </div>
 
-                      <div className="border-t pt-1 sm:pt-2">
+                      <div className="pt-1 border-t sm:pt-2">
                         <p className="font-medium text-[#bc4a17] mb-1 sm:mb-2 text-sm sm:text-base">
                           Company Information
                         </p>
-                        <p className="text-gray-700 text-sm">
+                        <p className="text-sm text-gray-700">
                           <strong>Company Code:</strong> {selectedCompany}
                         </p>
-                        <p className="text-gray-700 text-sm">
+                        <p className="text-sm text-gray-700">
                           <strong>Company Name:</strong> {selectedCompanyName}
                         </p>
                         {selectedType === "TOG" && (
                           <div>
-                            <p className="text-gray-700 text-sm">
+                            <p className="text-sm text-gray-700">
                               <strong>To Company Code:</strong>{" "}
                               {selectedToCompany}
                             </p>
-                            <p className="text-gray-700 text-sm">
+                            <p className="text-sm text-gray-700">
                               <strong>To Company Name:</strong>{" "}
                               {selectedToCompanyName}
                             </p>
@@ -1225,58 +1225,58 @@ function App() {
                         )}
 
                         {selectedType === "STOCK" && (
-                          <p className="text-gray-700 text-sm">
+                          <p className="text-sm text-gray-700">
                             <strong>Count Status:</strong> {selectedCount}
                           </p>
                         )}
 
-                        <p className="text-gray-700 text-sm">
+                        <p className="text-sm text-gray-700">
                           <strong>Type:</strong> {selectedType}
                         </p>
                       </div>
 
                       {(selectedType === "GRN" || selectedType === "PRN") && (
-                        <div className="border-t pt-1 sm:pt-2">
+                        <div className="pt-1 border-t sm:pt-2">
                           <p className="font-medium text-[#bc4a17] mb-1 sm:mb-2 text-sm sm:text-base">
                             Vendor Information
                           </p>
-                          <p className="text-gray-700 text-sm">
+                          <p className="text-sm text-gray-700">
                             <strong>Vendor Code:</strong> {selectedVendor}
                           </p>
-                          <p className="text-gray-700 text-sm">
+                          <p className="text-sm text-gray-700">
                             <strong>Vendor Name:</strong> {selectedVendorName}
                           </p>
-                          <p className="text-gray-700 text-sm">
+                          <p className="text-sm text-gray-700">
                             <strong>Invoice No:</strong> {invoiceNo}
                           </p>
                         </div>
                       )}
 
-                      <div className="border-t pt-1 sm:pt-2">
+                      <div className="pt-1 border-t sm:pt-2">
                         <p className="font-medium text-[#bc4a17] mb-1 sm:mb-2 text-sm sm:text-base">
                           Product Information
                         </p>
-                        <p className="text-gray-700 text-sm">
+                        <p className="text-sm text-gray-700">
                           <strong>Product Code:</strong>{" "}
                           {salesData.PRODUCT_CODE}
                         </p>
-                        <p className="text-gray-700 text-sm">
+                        <p className="text-sm text-gray-700">
                           <strong>Product Name:</strong>{" "}
                           {salesData.PRODUCT_NAMELONG}
                         </p>
-                        <p className="text-gray-700 text-sm">
+                        <p className="text-sm text-gray-700">
                           <strong>Cost Price:</strong> {costPrice}
                         </p>
-                        <p className="text-gray-700 text-sm">
+                        <p className="text-sm text-gray-700">
                           <strong>Unit Price: </strong> {salesPrice}
                         </p>
                       </div>
 
-                      <div className="border-t pt-1 sm:pt-2">
+                      <div className="pt-1 border-t sm:pt-2">
                         <p className="font-medium text-[#bc4a17] mb-1 sm:mb-2 text-sm sm:text-base">
                           Amount
                         </p>
-                        <p className="text-gray-700 text-sm">
+                        <p className="text-sm text-gray-700">
                           <strong>Stock: </strong>
                           {isNaN(Number(amount))
                             ? "0.000"
@@ -1291,11 +1291,11 @@ function App() {
                           {/* {state && ( */}
                             <div className="flex flex-col space-y-1 sm:space-y-2">
                             <div className="flex flex-col sm:flex-row sm:space-x-2">
-                              <p className="text-gray-700 text-sm">
+                              <p className="text-sm text-gray-700">
                                 <strong>Quantity: </strong>
                               </p>
                               {colorWiseTableData.length > 0 ? (
-                                <div className="overflow-x-auto w-full mt-2 sm:mt-4">
+                                <div className="w-full mt-2 overflow-x-auto sm:mt-4">
                                   <div
                                     className="w-full max-w-full"
                                     ref={tableRef}
@@ -1322,7 +1322,7 @@ function App() {
                                   ref={quantityRef}
                                   value={quantity}
                                   onChange={(e) => setQuantity(e.target.value)}
-                                  className="mt-1 px-2 sm:px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-gray-700 focus:outline-none w-full text-sm"
+                                  className="w-full px-2 py-2 mt-1 text-sm text-gray-700 bg-gray-100 border border-gray-300 rounded-md sm:px-3 focus:outline-none"
                                   placeholder="Enter quantity"
                                   step="1"
                                   min="0"
@@ -1332,13 +1332,13 @@ function App() {
 
                             {/* Display error message under the input field */}
                             {quantityError && (
-                              <p className="text-red-500 text-sm mt-1">
+                              <p className="mt-1 text-sm text-red-500">
                                 {quantityError}
                               </p>
                             )}
 
                             
-                          <div className="flex justify-center items-center">
+                          <div className="flex items-center justify-center">
                             <button
                               onClick={handleProductSubmit}
                               disabled={disable}
@@ -1352,7 +1352,7 @@ function App() {
                           </div>
 
                           
-                         {/* )}*/}
+                          {/* )}*/}
                           
 
                         </form>
@@ -1379,13 +1379,13 @@ function App() {
             newTableData.length !== 0 && (
               <div className="flex flex-col w-full max-w-full mt-4 sm:mt-6">
                 {/* Label: always centered */}
-                <div className="text-xl sm:text-2xl font-bold mb-2 sm:mb-4 text-center w-full">
+                <div className="w-full mb-2 text-xl font-bold text-center sm:text-2xl sm:mb-4">
                   {selectedType}
                 </div>
 
                 {/* Scrollable Table Container */}
                 <div className="w-full max-w-full px-4 sm:px-6 md:px-8">
-    <div className="overflow-hidden rounded-lg bg-white shadow-md border border-gray-300 mb-5">
+                <div className="mb-5 overflow-hidden bg-white border border-gray-300 rounded-lg shadow-md">
                     <Table
                       headers={headers}
                       data={filteredTableData.map((item) => item.rowData)}

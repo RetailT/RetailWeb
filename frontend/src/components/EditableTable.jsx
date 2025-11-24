@@ -37,7 +37,7 @@ const ScrollableTable = ({
   };
 
   return (
-    <div className="p-4 flex flex-col">
+    <div className="flex flex-col p-4">
       {/* Responsive horizontal scroll */}
       <div className="w-full overflow-x-auto">
         {/* Table container with vertical scroll when needed */}
@@ -48,18 +48,18 @@ const ScrollableTable = ({
           }`}
         >
           <table className="min-w-[700px] md:min-w-full divide-y divide-gray-200 border border-gray-300">
-            <thead className="bg-gray-100 sticky top-0">
+            <thead className="sticky top-0 bg-gray-100">
               <tr>
                 {headers.map((header, index) => (
                   <th
                     key={index}
-                    className="px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider border border-gray-300"
+                    className="px-4 py-2 text-xs font-medium tracking-wider text-gray-500 uppercase border border-gray-300"
                   >
                     {header}
                   </th>
                 ))}
                 {data.length > 0 && !bin && (
-                  <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border border-gray-300">
+                  <th className="px-4 py-2 text-xs font-medium tracking-wider text-center text-gray-500 uppercase border border-gray-300">
                     Actions
                   </th>
                 )}
@@ -104,7 +104,7 @@ const ScrollableTable = ({
                     <td className="px-6 py-3 text-center">
                       <button
                         onClick={() => onDeleteRow(rowIndex)}
-                        className="text-red-600 hover:text-red-800 p-2"
+                        className="p-2 text-red-600 hover:text-red-800"
                       >
                         <FaTrash size={16} />
                       </button>

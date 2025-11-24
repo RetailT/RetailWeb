@@ -42,8 +42,8 @@ const Profile = () => {
   return (
     <div>
       <Navbar />
-      <div className="flex justify-center items-center min-h-screen bg-gradient-to-br from-orange-50 to-white px-4 mt-12 md:mt-8">
-  <div className="w-full max-w-3xl bg-white rounded-2xl shadow-2xl p-8 sm:p-14 transition-all duration-500 ease-in-out hover:shadow-orange-200">
+      <div className="flex items-center justify-center min-h-screen px-4 mt-12 bg-gradient-to-br from-orange-50 to-white md:mt-8">
+  <div className="w-full max-w-3xl p-8 transition-all duration-500 ease-in-out bg-white shadow-2xl rounded-2xl sm:p-14 hover:shadow-orange-200">
     {/* Alert */}
     {alert && (
       <div className="mb-6">
@@ -56,16 +56,16 @@ const Profile = () => {
     )}
 
     {/* Header */}
-    <div className="text-center mb-10">
-      <h1 className="text-3xl sm:text-4xl font-bold text-orange-600">Welcome to</h1>
-      <p className="text-2xl sm:text-3xl font-bold text-orange-700 mt-2">Retail Target Software Solutions</p>
+    <div className="mb-10 text-center">
+      <h1 className="text-3xl font-bold text-orange-600 sm:text-4xl">Welcome to</h1>
+      <p className="mt-2 text-2xl font-bold text-orange-700 sm:text-3xl">Retail Target Software Solutions</p>
     </div>
 
     {/* Profile Card */}
     {details && (
       <div className="flex justify-center">
-        <div className="p-8 bg-orange-50 rounded-xl shadow-md w-full max-w-md transition transform hover:scale-105">
-          <h2 className="text-center text-2xl font-bold mb-6 text-gray-800">User Profile</h2>
+        <div className="w-full max-w-md p-8 transition transform shadow-md bg-orange-50 rounded-xl hover:scale-105">
+          <h2 className="mb-6 text-2xl font-bold text-center text-gray-800">User Profile</h2>
           <div className="space-y-4 text-center text-gray-700">
             <p>
               <strong>Company:</strong> {details.company_name}
@@ -83,7 +83,7 @@ const Profile = () => {
     )}
 
     {/* Company Info */}
-    <div className="mt-12 text-center text-sm text-gray-500">
+    <div className="mt-12 text-sm text-center text-gray-500">
       <p>Retail Target Software Solutions Pvt Ltd</p>
       <p>No.375/1/1B, Galle road, Pallimankada, Wadduwa</p>
       <p>No.2A, Elliot road, Galle</p>

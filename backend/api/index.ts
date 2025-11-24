@@ -23,6 +23,7 @@ app.get("/", (req: Request, res: Response) => {
 });
 
 app.get('/companies', authenticateToken, authController.dashboardOptions);
+app.get('/customers', authenticateToken, authController.dashboardCustomerOptions);
 app.get('/vendors', authenticateToken, authController.vendorOptions);
 app.get('/product-names', authenticateToken, authController.productName);
 
@@ -56,6 +57,7 @@ app.get('/stock-wise-vendor', authenticateToken, authController.stockVendorDashb
 
 app.get('/scan', authenticateToken, authController.scan);
 app.get('/stock-update', authenticateToken, authController.stockUpdate);
+app.get('/stock-update-invoice', authenticateToken, authController.stockUpdateInvoice);
 app.get('/grnprn-table-data', authenticateToken, authController.grnprnTableData);
 app.get('/final-stock-update', authenticateToken, authController.finalStockUpdate);
 app.get('/final-grnprn-update', authenticateToken, authController.finalGrnPrnUpdate);
@@ -69,6 +71,7 @@ app.get('/product-view-sales', authenticateToken, authController.productViewSale
 
 app.get('/find-user-connection', authenticateToken, authController.findUserConnection);
 app.get('/connection-details', authenticateToken, authController.serverConnection);
+app.get('/invoice-temp-data', authenticateToken, authController.getInvoiceTempData);
 
 app.post("/login", authController.login);
 app.post('/close-connection', authController.closeConnection);
@@ -79,6 +82,8 @@ app.post('/forgot-password', authController.forgotPassword);
 app.post('/update-temp-sales-table', authController.updateTempSalesTable);
 app.post('/update-temp-grn-table', authController.updateTempGrnTable);
 app.post('/update-temp-tog-table', authController.updateTempTogTable);
+app.post('/insert-invoice-temp', authenticateToken, authController.insertInvoiceTemp);
+app.post('/save-invoice', authenticateToken, authController.saveInvoice);
 
 app.delete('/stock-update-delete', authenticateToken, authController.stockUpdateDelete);
 app.delete('/grnprn-delete', authenticateToken, authController.grnprnDelete);
@@ -86,10 +91,10 @@ app.delete('/grnprn-delete', authenticateToken, authController.grnprnDelete);
 app.put('/reset-database-connection', authenticateToken, authController.resetDatabaseConnection);
 
 
-// // for local development -- comment out in production
+// // // for local development -- comment out in production
 // if (process.env.NODE_ENV !== "production") {
 //   app.listen(5000, () => {
-//     console.log(`Server is running on http://localhost:5000`);
+//     console.log(`Server is running on http://localhost:5000/`);
 //   });
 // }
 // const handler = serverless(app);

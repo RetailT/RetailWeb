@@ -9,6 +9,7 @@ import CategoryDashboard from "./pages/categoryDashboard";
 import SubCategoryDashboard from "./pages/subCategoryDashboard";
 import VendorDashboard from "./pages/vendorDashboard";
 import StockUpdate from "./pages/stockUpdate";
+import Invoice from "./pages/invoice";
 import SyncDatabase from "./pages/syncDatabase";
 import ColorSizeSalesDepartment from "./pages/colorSizeSalesDepartment"
 import ColorSizeSalesCategory from "./pages/colorSizeSalesCategoryDashboard"
@@ -55,6 +56,7 @@ function App() {
         <Route path="/category-dashboard" element={<ProtectedRoute> <CategoryDashboard /> </ProtectedRoute>}/>
         <Route path="/sub-category-dashboard" element={<ProtectedRoute> <SubCategoryDashboard /> </ProtectedRoute>}/>
         <Route path="/stock-update" element={<ProtectedRoute> <StockUpdate /> </ProtectedRoute>}/>
+        <Route path="/invoice" element={<ProtectedRoute> <Invoice /> </ProtectedRoute>}/>
         <Route path="/report" element={<ProtectedRoute> <Report /> </ProtectedRoute>}/>
         <Route path="/vendor-dashboard" element={<ProtectedRoute> <VendorDashboard /> </ProtectedRoute>}/>
         <Route path="/hourly-report-dashboard" element={<ProtectedRoute> <HourlyReportDashboard /> </ProtectedRoute>}/>

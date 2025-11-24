@@ -95,14 +95,15 @@ const ScrollableTable = ({ headers, data, onRowClick, rightAlignedColumns = [] }
       }
     }
   };
+  
   const renderDropdown = () => {
     return (
-      <div className="relative flex flex-col gap-2 w-full md:w-60 mb-5">
+      <div className="relative flex flex-col w-full gap-2 mb-5 md:w-60">
        
         <select
           value={selectedType}
           onChange={handleTypeChange}
-          className="w-full border border-gray-300 p-2 rounded-md shadow-sm bg-white text-left overflow-hidden text-ellipsis whitespace-nowrap"
+          className="w-full p-2 overflow-hidden text-left bg-white border border-gray-300 rounded-md shadow-sm text-ellipsis whitespace-nowrap"
           style={{ minHeight: "40px" }}
         >
           <option value="" disabled>
@@ -120,17 +121,17 @@ const ScrollableTable = ({ headers, data, onRowClick, rightAlignedColumns = [] }
 
   return (
     <div className="space-y-4">
-  <div className="flex flex-col sm:flex-row items-center gap-4 mb-10">
+  <div className="flex flex-col items-center gap-4 mb-10 sm:flex-row">
     {/* Wrapper for label and dropdown */}
-    <div className="w-full sm:w-auto flex flex-col gap-2">
-      <label className="block text-sm font-medium text-gray-700 w-full mt-5">
+    <div className="flex flex-col w-full gap-2 sm:w-auto">
+      <label className="block w-full mt-5 text-sm font-medium text-gray-700">
         Select File Type:
       </label>
       <div className="w-full">
         {renderDropdown()}
       </div>
       {typeError && (
-        <p className="text-red-500 text-sm mb-4">{typeError}</p>
+        <p className="mb-4 text-sm text-red-500">{typeError}</p>
       )}
     </div>
     <button
@@ -140,18 +141,18 @@ const ScrollableTable = ({ headers, data, onRowClick, rightAlignedColumns = [] }
       Export
     </button>
   </div>
-  <div className="overflow-x-auto my-5 mx-auto rounded-lg border border-gray-400 ">
+  <div className="mx-auto my-5 overflow-x-auto border border-gray-400 rounded-lg ">
     <div
       className={`overflow-y-auto ${shouldScroll ? "max-h-64" : ""}`}
       style={shouldScroll ? { maxHeight: "350px" } : {}}
     >
-      <table className="min-w-full divide-y divide-gray-200 border border-gray-300">
-        <thead className="bg-gray-100 sticky top-0">
+      <table className="min-w-full border border-gray-300 divide-y divide-gray-200">
+        <thead className="sticky top-0 bg-gray-100">
           <tr>
             {headers.map((header, index) => (
               <th
                 key={index}
-                className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border border-gray-300"
+                className="px-4 py-2 text-xs font-medium tracking-wider text-center text-gray-500 uppercase border border-gray-300"
               >
                 {header}
               </th>
@@ -162,7 +163,7 @@ const ScrollableTable = ({ headers, data, onRowClick, rightAlignedColumns = [] }
           {data.map((row, rowIndex) => (
             <tr
               key={rowIndex}
-              className="hover:bg-gray-100 cursor-pointer"
+              className="cursor-pointer hover:bg-gray-100"
               onClick={() => onRowClick(headers, row)}
             >
               {row.map((cell, cellIndex) => (
