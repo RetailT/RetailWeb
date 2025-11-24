@@ -20,8 +20,6 @@ function App() {
   const [alert, setAlert] = useState(null);
   const [disable, setDisable] = useState(false);
   const [headers, setHeaders] = useState([]);
-  const [repUserFilter, setRepUserFilter] = useState("");
-  const [invoiceFilter, setInvoiceFilter] = useState("");
   
   const [invoice, setInvoice] = useState([]);
   const [uniqueRepUsers, setUniqueRepUsers] = useState([]);
@@ -41,7 +39,6 @@ function App() {
   const [selectedToCompanyName, setSelectedToCompanyName] = useState(null);
   const [selectedVendorName, setSelectedVendorName] = useState(null);
   const [companies, setCompanies] = useState([]);
-  const [vendors, setVendors] = useState([]);
   const [selectedCount, setSelectedCount] = useState("");
   const [selectedVendor, setSelectedVendor] = useState("");
   const [enteredProduct, setEnteredProduct] = useState("");
@@ -53,7 +50,6 @@ function App() {
   const [state, setState] = useState(false);
   const [companyError, setCompanyError] = useState("");
   const [companyToError, setCompanyToError] = useState("");
-  const [vendorError, setVendorError] = useState("");
   const [newTableData, setTableData] = useState([]);
   const [typeError, setTypeError] = useState("");
   const [countError, setCountError] = useState("");
@@ -199,78 +195,6 @@ useEffect(() => {
   if (!authToken) {
     return <Navigate to="/login" replace />;
   }
-
-  // const handleTableDataSubmit = async () => {
-  //   try {
-  //     setDisable(true);
-
-  //     if (
-  //       (!invoiceFilter || invoiceFilter.trim() === "")
-  //     ) {
-  //       setAlert({
-  //         message: "Please select an invoice number",
-  //         type: "error",
-  //       });
-
-  //       setTimeout(() => {
-  //         setAlert(null);
-  //       }, 3000);
-  //       setDisable(false);
-        
-  //       return;
-  //     } 
-
-  //     let response;
-
-  //     response = await axios.get(
-  //       `${process.env.REACT_APP_BACKEND_URL}stock-update`,
-  //       {
-  //         headers: {
-  //           Authorization: `Bearer ${token}`,
-  //         },
-  //         params: {
-  //           code: selectedCompany,   // <-- FIXED
-  //         },
-  //       }
-  //     );
-
-  //     if (response.data.message === "Data moved successfully") {
-  //     //  setDisable(true);
-  //     setAlert({
-  //         message: "Uploaded Successfully",
-  //         type: "success",
-  //       });
-  //       // Dismiss alert after 3 seconds
-  //       setTimeout(() => setAlert(null), 3000);
-        
-  //       setInvoiceFilter("");
-  //       requestData();
-
-  //     } else {
-  //       // setInitialData(false);
-  //       // setDisable(false);
-  //       setAlert({
-  //         message: response.data.message || "Cannot move data",
-  //         type: "error",
-  //       });
-  //       // Dismiss alert after 3 seconds
-  //       setTimeout(() => setAlert(null), 3000);
-        
-  //     }
-  //     setDisable(false);
-  //   } catch (err) {
-      
-  //     // Handle any errors that occur
-  //     setAlert({
-  //       message: err.response?.data?.message || "Data deletion failed",
-  //       type: "error",
-  //     });
-
-  //     // Dismiss alert after 3 seconds
-  //     setTimeout(() => setAlert(null), 3000);
-  //   }
-  //   setDisable(false);
-  // };
   
   const fetchStockData = async () => {
     try {
@@ -501,8 +425,6 @@ useEffect(() => {
   }
 };
 
-  ///////////////////////////////
-
   let costPrice = (salesData.COSTPRICE || 0).toFixed(2);
   let salesPrice = (salesData.SCALEPRICE || 0).toFixed(2);
 
@@ -665,7 +587,7 @@ useEffect(() => {
         setState(false);
       }
       else{
-       setState(true); 
+        setState(true); 
       }
       
 
@@ -717,21 +639,6 @@ useEffect(() => {
       requestData(result.text, "");
     }
   };
-  
-
-  // let valid = true;
-  // const handleSubmit = async (e) => {
-  //   e.preventDefault();
-  //   setCodeError("");
-
-  //   if (!code && !inputValue) {
-  //     setCodeError("Code or name is required.");
-  //     valid = false;
-  //   }
-  //   if (valid) {
-  //     requestData(code, inputValue);
-  //   }
-  // };
 
   const requestProductNames = async () => {
     try {
@@ -1233,9 +1140,6 @@ const handleSaveInvoice = async () => {
   }
 };
 
-// Update the Save button (replace the existing one at line ~1476)
-
-  ///////////////////////////////
   
   return (
     <div>
@@ -1622,36 +1526,16 @@ const handleSaveInvoice = async () => {
                                       <span className="text-sm text-gray-700">
                                         {discountAmount.toFixed(2)}
                                       </span>
-                                    </div>
-                                    
+                                    </div>            
 
                                     {/* Display Calculations */}
                                     <div className="pt-2 mt-2 border-t">
-                                      {/* <div className="flex justify-between text-sm text-gray-700">
-                                        <span><strong>Unit Price:</strong></span>
-                                        <span>{salesPrice}</span>
-                                      </div>
-                                      <div className="flex justify-between mt-1 text-sm text-gray-700">
-                                        <span><strong>Quantity:</strong></span>
-                                        <span>{quantity}</span>
-                                      </div>
-                                      <div className="flex justify-between mt-1 text-sm text-gray-700">
-                                        <span><strong>Subtotal:</strong></span>
-                                        <span>{(parseFloat(salesPrice) * parseFloat(quantity)).toFixed(2)}</span>
-                                      </div>
-                                      <div className="flex justify-between mt-1 text-sm text-gray-700">
-                                        <span><strong>Discount ({discount}%):</strong></span>
-                                        <span>
-                                          {(parseFloat(salesPrice) * parseFloat(quantity) * (parseFloat(discount) / 100)).toFixed(2)}
-                                        </span>
-                                      </div> */}
                                       <div className="flex items-center gap-2 pt-2 mt-2 text-base">
                                         <span className="font-medium text-[#bc4a17]">Total:</span>
                                         <span className="text-black">
                                           {calculateTotal()}
                                         </span>
                                       </div>
-
                                     </div>
 
                                   {/* Display error message under the input field */}
@@ -1672,14 +1556,18 @@ const handleSaveInvoice = async () => {
                                     Enter
                                   </button>
                                 </div>
-                                </div>
-                              
-                                {/* )}*/}
-                                
+                                </div>                               
                               </form>
                             </div>
                           </div>
                         </div>
+                        {alert && (
+                          <Alert
+                            message={alert.message}
+                            type={alert.type}
+                            onClose={() => setAlert(null)}
+                          />
+                        )}
                         
                         {/* Display invoice data table */}
                         {invoiceTableData && invoiceTableData.length > 0 ? (
@@ -1705,106 +1593,50 @@ const handleSaveInvoice = async () => {
                             </div>
                           </div>
 
-    <div className="overflow-hidden bg-white border border-gray-300 rounded-lg shadow-md">
-      <Table
-        headers={[
-          "Company Code",
-          "Company Name", 
-          "Product Code",
-          "Product Name",
-          "Cost Price",
-          "Unit Price", 
-          "Stock",
-          "Quantity",
-          "Discount",
-          "Discount Amount",
-          "Total"
-        ]}
-        data={(invoiceTableData || []).map((item) => [
-          item.COMPANY_CODE || '',
-          item.COMPANY_NAME || '',
-          item.PRODUCT_CODE || '',
-          item.PRODUCT_NAME || '',
-          parseFloat(item.COSTPRICE || 0).toFixed(2),
-          parseFloat(item.UNITPRICE || 0).toFixed(2),
-          parseFloat(item.STOCK || 0).toFixed(3),
-          item.QUANTITY || 0,
-          // Format discount display - add % if it's a percentage value
-          formatDiscountDisplay(item.DISCOUNT),
-          parseFloat(item.DISCOUNT_AMOUNT || 0).toFixed(2),
-          parseFloat(item.TOTAL || 0).toFixed(2)
-        ])}
-        editableColumns={[]}
-        formatColumns={[4, 5, 6, 9, 10]} // Columns to format as numbers
-        rightAlignedColumns={[4, 5, 6, 7, 9, 10]} // Columns to right-align
-        onDeleteRow={undefined}
-        bin={true}
-      />
-
-      {/* Grand Total */}
-      {/* <div className="flex justify-end px-4 py-3 border-t bg-gray-50">
-        <div className="text-lg font-semibold text-[#f17e21]">
-          Grand Total: Rs. {(invoiceTableData || []).reduce((sum, item) => 
-            sum + parseFloat(item.TOTAL || 0), 0).toFixed(2)}
-        </div>
-      </div> */}
-    </div>
-  </div>
-) : (
-  <div className="w-full max-w-full mt-6">
-    {/* <div className="text-lg font-semibold mb-3 text-[#f17e21]">
-      Invoice Items
-    </div>
-    <div className="p-4 text-center text-gray-500 bg-white border border-gray-300 rounded-lg">
-      No items added to invoice yet
-    </div> */}
-  </div>
-)}                                            
-                        
-                        {alert && (
-                          <Alert
-                            message={alert.message}
-                            type={alert.type}
-                            onClose={() => setAlert(null)}
-                          />
-                        )}
+                          <div className="overflow-hidden bg-white border border-gray-300 rounded-lg shadow-md">
+                            <Table
+                              headers={[
+                                "Company Code",
+                                "Company Name", 
+                                "Product Code",
+                                "Product Name",
+                                "Cost Price",
+                                "Unit Price", 
+                                "Stock",
+                                "Quantity",
+                                "Discount",
+                                "Discount Amount",
+                                "Total"
+                              ]}
+                              data={(invoiceTableData || []).map((item) => [
+                                item.COMPANY_CODE || '',
+                                item.COMPANY_NAME || '',
+                                item.PRODUCT_CODE || '',
+                                item.PRODUCT_NAME || '',
+                                parseFloat(item.COSTPRICE || 0).toFixed(2),
+                                parseFloat(item.UNITPRICE || 0).toFixed(2),
+                                parseFloat(item.STOCK || 0).toFixed(3),
+                                item.QUANTITY || 0,
+                                // Format discount display - add % if it's a percentage value
+                                formatDiscountDisplay(item.DISCOUNT),
+                                parseFloat(item.DISCOUNT_AMOUNT || 0).toFixed(2),
+                                parseFloat(item.TOTAL || 0).toFixed(2)
+                              ])}
+                              editableColumns={[]}
+                              formatColumns={[4, 5, 6, 9, 10]} // Columns to format as numbers
+                              rightAlignedColumns={[4, 5, 6, 7, 9, 10]} // Columns to right-align
+                              onDeleteRow={undefined}
+                              bin={true}
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="w-full max-w-full mt-6">
+                        </div>
+                      )}                                                
                       </div>
                     </div>
-                  </div>
-
-                {/* Table */}
-                {/* <div className="flex flex-col w-full max-w-full">
-                    <div className="w-full mt-2 mb-2 text-xl font-bold text-center sm:text-2xl sm:mt-4 sm:mb-4">
-                    {selectedType}
-                    </div>
-
-        <div className="w-full max-w-full lg:max-w-[100%] mx-auto px-4 sm:px-6 md:px-8">
-            <div className="mb-5 overflow-hidden bg-white border border-gray-300 rounded-lg shadow-md">
-                        <Table
-                        headers={headers}
-                        data={filteredTableData.map((item) => item.rowData)}
-                        editableColumns={editableColumns}
-                        onDeleteRow={handleDeleteRow}
-                        formatColumns={
-                            selectedType === "GRN" || selectedType === "PRN"
-                            ? [6, 7]
-                            : [4, 5]
-                        }
-                        formatColumnsQuantity={
-                            selectedType === "GRN" || selectedType === "PRN"
-                            ? [8, 9]
-                            : [6, 7]
-                        }
-                        rightAlignedColumns={
-                            selectedType === "GRN" || selectedType === "PRN"
-                            ? [6,7,8, 9]
-                            : [4,5,6, 7]
-                        }
-                        />
-                    </div>
-                    </div>
-                    </div> */}
-                
+                  </div>    
                 </div>
             )}
             </div>
