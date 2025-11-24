@@ -32,6 +32,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
   let d_invoice = "";
   let d_productView = "";
   let t_scan = "";
+  let t_invoice = "";
   let t_stock_update = "";
   let c_st_product_wise = "";
   let c_st_department = "";
@@ -64,6 +65,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
     d_productView = decodedToken.d_productView;
     d_productView = decodedToken.d_productView;
     t_scan = decodedToken.t_scan;
+    t_invoice = decodedToken.t_invoice;
     t_stock_update = decodedToken.t_stock_update;
     c_st_product_wise = decodedToken.c_st_product_wise;
     c_st_department = decodedToken.c_st_department;
@@ -138,7 +140,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
       style={{ zIndex: 40 }}
     >
       <div className="flex flex-col w-full h-full">
-        <ul className="mt-14 flex-1 overflow-y-auto">
+        <ul className="flex-1 overflow-y-auto mt-14">
           {/* dashboard */}
           {((d_company && d_company.toLowerCase() === "t") ||
             (d_department && d_department.toLowerCase() === "t") ||
@@ -155,7 +157,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
               aria-haspopup="true"
               aria-expanded={dashboardOpen}
             >
-              <MdSpaceDashboard size={20} className="mr-2 ml-2 mb-4 mt-3" />
+              <MdSpaceDashboard size={20} className="mt-3 mb-4 ml-2 mr-2" />
               <span className={`${isOpen ? "block" : "hidden"} ml-4`}>
                 Dashboard
               </span>
@@ -172,7 +174,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
           )}
 
           {/* submenu of dashboard */}
-          <ul className="ml-8 pl-8">
+          <ul className="pl-8 ml-8">
             {d_company?.toLowerCase() === "t" && dashboardOpen && isOpen && (
               <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
                 <NavLink to="/company-dashboard" onClick={establishConnection} className="w-full">
@@ -259,7 +261,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
               aria-haspopup="true"
               aria-expanded={stockWiseReportOpen}
             >
-              <FaCartFlatbed size={20} className="mr-2 ml-2 mb-4 mt-3" />
+              <FaCartFlatbed size={20} className="mt-3 mb-4 ml-2 mr-2" />
               <span className={`${isOpen ? "block" : "hidden"} ml-4`}>
                 Stock Wise Report
               </span>
@@ -276,7 +278,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
           )}
 
           {/* submenu of stock wise report */}
-          <ul className="ml-8 pl-8">
+          <ul className="pl-8 ml-8">
             {s_product?.toLowerCase() === "t" && stockWiseReportOpen && isOpen && (
               <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
                 <NavLink to="/stock-wise-product" onClick={establishConnection} className="w-full">
@@ -338,7 +340,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
                 aria-haspopup="true"
                 aria-expanded={colorWiseOpen}
               >
-                <IoMdColorPalette size={20} className="mr-2 ml-2 mb-4 mt-3" />
+                <IoMdColorPalette size={20} className="mt-3 mb-4 ml-2 mr-2" />
                 <span className={`${isOpen ? "block" : "hidden"} ml-4`}>
                   Color Size
                 </span>
@@ -355,7 +357,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
 
               {/* Submenu - Stock and Sales */}
               {colorWiseOpen && isOpen && (
-                <ul className="ml-8 pl-4">
+                <ul className="pl-4 ml-8">
                   {/* Stock Toggle */}
                   {(c_st_product_wise?.toLowerCase() === "t" ||
                     c_st_department?.toLowerCase() === "t" ||
@@ -380,7 +382,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
 
                   {/* Stock Submenu */}
                   {colorWiseStockOpen && (
-                    <ul className="ml-4 pl-4">
+                    <ul className="pl-4 ml-4">
                       {c_st_product_wise?.toLowerCase() === "t" && (
                         <li className="flex items-center p-2 mt-2 hover:bg-[#000000]">
                           <NavLink to="/color-size-stock-product" onClick={establishConnection} className="w-full">
@@ -449,7 +451,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
 
                   {/* Sales Submenu */}
                   {colorWiseSalesOpen && (
-                    <ul className="ml-4 pl-4">
+                    <ul className="pl-4 ml-4">
                       {c_sa_product_wise?.toLowerCase() === "t" && (
                         <li className="flex items-center p-2 mt-2 hover:bg-[#000000]">
                           <NavLink to="/color-size-sales-product" onClick={establishConnection} className="w-full">
@@ -499,15 +501,18 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
           )}
 
           {/* stock */}
-          {((t_scan && t_scan.toLowerCase() === "t") ||
-            (t_stock_update && t_stock_update.toLowerCase() === "t")) && (
+          {(
+            (t_scan?.toLowerCase() === "t") ||
+            (t_stock_update?.toLowerCase() === "t") ||
+            (t_invoice?.toLowerCase() === "t")
+          ) && (
             <li
               className="flex items-center p-2 hover:bg-[#000000] cursor-pointer"
               onClick={toggleReport}
               aria-haspopup="true"
               aria-expanded={transactionOpen}
             >
-              <MdCalculate size={20} className="mr-2 ml-2 mb-4 mt-3" />
+              <MdCalculate size={20} className="mt-3 mb-4 ml-2 mr-2" />
               <span className={`${isOpen ? "block" : "hidden"} ml-4`}>
                 Transaction
               </span>
@@ -524,26 +529,33 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
           )}
 
           {/* submenu of stock */}
+          {transactionOpen && isOpen && (
+            <ul className="pl-8 ml-8">
+              {t_scan?.toLowerCase() === "t" && (
+                <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
+                  <NavLink to="/scan" onClick={establishConnection} className="w-full">
+                    Quick Scan
+                  </NavLink>
+                </li>
+              )}
 
-          <ul className="ml-8 pl-8">
-            {t_scan?.toLowerCase() === "t" && transactionOpen && isOpen && (
-              <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
-                <NavLink to="/scan" onClick={establishConnection} className="w-full">
-                  Quick Scan
-                </NavLink>
-              </li>
-            )}
-
-            {t_stock_update?.toLowerCase() === "t" &&
-              transactionOpen &&
-              isOpen && (
+              {t_stock_update?.toLowerCase() === "t" && (
                 <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
                   <NavLink to="/stock-update" onClick={establishConnection} className="w-full">
                     Scan Data
                   </NavLink>
                 </li>
               )}
-          </ul>
+
+              {t_invoice?.toLowerCase() === "t" && (
+                <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
+                  <NavLink to="/invoice" onClick={establishConnection} className="w-full">
+                    Invoice
+                  </NavLink>
+                </li>
+              )}
+            </ul>
+          )}
 
           {/* admin */}
           {((a_permission && a_permission.toLowerCase() === "t") ||
@@ -554,7 +566,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
               aria-haspopup="true"
               aria-expanded={adminOpen}
             >
-              <MdManageAccounts size={20} className="mr-2 ml-2 mb-4 mt-3" />
+              <MdManageAccounts size={20} className="mt-3 mb-4 ml-2 mr-2" />
               <span className={`${isOpen ? "block" : "hidden"} ml-4`}>
                 Administration
               </span>
@@ -572,7 +584,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
 
           {/* submenu of admin */}
 
-          <ul className="ml-8 pl-8">
+          <ul className="pl-8 ml-8">
             {a_permission?.toLowerCase() === "t" && adminOpen && isOpen && (
               <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
                 <NavLink to="/reset" onClick={establishConnection} className="w-full">
