@@ -79,9 +79,9 @@ app.post('/register', authController.register);
 app.post('/reset-password', authController.resetPassword);
 app.post('/forgot-password', authController.forgotPassword);
 
-app.post('/update-temp-sales-table', authController.updateTempSalesTable);
-app.post('/update-temp-grn-table', authController.updateTempGrnTable);
-app.post('/update-temp-tog-table', authController.updateTempTogTable);
+app.post('/update-temp-sales-table', authenticateToken, authController.updateTempSalesTable);
+app.post('/update-temp-grn-table', authenticateToken, authController.updateTempGrnTable);
+app.post('/update-temp-tog-table', authenticateToken, authController.updateTempTogTable);
 app.post('/insert-invoice-temp', authenticateToken, authController.insertInvoiceTemp);
 app.post('/save-invoice', authenticateToken, authController.saveInvoice);
 
@@ -91,7 +91,7 @@ app.delete('/grnprn-delete', authenticateToken, authController.grnprnDelete);
 app.put('/reset-database-connection', authenticateToken, authController.resetDatabaseConnection);
 
 
-// // // for local development -- comment out in production
+// // for local development -- comment out in production
 // if (process.env.NODE_ENV !== "production") {
 //   app.listen(5000, () => {
 //     console.log(`Server is running on http://localhost:5000/`);
