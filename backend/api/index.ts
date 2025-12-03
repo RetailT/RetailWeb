@@ -72,6 +72,7 @@ app.get('/product-view-sales', authenticateToken, authController.productViewSale
 app.get('/find-user-connection', authenticateToken, authController.findUserConnection);
 app.get('/connection-details', authenticateToken, authController.serverConnection);
 app.get('/invoice-temp-data', authenticateToken, authController.getInvoiceTempData);
+app.get('/get-product-code-from-name', authenticateToken, authController.getProductCodeFromName);
 
 app.post("/login", authController.login);
 app.post('/close-connection', authController.closeConnection);
@@ -87,6 +88,7 @@ app.post('/save-invoice', authenticateToken, authController.saveInvoice);
 
 app.delete('/stock-update-delete', authenticateToken, authController.stockUpdateDelete);
 app.delete('/grnprn-delete', authenticateToken, authController.grnprnDelete);
+app.delete('/delete-invoice-temp-item', authenticateToken, authController.deleteInvoiceTempItem);
 
 app.put('/reset-database-connection', authenticateToken, authController.resetDatabaseConnection);
 

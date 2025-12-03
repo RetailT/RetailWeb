@@ -85,7 +85,6 @@ function App() {
   const tog = decodedToken.t_tog;
   const stock_scan = decodedToken.t_stock;
   const stock_update = decodedToken.t_stock_update;
-  
 
   useEffect(() => {
     if (headers.length > 0 && data.length > 0) {
@@ -347,7 +346,7 @@ useEffect(() => {
       console.error("Error fetching customers:", err);
     }
   };
-
+  
 
   const handleCompanyChange = (event) => {
   const selectedCode = event.target.value;
@@ -361,8 +360,7 @@ useEffect(() => {
   if (selectedCompanyObj) {
     setSelectedCompanyName(selectedCompanyObj.name);
   }
-};
-
+  };
   
   const handleCustomerChange = (event) => {
     const selectedCustomer = event.target.value;
@@ -378,6 +376,26 @@ useEffect(() => {
       setSelectedCustomerName(selectedCustomerName.name);
     }
   };
+
+  // Handle Enter key press for company dropdown
+  const handleCompanyKeyPress = (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      // Move focus to customer dropdown
+      const customerSelect = document.getElementById('customer-select');
+      if (customerSelect) {
+        customerSelect.focus();
+      }
+    }
+  };
+
+  const handleEnterSubmit = (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    handleSubmit(event);
+  }
+};
+
 
   const handleSubmit = async (e) => {
   e.preventDefault();
@@ -428,66 +446,6 @@ useEffect(() => {
   let costPrice = (salesData.COSTPRICE || 0).toFixed(2);
   let salesPrice = (salesData.SCALEPRICE || 0).toFixed(2);
 
-  // const fetchCompanies = async () => {
-  //   try {
-  //     const response = await axios.get(
-  //       `${process.env.REACT_APP_BACKEND_URL}companies`,
-  //       {
-  //         headers: {
-  //           Authorization: `Bearer ${token}`,
-  //         },
-  //       }
-  //     );
-  //     if (response.data.userData && response.data.userData.length > 0) {
-  //       // Map through all userData and get all options
-  //       const companies = response.data.userData.map((data) => ({
-  //         code: data.COMPANY_CODE.trim(),
-  //         name: data.COMPANY_NAME.trim(),
-  //       }));
-  //       setCompanies(companies);
-  //     }
-  //     else{
-  //       setDisable(false);
-  //       setAlert({ message: response.data.message || "Error Occured", type: "error" });
-  //     setTimeout(() => setAlert(null), 3000);
-  //     }
-  //   } catch (err) {
-  //     setError("Failed to fetch dashboard data");
-
-  //     console.error("Error fetching dashboard data:", err);
-  //   }
-  // };
-
-  // const fetchVendors = async () => {
-  //   try {
-  //     const response = await axios.get(
-  //       `${process.env.REACT_APP_BACKEND_URL}vendors`,
-  //       {
-  //         headers: {
-  //           Authorization: `Bearer ${token}`,
-  //         },
-  //       }
-  //     );
-  //     if (response.data.vendorData && response.data.vendorData.length > 0) {
-  //       // Map through all userData and get all options
-  //       const vendors = response.data.vendorData.map((data) => ({
-  //         code: data.VENDORCODE.trim(),
-  //         name: data.VENDORNAME.trim(),
-  //       }));
-  //       setVendors(vendors);
-  //     }
-  //     else{
-  //       setDisable(false);
-  //       setAlert({ message: response.data.message || "Error Occured", type: "error" });
-  //     setTimeout(() => setAlert(null), 3000);
-  //     }
-  //   } catch (err) {
-  //     setError("Failed to fetch dashboard data");
-
-  //     console.error("Error fetching dashboard data:", err);
-  //   }
-  // };
-
   const getCameraStream = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -518,6 +476,7 @@ useEffect(() => {
 
   const requestData = async (data, name) => {
     setDisable(true);
+  
     try {
       const response = await axios.get(
         `${process.env.REACT_APP_BACKEND_URL}scan`,
@@ -842,16 +801,6 @@ useEffect(() => {
     setColorWiseTableData(updatedData);
   };
 
-  const handleSearchClick = () => {
-    setCodeError("");
-    
-    if (!code && !inputValue) {
-      setCodeError("Code or name is required.");
-      return;
-    }
-    
-    requestData(code, inputValue);
-  };
 
   // Add this function to your component
   const formatDiscountDisplay = (discountValue) => {
@@ -1016,8 +965,8 @@ useEffect(() => {
           discount: discount,
           discountAmount: discountAmount,
           total: calculateTotal(),
-          customer: selectedCustomer, // ADD THIS
-          customerName: selectedCustomerName // ADD THIS
+          customer: selectedCustomer,
+          customerName: selectedCustomerName 
         },
         {
           headers: {
@@ -1068,7 +1017,6 @@ useEffect(() => {
   }
   setDisable(false);
 };
-
 
 // Add this function before the return statement
 const handleSaveInvoice = async () => {
@@ -1140,6 +1088,222 @@ const handleSaveInvoice = async () => {
   }
 };
 
+const handleDeleteRow = async (index) => {
+  if (!invoiceTableData[index] || !invoiceTableData[index].IDX) {
+    console.error("No IDX found for row:", index);
+    setAlert({
+      message: "Cannot delete item - no ID found",
+      type: "error"
+    });
+    setTimeout(() => setAlert(null), 3000);
+    return;
+  }
+
+  const itemId = invoiceTableData[index].IDX;
+  
+  try {
+    setDisable(true);
+    
+    const response = await axios.delete(
+      `${process.env.REACT_APP_BACKEND_URL}delete-invoice-temp-item`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        data: {
+          id: itemId
+        }
+      }
+    );
+
+    if (response.data.success) {
+      // Remove from local state
+      const updated = [...invoiceTableData];
+      updated.splice(index, 1);
+      setInvoiceTableData(updated);
+      
+      setAlert({
+        message: "Item deleted successfully",
+        type: "success"
+      });
+      setTimeout(() => setAlert(null), 3000);
+    }
+    
+    setDisable(false);
+  } catch (err) {
+    console.error("Error deleting item:", err);
+    setAlert({
+      message: err.response?.data?.message || "Failed to delete item",
+      type: "error"
+    });
+    setTimeout(() => setAlert(null), 3000);
+    setDisable(false);
+  }
+};
+
+// handleProductNameChange function
+const handleProductNameChange = (e) => {
+  const value = e.target.value;
+  setInputValue(value);
+  setScannedCode(""); // Clear scanned code when typing
+
+  if (value.length > 0) {
+    // Filter products that START with the entered text
+    const filtered = names.filter((name) =>
+      name.toLowerCase().startsWith(value.toLowerCase())
+    );
+    setFilteredSuggestions(filtered);
+    setShowSuggestions(true);
+  } else {
+    setFilteredSuggestions([]);
+    setShowSuggestions(false);
+  }
+};
+
+// Update the handleProductSelect function to auto-fill the code input:
+const handleProductSelect = async (productName) => {
+  setInputValue(productName);
+  setShowSuggestions(false);
+  setQuantity('');   // clear quantity
+  setDiscount('');   // clear discount
+  
+  try {
+    setDisable(true);
+    
+    // First, get product code from the selected product name
+    const response = await axios.get(
+      `${process.env.REACT_APP_BACKEND_URL}get-product-code-from-name`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+        params: {
+          name: productName,
+          company: selectedCompany
+        }
+      }
+    );
+    
+    if (response.data.success && response.data.productCode) {
+      // Set the code in the code input field
+      setCode(response.data.productCode);
+      setScannedCode(response.data.productCode);
+      
+      // Fetch product details using the code
+      await requestData(response.data.productCode, productName);
+    } else {
+      // If no code found, search by name only
+      await requestData("", productName);
+    }
+  } catch (err) {
+    console.error("Error getting product code:", err);
+    // Fallback: search by name only
+    await requestData("", productName);
+  } finally {
+    setDisable(false);
+  }
+};
+
+// Update the handleSearchClick function:
+const handleSearchClick = async () => {
+  setCodeError("");
+  
+  // If there's a code, use it
+  if (code) {
+    await requestData(code, inputValue);
+  } 
+  // If no code but has product name, use name
+  else if (inputValue) {
+    // First try to get product code from name
+    try {
+      setDisable(true);
+      const response = await axios.get(
+        `${process.env.REACT_APP_BACKEND_URL}get-product-code-from-name`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          params: {
+            name: inputValue,
+            company: selectedCompany
+          }
+        }
+      );
+      
+      if (response.data.success && response.data.productCode) {
+        setCode(response.data.productCode);
+        setScannedCode(response.data.productCode);
+        await requestData(response.data.productCode, inputValue);
+      } else {
+        await requestData("", inputValue);
+      }
+    } catch (err) {
+      await requestData("", inputValue);
+    } finally {
+      setDisable(false);
+    }
+  }
+  // Otherwise show error
+  else {
+    setCodeError("Code or product name is required.");
+    return;
+  }
+};
+  // Enter key press handler for code input
+  const handleCodeKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault(); // Prevent form submission
+      
+      if (code) {
+        handleSearchClick(); // Call search function if code exists
+      } else if (!code && !inputValue) {
+        setCodeError("Code or product name is required.");
+      }
+    }
+  };
+
+  // Enter key press handler function
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault(); // Prevent form submission
+      
+      if (code || inputValue) {
+        handleSearchClick(); // Call your search function
+      } else {
+        // If both fields are empty, move focus to code input
+        if (codeRef.current) {
+          codeRef.current.focus();
+        }
+      }
+    }
+  };
+
+  // Enter key press handler for quantity input
+  const handleQuantityKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      
+      if (quantity && !isNaN(quantity) && parseFloat(quantity) > 0) {
+        if (discountRef.current) {
+          discountRef.current.focus();
+          discountRef.current.select();
+        }
+      }
+    }
+  };
+
+// Enter key press handler for discount input
+const handleDiscountKeyPress = (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    
+    if (quantity && salesData.PRODUCT_CODE) {
+      handleProductSubmit(e); // Submit the product form
+    } else {
+      if (quantityRef.current) {
+        quantityRef.current.focus();
+      }
+    }
+  }
+};
+
+
   
   return (
     <div>
@@ -1166,7 +1330,9 @@ const handleSaveInvoice = async () => {
 
             {/* Company & Customer Selector Section */}
             {!initialData && (
-              <div className="bg-[#d8d8d8] p-2 sm:p-4 rounded-md ml-0 md:ml-4 shadow-md mb-2 sm:mb-4 mt-10 w-full max-w-full">
+              <div className="bg-[#d8d8d8] p-2 sm:p-4 rounded-md ml-0 md:ml-4 shadow-md mb-2 sm:mb-4 mt-10 w-full max-w-full"
+              onKeyDown={handleEnterSubmit} // Add 'Enter' key handler
+              >
                 <div className="flex flex-col gap-2 mb-2 justify-left lg:flex-row lg:items-end sm:gap-4 sm:mb-4">
 
                   {/* Company Dropdown */}
@@ -1249,8 +1415,11 @@ const handleSaveInvoice = async () => {
                           <form
                             onSubmit={handleSubmit}
                             className="flex flex-col items-center w-full space-y-2 sm:flex-row sm:space-y-0 sm:space-x-2 lg:w-auto"
-                          >
-                            <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 w-full lg:w-[600px]">
+                          >                        
+
+                            {/* Product name input with suggestions */}
+                            <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 w-full lg:w-[600px] relative">
+                              {/* Product Code Input */}
                               <input
                                 type="text"
                                 id="code"
@@ -1259,44 +1428,53 @@ const handleSaveInvoice = async () => {
                                 onChange={(e) => {
                                   setCode(e.target.value);
                                   setScannedCode(e.target.value);
+                                  setQuantity('');   // clear quantity
+                                  setDiscount('');
                                 }}
+                                onKeyDown={handleCodeKeyPress} // Add 'Enter' key handler
                                 className="w-full px-2 py-2 text-sm text-gray-700 bg-gray-100 border border-gray-300 rounded-md sm:px-3 lg:w-1/2 focus:outline-none"
                                 placeholder="Enter Code"
                               />
-                              <input
-                                type="text"
-                                value={inputValue}
-                                onChange={(e) => {
-                                  handleChange(e);
-                                  setScannedCode("");
-                                }}
-                                onBlur={() =>
-                                  setTimeout(() => setShowSuggestions(false), 150)
-                                }
-                                onFocus={() => inputValue && setShowSuggestions(true)}
-                                placeholder="Enter Product Name"
-                                className="w-full px-2 py-2 text-sm text-gray-700 bg-gray-100 border border-gray-300 rounded-md sm:px-3 lg:w-1/2 focus:outline-none"
-                              />
-                              {showSuggestions && filteredSuggestions.length > 0 && (
-                                <ul className="absolute z-10 w-full lg:w-[calc(50%-0.5rem)] bg-white border border-gray-300 rounded-md mt-1 shadow-md max-h-40 sm:max-h-60 overflow-y-auto">
-                                  {filteredSuggestions.map((name, index) => (
-                                    <li
-                                      key={index}
-                                      onClick={() => handleSelect(name)}
-                                      className="p-1 text-sm cursor-pointer sm:p-2 hover:bg-gray-100"
-                                    >
-                                      {name}
-                                    </li>
-                                  ))}
-                                </ul>
-                              )}
+                              
+                              {/* Product Name Input with Autocomplete */}
+                              <div className="relative w-full lg:w-1/2">
+                                <input
+                                  type="text"
+                                  value={inputValue}
+                                  onChange={handleProductNameChange}
+                                  onKeyDown={handleKeyPress} // Add 'Enter' key handler
+                                  onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                                  onFocus={() => inputValue && filteredSuggestions.length > 0 && setShowSuggestions(true)}
+                                  placeholder="Enter Product Name"
+                                  className="w-full px-2 py-2 text-sm text-gray-700 bg-gray-100 border border-gray-300 rounded-md sm:px-3 lg:w-6/7 focus:outline-none"
+                                />
+                                
+                                {/* Suggestions Dropdown */}
+                                {showSuggestions && filteredSuggestions.length > 0 && (
+                                  <ul className="absolute z-50 w-full mt-1 overflow-y-auto bg-white border border-gray-300 rounded-md shadow-lg max-h-60 top-full">
+                                    {filteredSuggestions.map((name, index) => (
+                                      <li
+                                        key={index}
+                                        onMouseDown={(e) => {
+                                          e.preventDefault(); // Prevent input blur
+                                          handleProductSelect(name);
+                                        }}
+                                        className="p-2 text-sm transition-colors border-b cursor-pointer hover:bg-gray-100 last:border-b-0"
+                                      >
+                                        {name}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </div>
                             </div>
+
                             <button
                               type="button"
                               onClick={handleSearchClick}
                               disabled={disable}
-                              className={`bg-[#f17e21] hover:bg-[#efa05f] text-white px-3 sm:px-4 py-2 rounded-lg w-full sm:w-auto text-sm mt-2 sm:mt-0
-                            ${disable ? "opacity-50 cursor-not-allowed" : ""}`}
+                              className={`bg-[#f17e21] hover:bg-[#efa05f] text-white px-3 sm:px-4 py-2 rounded-lg w-full sm:w-auto text-sm mt-2 sm:mt-0 transition-colors
+                                ${disable ? "opacity-50 cursor-not-allowed" : ""}`}
                             >
                               Search
                             </button>
@@ -1354,6 +1532,7 @@ const handleSaveInvoice = async () => {
                           </div>
                         )}
                       
+                        {/* // Update the Product Details Card JSX (replace the existing card): */}
                         <div className="max-w-full p-2 mt-4 mb-2 bg-white border border-gray-300 rounded-md shadow-md sm:p-4 sm:mb-4 sm:mt-6 sm:w-full md:w-2/5">
                           <div className="text-sm sm:text-lg font-semibold mb-2 sm:mb-4 text-[#f17e21]">
                             Product Details
@@ -1426,24 +1605,24 @@ const handleSaveInvoice = async () => {
                             )}
 
                             <div className="pt-1 border-t sm:pt-2">
-                              <p className="font-medium text-[#bc4a17] mb-1 sm:mb-2 text-sm sm:text-base">
-                                Product Information
-                              </p>
-                              <p className="text-sm text-gray-700">
-                                <strong>Product Code:</strong>{" "}
-                                {salesData.PRODUCT_CODE}
-                              </p>
-                              <p className="text-sm text-gray-700">
-                                <strong>Product Name:</strong>{" "}
-                                {salesData.PRODUCT_NAMELONG}
-                              </p>
-                              <p className="text-sm text-gray-700">
-                                <strong>Cost Price:</strong> {costPrice}
-                              </p>
-                              <p className="text-sm text-gray-700">
-                                <strong>Unit Price: </strong> {salesPrice}
-                              </p>
-                            </div>
+                            <p className="font-medium text-[#bc4a17] mb-1 sm:mb-2 text-sm sm:text-base">
+                              Product Information
+                            </p>
+                            <p className="text-sm text-gray-700">
+                              <strong>Product Code:</strong>{" "}
+                              {salesData.PRODUCT_CODE}
+                            </p>
+                            <p className="text-sm text-gray-700">
+                              <strong>Product Name:</strong>{" "}
+                              {salesData.PRODUCT_NAMELONG}
+                            </p>
+                            <p className="text-sm text-gray-700">
+                            <strong>Cost Price:</strong> {costPrice}
+                            </p>
+                            <p className="text-sm text-gray-700">
+                              <strong>Unit Price: </strong> {salesPrice}
+                            </p>
+                          </div>
 
                             <div className="pt-1 border-t sm:pt-2">
                               <p className="font-medium text-[#bc4a17] mb-1 sm:mb-2 text-sm sm:text-base">
@@ -1473,19 +1652,19 @@ const handleSaveInvoice = async () => {
                                         ref={quantityRef}
                                         value={quantity}
                                         onChange={(e) => setQuantity(e.target.value)}
+                                        onKeyDown={handleQuantityKeyPress} // Add 'Enter' key handler
                                         className="w-full px-2 py-2 mt-1 text-sm text-gray-700 bg-gray-100 border border-gray-300 rounded-md sm:px-3 focus:outline-none"
                                         placeholder="Enter quantity"
                                         step="1"
                                         min="0"
                                       />
                                     </div>
-
                                     {/* Set Discount */}
                                     <div className="flex flex-col sm:flex-row sm:space-x-2">
                                       <p className="gap-2 text-sm text-gray-700">
                                         <strong>Discount: </strong>
                                       </p>
-                                      
+                                    
                                       <input
                                         type="text"
                                         id="discount"
@@ -1493,23 +1672,24 @@ const handleSaveInvoice = async () => {
                                         value={discount}
                                         onChange={(e) => {
                                           let val = e.target.value;
-                                          
+                                        
                                           // Allow digits, decimal point, and % symbol
                                           val = val.replace(/[^0-9.%]/g, "");
-                                          
+                                        
                                           // Only allow ONE % symbol at the end
                                           if ((val.match(/%/g) || []).length > 1) {
                                             val = val.replace(/%/g, "") + "%";
                                           }
-                                          
+                                        
                                           // Ensure % is only at the end
                                           if (val.includes("%") && !val.endsWith("%")) {
                                             const parts = val.split("%");
                                             val = parts[0] + "%";
                                           }
-                                          
+                                        
                                           setDiscount(val);
                                         }}
+                                        onKeyDown={handleDiscountKeyPress} // Add 'Enter' key handler
                                         className="w-full px-2 py-2 mt-1 text-sm text-gray-700 bg-gray-100 border border-gray-300 rounded-md sm:px-3 focus:outline-none"
                                         placeholder="Enter discount 5% or 100)"
                                         step="0.01"
@@ -1545,22 +1725,23 @@ const handleSaveInvoice = async () => {
                                     </p>
                                   )}
                                   
-                                <div className="flex items-center justify-center">
-                                  <button
-                                    onClick={handleProductSubmit}
-                                    disabled={disable}
-                                    className={`bg-[#f17e21] hover:bg-[#efa05f] text-white px-3 sm:px-4 py-2 rounded-lg mt-2 sm:mt-4 w-full sm:w-1/2 ${
-                                      disable ? "opacity-50 cursor-not-allowed" : ""
-                                    } text-sm`}
-                                  >
-                                    Enter
-                                  </button>
-                                </div>
+                                  <div className="flex items-center justify-center">
+                                    <button
+                                      onClick={handleProductSubmit}
+                                      disabled={disable}
+                                      className={`bg-[#f17e21] hover:bg-[#efa05f] text-white px-3 sm:px-4 py-2 rounded-lg mt-2 sm:mt-4 w-full sm:w-1/2 ${
+                                        disable ? "opacity-50 cursor-not-allowed" : ""
+                                      } text-sm`}
+                                    >
+                                      Enter
+                                    </button>
+                                  </div>
                                 </div>                               
                               </form>
                             </div>
                           </div>
                         </div>
+                        
                         {alert && (
                           <Alert
                             message={alert.message}
@@ -1625,8 +1806,8 @@ const handleSaveInvoice = async () => {
                               editableColumns={[]}
                               formatColumns={[4, 5, 6, 9, 10]} // Columns to format as numbers
                               rightAlignedColumns={[4, 5, 6, 7, 9, 10]} // Columns to right-align
-                              onDeleteRow={undefined}
-                              bin={true}
+                              onDeleteRow={handleDeleteRow}
+                              //bin={true}
                             />
                           </div>
                         </div>

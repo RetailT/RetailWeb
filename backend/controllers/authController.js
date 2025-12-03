@@ -7082,6 +7082,165 @@ exports.saveInvoice = async (req, res) => {
   }
 };
 
+// Get product code from product name
+exports.getProductCodeFromName = async (req, res) => {
+  console.log("=== GET PRODUCT CODE FROM NAME START ===");
+  console.log("Request Query:", req.query);
+  
+  try {
+    const { name, company } = req.query;
+    const user_ip = String(req.user.ip).trim();
+    
+    console.log("Product Name:", name);
+    console.log("Company Code:", company);
+    console.log("User IP:", user_ip);
+    
+    if (mssql.connected) {
+      await mssql.close();
+    }
+    
+    const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+    
+    if (!pool || !pool.connected) {
+      console.error("❌ Database connection failed");
+      return res.status(500).json({ message: "Database connection failed" });
+    }
+
+    console.log("✅ Database connected");
+
+    // Query to get product code from product name
+    const result = await pool.request()
+      .input('name', mssql.NVarChar(100), name)
+      .input('company', mssql.NChar(10), company)
+      .query(`
+        SELECT TOP 1 PRODUCT_CODE 
+        FROM tb_PRODUCT 
+        WHERE PRODUCT_NAMELONG = @name
+        AND COMPANY_CODE = @company
+      `);
+
+    console.log("Query executed, recordset length:", result.recordset.length);
+
+    if (result.recordset.length > 0) {
+      const productCode = result.recordset[0].PRODUCT_CODE;
+      console.log("✅ Product code found:", productCode);
+      console.log("Full result:", result.recordset[0]);
+      console.log("=== GET PRODUCT CODE FROM NAME END ===\n");
+      
+      return res.status(200).json({ 
+        success: true,
+        productCode: productCode
+      });
+    } else {
+      console.log("⚠️ Product not found");
+      console.log("=== GET PRODUCT CODE FROM NAME END ===\n");
+      
+      return res.status(404).json({ 
+        success: false,
+        message: "Product not found" 
+      });
+    }
+    
+  } catch (error) {
+    console.error("❌ Error fetching product code:", error);
+    console.error("Error details:", error.message);
+    console.log("=== GET PRODUCT CODE FROM NAME END ===\n");
+    
+    return res.status(500).json({ 
+      success: false,
+      message: "Failed to fetch product code",
+      error: error.message 
+    });
+  }
+};
+
+// DELETE - Delete invoice temp item
+exports.deleteInvoiceTempItem = async (req, res) => {
+  console.log("=== DELETE INVOICE TEMP ITEM START ===");
+  console.log("Request body:", req.body);
+  
+  try {
+    const { id } = req.body; // IDX of the row to delete
+    
+    if (!id) {
+      console.log("Missing ID parameter");
+      return res.status(400).json({ 
+        message: "Item ID is required" 
+      });
+    }
+
+    const user_ip = String(req.user.ip).trim();
+
+    if (mssql.connected) {
+      await mssql.close();
+    }
+    
+    const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+    
+    if (!pool || !pool.connected) {
+      console.error("Database connection failed");
+      return res.status(500).json({ message: "Database connection failed" });
+    }
+
+    console.log("Database connected successfully");
+
+    // Check if rtweb database exists
+    try {
+      const dbCheck = await pool.request().query(`
+        SELECT name FROM sys.databases WHERE name = 'rtweb'
+      `);
+      
+      if (dbCheck.recordset.length === 0) {
+        console.log("rtweb database not found");
+        return res.status(404).json({ 
+          message: "rtweb database not found" 
+        });
+      }
+    } catch (dbError) {
+      console.error("Database check error:", dbError.message);
+      return res.status(500).json({ 
+        message: "Database setup failed",
+        error: dbError.message 
+      });
+    }
+
+    // Delete the item
+    const deleteResult = await pool.request()
+      .input('id', mssql.Int, id)
+      .query(`
+        USE rtweb;
+        DELETE FROM tb_InvoiceTemp
+        WHERE IDX = @id
+      `);
+
+    console.log(`Rows deleted: ${deleteResult.rowsAffected[0]}`);
+
+    if (deleteResult.rowsAffected[0] === 0) {
+      console.log("No rows deleted - item not found");
+      return res.status(404).json({ 
+        message: "Item not found" 
+      });
+    }
+
+    console.log("=== DELETE INVOICE TEMP ITEM SUCCESS ===");
+    return res.status(200).json({ 
+      success: true,
+      message: "Item deleted successfully"
+    });
+    
+  } catch (error) {
+    console.error("=== DELETE INVOICE TEMP ITEM ERROR ===");
+    console.error("Error message:", error.message);
+    console.error("Error stack:", error.stack);
+    
+    return res.status(500).json({ 
+      success: false,
+      message: "Failed to delete item",
+      error: error.message
+    });
+  }
+};
+
 // GRN/PRN/TOG table for scan page
 exports.grnprnTableData = async (req, res) => {
   const { name, code, selectedType } = req.query;
