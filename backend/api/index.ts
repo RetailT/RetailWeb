@@ -80,9 +80,9 @@ app.post('/register', authController.register);
 app.post('/reset-password', authController.resetPassword);
 app.post('/forgot-password', authController.forgotPassword);
 
-app.post('/update-temp-sales-table', authController.updateTempSalesTable);
-app.post('/update-temp-grn-table', authController.updateTempGrnTable);
-app.post('/update-temp-tog-table', authController.updateTempTogTable);
+app.post('/update-temp-sales-table', authenticateToken, authController.updateTempSalesTable);
+app.post('/update-temp-grn-table', authenticateToken, authController.updateTempGrnTable);
+app.post('/update-temp-tog-table', authenticateToken, authController.updateTempTogTable);
 app.post('/insert-invoice-temp', authenticateToken, authController.insertInvoiceTemp);
 app.post('/save-invoice', authenticateToken, authController.saveInvoice);
 

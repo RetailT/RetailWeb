@@ -459,70 +459,76 @@ function App() {
 
       {/* Company Selector Section */}
       {!initialData && (
-        <div className="bg-[#d8d8d8] p-2 sm:p-4 rounded-md ml-0 md:ml-4 shadow-md mb-2 sm:mb-4 mt-10 w-full max-w-full">
-          <div className="flex flex-col lg:flex-row lg:items-end justify-center gap-2 sm:gap-4 mb-2 sm:mb-4">
-            {/* Company Dropdown */}
-            <div className="flex flex-col gap-1 w-full lg:w-1/3 mb-2 sm:mb-0">
-              <label className="text-sm font-medium text-gray-700">
-                Select a Company
-              </label>
-              <select
-                value={selectedCompany}
-                onChange={handleCompanyChange}
-                className="border border-gray-300 p-1 sm:p-2 rounded-md shadow-sm bg-white w-full text-sm"
-              >
-                <option value="" disabled>
-                  Select a Company
-                </option>
-                {companies.map((company) => (
-                  <option key={company.code} value={company.code}>
-                    {company.code} {company.name}
-                  </option>
-                ))}
-              </select>
-              {companyError && (
-                <p className="text-red-500 text-sm mt-1 mb-2">{companyError}</p>
-              )}
-            </div>
+        <div className="bg-[#d8d8d8] p-4 sm:p-6 rounded-md ml-0 md:ml-4 shadow-md mb-4 mt-10 w-full">
+  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start"> {/* Stable grid */}
 
-            {/* Type Dropdown */}
-            <div className="flex flex-col gap-1 w-full lg:w-1/3 mb-2 sm:mb-0">
-              <label className="text-sm font-medium text-gray-700">
-                Select a Type
-              </label>
-              <select
-                value={selectedType}
-                onChange={handleTypeChange}
-                className="border border-gray-300 p-1 sm:p-2 rounded-md shadow-sm bg-white w-full text-sm"
-              >
-                <option value="" disabled>
-                  Select a Type
-                </option>
-                {typeOptions.map((name, index) => (
-                  <option key={index} value={name}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-              {typeError && (
-                <p className="text-red-500 text-sm mt-1 mb-2">{typeError}</p>
-              )}
-            </div>
+    {/* Company Dropdown */}
+    <div className="flex flex-col space-y-1">
+      <label className="text-sm font-medium text-gray-700">
+        Select a Company
+      </label>
+      <select
+        value={selectedCompany}
+        onChange={handleCompanyChange}
+        className="w-full p-2 text-sm bg-white border border-gray-300 rounded-md shadow-sm"
+      >
+        <option value="" disabled>
+          Select a Company
+        </option>
+        {companies.map((company) => (
+          <option key={company.code} value={company.code}>
+            {company.code} {company.name}
+          </option>
+        ))}
+      </select>
 
-            {/* Submit Button aligned with bottom of selects */}
-            <div className="w-full lg:w-auto flex justify-center lg:justify-end">
-              <button
-                onClick={handleCompanySubmit}
-                disabled={disable}
-                className={`bg-black hover:bg-gray-800 text-white font-semibold py-1 sm:py-2 px-2 sm:px-4 rounded-md shadow-md transition-all w-full lg:w-auto text-sm ${
-                  disable ? "opacity-50 cursor-not-allowed" : ""
-                }`}
-              >
-                Submit
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* Fixed-height error space - prevents layout shift */}
+      <div className="min-h-6 text-sm text-red-500">
+        {companyError}
+      </div>
+    </div>
+
+    {/* Type Dropdown */}
+    <div className="flex flex-col space-y-1">
+      <label className="text-sm font-medium text-gray-700">
+        Select a Type
+      </label>
+      <select
+        value={selectedType}
+        onChange={handleTypeChange}
+        className="w-full p-2 text-sm bg-white border border-gray-300 rounded-md shadow-sm"
+      >
+        <option value="" disabled>
+          Select a Type
+        </option>
+        {typeOptions.map((name, index) => (
+          <option key={index} value={name}>
+            {name}
+          </option>
+        ))}
+      </select>
+
+      {/* Fixed-height error space */}
+      <div className="min-h-6 text-sm text-red-500">
+        {typeError}
+      </div>
+    </div>
+
+    {/* Submit Button - Always aligned to bottom */}
+    <div className="flex items-end justify-center lg:justify-end h-full">
+      <button
+        onClick={handleCompanySubmit}
+        disabled={disable}
+        className={`bg-black hover:bg-gray-800 text-white font-semibold py-2 px-6 rounded-md shadow-md transition-all text-sm whitespace-nowrap ${
+          disable ? "opacity-50 cursor-not-allowed" : ""
+        }`}
+      >
+        Submit
+      </button>
+    </div>
+
+  </div>
+</div>
       )}
 
       {/* Upload Section */}
