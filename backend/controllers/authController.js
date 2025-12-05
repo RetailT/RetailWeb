@@ -7114,8 +7114,8 @@ exports.getProductCodeFromName = async (req, res) => {
       .input('company', mssql.NChar(10), company)
       .query(`
         SELECT TOP 1 PRODUCT_CODE 
-        FROM tb_PRODUCT 
-        WHERE PRODUCT_NAMELONG = @name
+        FROM tb_InvoiceTemp
+        WHERE PRODUCT_NAME = @name
         AND COMPANY_CODE = @company
       `);
 
