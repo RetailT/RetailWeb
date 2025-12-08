@@ -802,35 +802,32 @@ useEffect(() => {
   };
 
 
-  // Add this function to your component
+  // Add this function to component
   const formatDiscountDisplay = (discountValue) => {
-  if (!discountValue && discountValue !== 0) return '0';
-  
+  if (discountValue === null || discountValue === undefined || discountValue === "") {
+    return "0"; // default
+  }
+
   const discountStr = String(discountValue).trim();
-  
-  // If it already contains %, return as is
-  if (discountStr.includes('%')) {
+
+  // If user typed % → keep as is
+  if (discountStr.includes("%")) {
     return discountStr;
   }
-  
-  // If it's a number
+
+  // Parse number
   const numValue = parseFloat(discountStr);
-  if (!isNaN(numValue)) {
-    // Only add % for numbers less than 100 (not including 100)
-    if (numValue < 100) {
-      if (numValue % 1 === 0) {
-        return `${numValue}%`;
-      } else {
-        return `${numValue.toFixed(2)}%`;
-      }
-    } else {
-      // For 100 and above, show as fixed amount without %
-      return numValue.toFixed(2);
-    }
+  if (isNaN(numValue)) return discountStr; // fallback for invalid input
+
+  // Less than 100 → format to 2 decimals
+  if (numValue < 100) {
+    return numValue % 1 === 0 ? `${numValue}` : `${numValue.toFixed(2)}`;
   }
-  
-  return discountStr;
+
+  // 100 or more → display as is
+  return numValue % 1 === 0 ? `${numValue}` : `${numValue.toFixed(2)}`;
 };
+
 
   const calculateTotal = () => {
   const qty = parseFloat(quantity) || 0;
@@ -920,18 +917,19 @@ useEffect(() => {
   e.preventDefault();
 
   // Stock validation - Check if quantity exceeds available stock
-  const availableStock = parseFloat(amount) || 0;
+  
+  //const availableStock = parseFloat(amount) || 0;
   const requestedQuantity = parseFloat(quantity) || 0;
   
-  if (requestedQuantity > availableStock) {
-    setAlert({ 
-      message: `Insufficient stock! Available: ${availableStock.toFixed(3)}`, 
-      type: "error" 
-    });
-    setTimeout(() => setAlert(null), 3000);
-    setDisable(false);
-    return;
-  }
+  // if (requestedQuantity > availableStock) {
+  //   setAlert({ 
+  //     message: `Insufficient stock! Available: ${availableStock.toFixed(3)}`, 
+  //     type: "error" 
+  //   });
+  //   setTimeout(() => setAlert(null), 3000);
+  //   setDisable(false);
+  //   return;
+  // }
   
   if (requestedQuantity <= 0) {
     setAlert({ 
@@ -983,7 +981,7 @@ useEffect(() => {
         setTimeout(() => setAlert(null), 3000);
         
         // Reset fields
-        setQuantity(1);
+        setQuantity("");
         setDiscount("0");
         setSalesData([]);
         setAmount("");
@@ -1161,11 +1159,12 @@ const handleProductNameChange = (e) => {
 };
 
 // Update the handleProductSelect function to auto-fill the code input:
+
 const handleProductSelect = async (productName) => {
   setInputValue(productName);
   setShowSuggestions(false);
   setQuantity('');   // clear quantity
-  setDiscount('');   // clear discount
+  setDiscount('0');   // clear discount (set to default '0' instead of empty)
   
   try {
     setDisable(true);
@@ -1193,10 +1192,31 @@ const handleProductSelect = async (productName) => {
       // If no code found, search by name only
       await requestData("", productName);
     }
+    
+    // After data is loaded, focus on quantity input
+    setTimeout(() => {
+      if (quantityRef.current) {
+        quantityRef.current.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+        quantityRef.current.focus();
+        quantityRef.current.select(); // This will select any existing text
+      }
+    }, 300); // Increased timeout to ensure data is fully loaded
+    
   } catch (err) {
     console.error("Error getting product code:", err);
     // Fallback: search by name only
     await requestData("", productName);
+    
+    // Still focus on quantity even if there's an error
+    setTimeout(() => {
+      if (quantityRef.current) {
+        quantityRef.current.focus();
+        quantityRef.current.select();
+      }
+    }, 300);
   } finally {
     setDisable(false);
   }
@@ -1206,9 +1226,25 @@ const handleProductSelect = async (productName) => {
 const handleSearchClick = async () => {
   setCodeError("");
   
+  // Clear quantity and set discount to '0' before searching
+  setQuantity('');
+  setDiscount('0');
+  
   // If there's a code, use it
   if (code) {
     await requestData(code, inputValue);
+    
+    // After data loads, focus on quantity input
+    setTimeout(() => {
+      if (quantityRef.current) {
+        quantityRef.current.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+        quantityRef.current.focus();
+        quantityRef.current.select();
+      }
+    }, 300);
   } 
   // If no code but has product name, use name
   else if (inputValue) {
@@ -1233,8 +1269,29 @@ const handleSearchClick = async () => {
       } else {
         await requestData("", inputValue);
       }
+      
+      // After data loads, focus on quantity input
+      setTimeout(() => {
+        if (quantityRef.current) {
+          quantityRef.current.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+          quantityRef.current.focus();
+          quantityRef.current.select();
+        }
+      }, 300);
+      
     } catch (err) {
       await requestData("", inputValue);
+      
+      // Still focus on quantity even if error
+      setTimeout(() => {
+        if (quantityRef.current) {
+          quantityRef.current.focus();
+          quantityRef.current.select();
+        }
+      }, 300);
     } finally {
       setDisable(false);
     }
@@ -1245,18 +1302,36 @@ const handleSearchClick = async () => {
     return;
   }
 };
+
   // Enter key press handler for code input
-  const handleCodeKeyPress = (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault(); // Prevent form submission
+  const handleCodeKeyPress = async (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault(); // Prevent form submission
+    
+    if (code) {
+      // Clear quantity and discount
+      setQuantity('');
+      setDiscount('0');
       
-      if (code) {
-        handleSearchClick(); // Call search function if code exists
-      } else if (!code && !inputValue) {
-        setCodeError("Code or product name is required.");
-      }
+      // Call search and then focus on quantity
+      await handleSearchClick();
+      
+      // After search completes, focus on quantity
+      setTimeout(() => {
+        if (quantityRef.current) {
+          quantityRef.current.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+          quantityRef.current.focus();
+          quantityRef.current.select();
+        }
+      }, 300);
+    } else if (!code && !inputValue) {
+      setCodeError("Code or product name is required.");
     }
-  };
+  }
+};
 
   // Enter key press handler function
   const handleKeyPress = (e) => {
@@ -1429,7 +1504,7 @@ const handleDiscountKeyPress = (e) => {
                                   setCode(e.target.value);
                                   setScannedCode(e.target.value);
                                   setQuantity('');   // clear quantity
-                                  setDiscount('');
+                                  setDiscount('0');   // clear discount (set to default '0' instead of empty)
                                 }}
                                 onKeyDown={handleCodeKeyPress} // Add 'Enter' key handler
                                 className="w-full px-2 py-2 text-sm text-gray-700 bg-gray-100 border border-gray-300 rounded-md sm:px-3 lg:w-1/2 focus:outline-none"
