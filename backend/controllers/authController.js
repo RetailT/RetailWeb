@@ -541,7 +541,7 @@ exports.syncDatabases = async (req, res) => {
       }
     }
 
-    const allSuccess = !hasError && results.every(r => r.success);
+    const allSuccess = !hasError && results.every(r => r.success) && !responses.errors?.length;
 
     return res.status(allSuccess ? 200 : 207).json({
       success: allSuccess,
