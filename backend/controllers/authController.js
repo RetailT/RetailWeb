@@ -289,6 +289,9 @@ console.log('TABLES UPDATED')
 
 async function syncDB() {
   try {
+    let syncdbIp = null;
+    let syncdbPort = null;
+    let syncDbList = [];
     // await mssql.close();
     // await mssql.connect(dbConnection);
     await connectToDatabase()
@@ -303,8 +306,10 @@ async function syncDB() {
     const errors = [];
 
     for (const customer of dbConnectionData) {
-      const syncdbIp = customer.IP ? customer.IP.trim() : null;
-      const syncdbPort = customer.PORT ? parseInt(customer.PORT.trim()) : null;
+      syncdbIp = customer.IP ? customer.IP.trim() : null;
+      syncdbPort = customer.PORT ? parseInt(customer.PORT.trim()) : null;
+
+
 
       if (!syncdbIp) {
         const errMsg = "IP is null for a customer entry";
@@ -318,6 +323,13 @@ async function syncDB() {
         errors.push(errMsg);
         continue;
       }
+
+      syncDbList = dbConnectionData
+  .map(customer => ({
+    ip: customer.IP ? customer.IP.trim() : null,
+    port: customer.PORT ? parseInt(customer.PORT.trim(), 10) : null
+  }))
+  .filter(item => item.ip && item.port);
 
       try {
         // await mssql.close();
@@ -454,7 +466,7 @@ async function syncDB() {
       // }
     }
 
-    return { responses: apiResponses, errors };
+    return { responses: apiResponses, errors, syncDbList };
   } catch (error) {
     console.error("Unexpected error occurred in syncDB:", error);
     return { responses: [], errors: [error.message] };
@@ -464,62 +476,90 @@ async function syncDB() {
 //sync db
 exports.syncDatabases = async (req, res) => {
   try {
-
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res
-        .status(403)
-        .json({ message: "No authorization token provided" });
+      return res.status(403).json({
+        success: false,
+        message: "No authorization token provided",
+      });
     }
-
-    const token = authHeader.split(" ")[1];
-
-    let decoded;
-    try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET);
-    } catch (err) {
-      return res.status(403).json({ message: "Invalid or expired token" });
-    }
-
 
     const responses = await syncDB();
+    const responsesList = responses.syncDbList || [];
 
-    const user_ip = String(decoded.ip).trim(); 
-     if (mssql.connected) {
-    await mssql.close();
-    console.log("✅ Database connection closed successfully");
-  }
-      const pool = await connectToUserDatabase(user_ip, decoded.port.trim());
-     
+    // If no list but has single IP/port, support that too
+    const dbList = responsesList.length > 0 
+      ? responsesList 
+      : [{ ip: responses.syncdbIp, port: responses.syncdbPort }].filter(db => db.ip && db.port);
 
-
-    if (
-      Array.isArray(responses.responses) &&
-      responses.responses[0]?.returnStatus === "Success"
-    ) {
-      const updateTableResult = await updateTables(pool);
-      return res.status(200).json({
-        success: true,
-        message: "Database sync completed successfully.",
-        syncDetails: responses.responses,
-        updateDetails: updateTableResult,
-        errors: responses.errors || [],
-      });
-    } else {
-      return res.status(207).json({
+    if (dbList.length === 0) {
+      return res.status(400).json({
         success: false,
-        message: "Partial or full sync failure.",
-        syncDetails: responses.responses,
-        errors: responses.errors,
+        message: "No database configuration provided",
       });
     }
+
+    const results = [];
+    let hasError = false;
+
+    for (const db of dbList) {
+      const user_ip = String(db.ip || responses.syncdbIp || '').trim();
+      const user_port = String(db.port || responses.syncdbPort || '').trim();
+
+      if (!user_ip || !user_port) {
+        results.push({ ip: user_ip, port: user_port, success: false, error: "Missing IP or port" });
+        hasError = true;
+        continue;
+      }
+
+      let pool = null;
+      try {
+        // Do NOT close global mssql connection here!
+        pool = await connectToUserDatabase(user_ip, user_port);
+
+        const updateTableResult = await updateTables(pool);
+        results.push({
+          ip: user_ip,
+          port: user_port,
+          success: true,
+          updateDetails: updateTableResult,
+        });
+      } catch (err) {
+        console.error(`Sync failed for ${user_ip}:${user_port}`, err);
+        hasError = true;
+        results.push({
+          ip: user_ip,
+          port: user_port,
+          success: false,
+          error: err.message || "Connection or sync failed",
+        });
+      } finally {
+        if (pool?.close) {
+          try { await pool.close(); } catch (e) { console.warn("Pool close error:", e); }
+        }
+      }
+    }
+
+    const allSuccess = !hasError && results.every(r => r.success);
+
+    return res.status(allSuccess ? 200 : 207).json({
+      success: allSuccess,
+      message: allSuccess 
+        ? "Database sync completed successfully." 
+        : "Some databases failed to sync",
+      totalDatabases: dbList.length,
+      results,
+      syncDetails: responses.responses || [],
+      errors: responses.errors || [],
+    });
+
   } catch (error) {
+    console.error("Sync controller error:", error);
     return res.status(500).json({
       success: false,
-      message: "Failed to start database sync.",
-      syncDetails: [],
-      errors: [error.message],
+      message: "Failed to start database sync",
+      error: error.message,
     });
   }
 };
