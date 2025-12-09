@@ -93,18 +93,18 @@ app.delete('/delete-invoice-temp-item', authenticateToken, authController.delete
 app.put('/reset-database-connection', authenticateToken, authController.resetDatabaseConnection);
 
 
-// for local development -- comment out in production
-if (process.env.NODE_ENV !== "production") {
-  app.listen(5000, () => {
-    console.log(`Server is running on http://localhost:5000/`);
-  });
-}
-const handler = serverless(app);
-export default handler;
+// // for local development -- comment out in production
+// if (process.env.NODE_ENV !== "production") {
+//   app.listen(5000, () => {
+//     console.log(`Server is running on http://localhost:5000/`);
+//   });
+// }
+// const handler = serverless(app);
+// export default handler;
 
 
-// // Uncomment the following lines if you want to export the app for serverless deployment
-// module.exports = app;
-// module.exports.handler = serverless(app);
+// Uncomment the following lines if you want to export the app for serverless deployment
+module.exports = app;
+module.exports.handler = serverless(app);
 
 
