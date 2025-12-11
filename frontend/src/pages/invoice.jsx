@@ -834,7 +834,7 @@ useEffect(() => {
   const price = parseFloat(salesData.SCALEPRICE) || 0;
   const subtotal = price * qty;
 
-  if (!discount) return subtotal.toFixed(2);
+  if (!discount) return subtotal;  // ✅ Return NUMBER, not string
 
   let discountValue = discount.toString().trim();
   let discountAmount = 0;
@@ -855,7 +855,7 @@ useEffect(() => {
   }
 
   const total = subtotal - discountAmount;
-  return total.toFixed(2);
+  return total;  // ✅ Return NUMBER (not .toFixed(2) string)
 };
 
   const fetchInvoiceTableData = async () => {
@@ -948,6 +948,21 @@ useEffect(() => {
     setQuantityError("");
 
     try {
+      const quantityInt = parseInt(quantity) || 0;
+      
+      // ✅ FIX: Parse discount to remove % and convert to number
+      let discountValue = 0;
+      if (discount) {
+        const discountStr = discount.toString().trim();
+        if (discountStr.includes("%")) {
+          // If it's a percentage, just get the number part
+          discountValue = parseFloat(discountStr.replace("%", "")) || 0;
+        } else {
+          // If it's a direct amount
+          discountValue = parseFloat(discountStr) || 0;
+        }
+      }
+    
       // FIXED: Add customer fields to the request
       const response = await axios.post(
         `${process.env.REACT_APP_BACKEND_URL}insert-invoice-temp`,
@@ -959,10 +974,10 @@ useEffect(() => {
           costPrice: salesData.COSTPRICE,
           unitPrice: salesData.SCALEPRICE,
           stock: amount,
-          quantity: quantity,
-          discount: discount,
+          quantity: quantityInt,
+          discount: discountValue,  // ✅ Send as number, not string with %
           discountAmount: discountAmount,
-          total: calculateTotal(),
+          total: parseFloat(calculateTotal()),  // ✅ Parse to number
           customer: selectedCustomer,
           customerName: selectedCustomerName 
         },
@@ -1788,7 +1803,7 @@ const handleDiscountKeyPress = (e) => {
                                       <div className="flex items-center gap-2 pt-2 mt-2 text-base">
                                         <span className="font-medium text-[#bc4a17]">Total:</span>
                                         <span className="text-black">
-                                          {calculateTotal()}
+                                          {calculateTotal().toFixed(2)}  {/* ✅ Display with 2 decimals */}
                                         </span>
                                       </div>
                                     </div>

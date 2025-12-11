@@ -7150,12 +7150,12 @@ exports.getProductCodeFromName = async (req, res) => {
 
     // Query to get product code from product name
     const result = await pool.request()
-      .input('name', mssql.NVarChar(100), name)
-      .input('company', mssql.NChar(10), company)
+      .input('name', mssql.NVarChar(100), `%${name}%`)
+      .input('company', mssql.VarChar(10), company)
       .query(`
         SELECT TOP 1 PRODUCT_CODE 
-        FROM tb_InvoiceTemp
-        WHERE PRODUCT_NAME = @name
+        FROM tb_PRN
+        WHERE PRODUCT_NAMELONG LIKE @name
         AND COMPANY_CODE = @company
       `);
 
