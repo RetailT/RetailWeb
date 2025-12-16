@@ -72,7 +72,7 @@ app.get('/product-view-sales', authenticateToken, authController.productViewSale
 app.get('/find-user-connection', authenticateToken, authController.findUserConnection);
 app.get('/connection-details', authenticateToken, authController.serverConnection);
 app.get('/invoice-temp-data', authenticateToken, authController.getInvoiceTempData);
-app.get('/get-product-code-from-name', authenticateToken, authController.getProductCodeFromName);
+// app.get('/get-product-code-from-name', authenticateToken, authController.getProductCodeFromName);
 
 app.post("/login", authController.login);
 app.post('/close-connection', authController.closeConnection);

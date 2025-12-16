@@ -61,9 +61,10 @@ function App() {
   const [scannerEnabled, setScannerEnabled] = useState(false);
   const [quantityError, setQuantityError] = useState("");
   const [amount, setAmount] = useState("");
-  const [quantity, setQuantity] = useState("1");
+  const [quantity, setQuantity] = useState("");
   const [discount, setDiscount] = useState("0");
   const [discountAmount, setDiscountAmount] = useState(0);
+  const [total, setTotal] = useState("");
   const [salesData, setSalesData] = useState([]);
   const [inputValue, setInputValue] = useState("");
   const [filteredSuggestions, setFilteredSuggestions] = useState([]);
@@ -793,14 +794,23 @@ useEffect(() => {
     setShowSuggestions(false);
   };
 
-  const handleRowChange = (rowIndex, cellIndex, newValue) => {
-    if (parseFloat(newValue) < 0) return; // do nothing if negative
-
-    const updatedData = [...colorWiseTableData];
-    updatedData[rowIndex][cellIndex] = newValue;
-    setColorWiseTableData(updatedData);
-  };
-
+const handleRowChange = (rowIndex, colIndex, value) => {
+  // If colIndex 7 quantity column
+  if (colIndex === 7) {
+    const updatedData = [...invoiceTableData];
+    updatedData[rowIndex].QUANTITY = value;
+    
+    // Re-calculate totals
+    const item = updatedData[rowIndex];
+    const qty = parseFloat(value) || 0;
+    const price = parseFloat(item.UNITPRICE) || 0;
+    const discountAmount = parseFloat(item.DISCOUNT_AMOUNT) || 0;
+    
+    item.TOTAL = (qty * price - discountAmount).toFixed(2);
+    
+    setInvoiceTableData(updatedData);
+  }
+};
 
   // Add this function to component
   const formatDiscountDisplay = (discountValue) => {
@@ -873,6 +883,7 @@ useEffect(() => {
     );
 
     if (response.data.success) {
+
       setInvoiceTableData(response.data.invoiceData);
       
       // FIX: Extract just the label values for headers
@@ -948,7 +959,7 @@ useEffect(() => {
     setQuantityError("");
 
     try {
-      const quantityInt = parseInt(quantity) || 0;
+      const qty = parseFloat(quantity) || 0;
       
       // ✅ FIX: Parse discount to remove % and convert to number
       let discountValue = 0;
@@ -962,6 +973,14 @@ useEffect(() => {
           discountValue = parseFloat(discountStr) || 0;
         }
       }
+
+      // ✅ FIX: Parse total to number (remove any non-numeric characters except decimal point)
+      let totalValue = 0;
+      if (total) {
+        const totalStr = total.toString().trim();
+        // Remove any non-numeric characters except decimal point
+        totalValue = parseFloat(totalStr.replace(/[^\d.]/g, "")) || 0;
+      }
     
       // FIXED: Add customer fields to the request
       const response = await axios.post(
@@ -974,10 +993,12 @@ useEffect(() => {
           costPrice: salesData.COSTPRICE,
           unitPrice: salesData.SCALEPRICE,
           stock: amount,
-          quantity: quantityInt,
+          //quantity: qty,
+          quantity: parseFloat(qty) || 0,
           discount: discountValue,  // ✅ Send as number, not string with %
           discountAmount: discountAmount,
-          total: parseFloat(calculateTotal()),  // ✅ Parse to number
+          // total: parseFloat(calculateTotal()),  // ✅ Parse to number
+          total: totalValue,  // ✅ Parse to number
           customer: selectedCustomer,
           customerName: selectedCustomerName 
         },
@@ -998,6 +1019,7 @@ useEffect(() => {
         // Reset fields
         setQuantity("");
         setDiscount("0");
+        setTotal(""); // Reset total
         setSalesData([]);
         setAmount("");
         setColorWiseTableData([]);
@@ -1174,41 +1196,19 @@ const handleProductNameChange = (e) => {
 };
 
 // Update the handleProductSelect function to auto-fill the code input:
-
 const handleProductSelect = async (productName) => {
   setInputValue(productName);
   setShowSuggestions(false);
-  setQuantity('');   // clear quantity
-  setDiscount('0');   // clear discount (set to default '0' instead of empty)
+  setQuantity('');
+  setDiscount('0');
   
   try {
     setDisable(true);
     
-    // First, get product code from the selected product name
-    const response = await axios.get(
-      `${process.env.REACT_APP_BACKEND_URL}get-product-code-from-name`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-        params: {
-          name: productName,
-          company: selectedCompany
-        }
-      }
-    );
+    // Just search by name - no code lookup
+    await requestData("", productName);
     
-    if (response.data.success && response.data.productCode) {
-      // Set the code in the code input field
-      setCode(response.data.productCode);
-      setScannedCode(response.data.productCode);
-      
-      // Fetch product details using the code
-      await requestData(response.data.productCode, productName);
-    } else {
-      // If no code found, search by name only
-      await requestData("", productName);
-    }
-    
-    // After data is loaded, focus on quantity input
+    // Focus on quantity input after data loads
     setTimeout(() => {
       if (quantityRef.current) {
         quantityRef.current.scrollIntoView({
@@ -1216,22 +1216,17 @@ const handleProductSelect = async (productName) => {
           block: "center",
         });
         quantityRef.current.focus();
-        quantityRef.current.select(); // This will select any existing text
-      }
-    }, 300); // Increased timeout to ensure data is fully loaded
-    
-  } catch (err) {
-    console.error("Error getting product code:", err);
-    // Fallback: search by name only
-    await requestData("", productName);
-    
-    // Still focus on quantity even if there's an error
-    setTimeout(() => {
-      if (quantityRef.current) {
-        quantityRef.current.focus();
         quantityRef.current.select();
       }
     }, 300);
+    
+  } catch (err) {
+    console.error("Error fetching product:", err);
+    setAlert({
+      message: err.response?.data?.message || "Failed to fetch product",
+      type: "error"
+    });
+    setTimeout(() => setAlert(null), 3000);
   } finally {
     setDisable(false);
   }
@@ -1383,16 +1378,35 @@ const handleDiscountKeyPress = (e) => {
   if (e.key === 'Enter') {
     e.preventDefault();
     
-    if (quantity && salesData.PRODUCT_CODE) {
-      handleProductSubmit(e); // Submit the product form
+    // Instead of submitting, focus on total input
+    if (total && quantity && salesData.PRODUCT_CODE) {
+      // If there's a total field, focus on it
+      const totalInput = document.getElementById('total');
+      if (totalInput) {
+        totalInput.focus();
+        totalInput.select();
+      }
     } else {
-      if (quantityRef.current) {
-        quantityRef.current.focus();
+      // If no total field found, try to find it by ID
+      const totalInput = document.getElementById('total');
+      if (totalInput) {
+        totalInput.focus();
+        totalInput.select();
       }
     }
   }
 };
 
+// Enter key press handler for total input
+const handleTotalKeyPress = (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    
+    if (quantity && salesData.PRODUCT_CODE) {
+      handleProductSubmit(e); // Submit the product form
+    }
+  }
+};
 
   
   return (
@@ -1732,7 +1746,7 @@ const handleDiscountKeyPress = (e) => {
                               
                                 {/* {state && ( */}
                                   <div className="flex flex-col space-y-1 sm:space-y-2">
-                                    <div className="flex flex-col sm:flex-row sm:space-x-2">
+                                    <div className="flex flex-col items-center sm:flex-row sm:space-x-2">
                                       <p className="text-sm text-gray-700">
                                         <strong>Quantity: </strong>
                                       </p>
@@ -1745,12 +1759,12 @@ const handleDiscountKeyPress = (e) => {
                                         onKeyDown={handleQuantityKeyPress} // Add 'Enter' key handler
                                         className="w-full px-2 py-2 mt-1 text-sm text-gray-700 bg-gray-100 border border-gray-300 rounded-md sm:px-3 focus:outline-none"
                                         placeholder="Enter quantity"
-                                        step="1"
+                                        step="0.01"
                                         min="0"
                                       />
                                     </div>
                                     {/* Set Discount */}
-                                    <div className="flex flex-col sm:flex-row sm:space-x-2">
+                                    <div className="flex flex-col items-center sm:flex-row sm:space-x-2">
                                       <p className="gap-2 text-sm text-gray-700">
                                         <strong>Discount: </strong>
                                       </p>
@@ -1799,14 +1813,52 @@ const handleDiscountKeyPress = (e) => {
                                     </div>            
 
                                     {/* Display Calculations */}
-                                    <div className="pt-2 mt-2 border-t">
+                                    {/* <div className="pt-2 mt-2 border-t">
                                       <div className="flex items-center gap-2 pt-2 mt-2 text-base">
                                         <span className="font-medium text-[#bc4a17]">Total:</span>
                                         <span className="text-black">
-                                          {calculateTotal().toFixed(2)}  {/* ✅ Display with 2 decimals */}
+                                          {calculateTotal().toFixed(2)}  // ✅ Display with 2 decimals 
                                         </span>
                                       </div>
+                                    </div> */}
+                                    {/* Total Input field add */}
+                                    <div className="flex flex-col items-start gap-8 sm:flex-row sm:items-center sm:space-x-4">
+                                      <p className="gap-2 text-sm text-gray-700">
+                                        <strong>Total: </strong>
+                                      </p>
+                                      <input
+                                      type="number"
+                                      id="total"
+                                      value={total}
+                                      onChange={(e) => {
+                                        const val = e.target.value.replace(/[^\d.]/g, "");
+                                        setTotal(val);
+                                      }}
+                                      onKeyDown={(e) => {
+                                        // Disable arrow keys
+                                        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                                          e.preventDefault();
+                                          return;
+                                        }
+                                        handleTotalKeyPress(e);
+                                      }}
+                                      // Hide the spinner arrows in some browsers
+                                      style={{ 
+                                        MozAppearance: 'textfield',
+                                        WebkitAppearance: 'none',
+                                        margin: 0 
+                                      }}
+                                      className="w-full px-2 py-2 mt-1 text-sm text-gray-700 bg-gray-100 border border-gray-300 rounded-md sm:px-3 focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                      placeholder="Enter total amount"
+                                      step="0.01"
+                                      min="0"
+                                    />
                                     </div>
+
+                                    {/* Optional: Show suggested total (for reference only) */}
+                                    <div className="mt-1 text-xs text-gray-500">
+                                      <span>Suggested: {((parseFloat(salesData.SCALEPRICE) || 0) * (parseFloat(quantity) || 0) - discountAmount).toFixed(2)}</span>
+                                    </div>                               
 
                                   {/* Display error message under the input field */}
                                   {quantityError && (
@@ -1832,13 +1884,6 @@ const handleDiscountKeyPress = (e) => {
                           </div>
                         </div>
                         
-                        {alert && (
-                          <Alert
-                            message={alert.message}
-                            type={alert.type}
-                            onClose={() => setAlert(null)}
-                          />
-                        )}
                         
                         {/* Display invoice data table */}
                         {invoiceTableData && invoiceTableData.length > 0 ? (
@@ -1864,6 +1909,14 @@ const handleDiscountKeyPress = (e) => {
                             </div>
                           </div>
 
+                          {alert && (
+                            <Alert
+                              message={alert.message}
+                              type={alert.type}
+                              onClose={() => setAlert(null)}
+                            />
+                          )}
+
                           <div className="overflow-hidden bg-white border border-gray-300 rounded-lg shadow-md">
                             <Table
                               headers={[
@@ -1879,6 +1932,7 @@ const handleDiscountKeyPress = (e) => {
                                 "Discount Amount",
                                 "Total"
                               ]}
+                              
                               data={(invoiceTableData || []).map((item) => [
                                 item.COMPANY_CODE || '',
                                 item.COMPANY_NAME || '',
@@ -1887,15 +1941,16 @@ const handleDiscountKeyPress = (e) => {
                                 parseFloat(item.COSTPRICE || 0).toFixed(2),
                                 parseFloat(item.UNITPRICE || 0).toFixed(2),
                                 parseFloat(item.STOCK || 0).toFixed(3),
-                                item.QUANTITY || 0,
+                                parseFloat(item.QUANTITY || 0).toFixed(2),                            
                                 // Format discount display - add % if it's a percentage value
                                 formatDiscountDisplay(item.DISCOUNT),
                                 parseFloat(item.DISCOUNT_AMOUNT || 0).toFixed(2),
                                 parseFloat(item.TOTAL || 0).toFixed(2)
                               ])}
                               editableColumns={[]}
-                              formatColumns={[4, 5, 6, 9, 10]} // Columns to format as numbers
-                              rightAlignedColumns={[4, 5, 6, 7, 9, 10]} // Columns to right-align
+                              formatColumns={[4, 5, 9, 10]} // Columns to format as numbers
+                              rightAlignedColumns={[4, 5, 6, 7, 8, 9, 10]} // Columns to right-align
+                              onRowChange={handleRowChange} // ✅ Add this prop
                               onDeleteRow={handleDeleteRow}
                               //bin={true}
                             />

@@ -6721,11 +6721,12 @@ exports.stockUpdateInvoice = async (req, res) => {
 };
 
 
-// GET - Invoice temp data
+// GET - Invoice temp data (FIXED - Safer column check)
 exports.getInvoiceTempData = async (req, res) => {
   try {
     const { company, customer } = req.query;
     const user_ip = String(req.user.ip).trim();
+    const username = req.user.username;
     
     if (mssql.connected) {
       await mssql.close();
@@ -6737,16 +6738,48 @@ exports.getInvoiceTempData = async (req, res) => {
       return res.status(500).json({ message: "Database connection failed" });
     }
 
-    const result = await pool.request()
-    .input('company', mssql.NChar(10), company)
-    .input('customer', mssql.NChar(10), customer)  // Added customer input
-    .query(`
+    // Check if TRUSER column exists
+    const columnCheck = await pool.request().query(`
+      USE [rtweb];
+      IF EXISTS (SELECT * FROM sysobjects WHERE name='tb_InvoiceTemp' AND xtype='U')
+      BEGIN
+        SELECT CASE 
+          WHEN EXISTS (SELECT * FROM sys.columns 
+                      WHERE object_id = OBJECT_ID('tb_InvoiceTemp') 
+                      AND name = 'TRUSER')
+          THEN 1 
+          ELSE 0 
+        END as HasTRUSER
+      END
+      ELSE
+        SELECT 0 as HasTRUSER
+    `);
+
+    const hasTRUSER = columnCheck.recordset[0]?.HasTRUSER === 1;
+
+    // Build query based on whether TRUSER column exists
+    let query = `
       USE [rtweb];
       SELECT * FROM tb_InvoiceTemp
       WHERE COMPANY_CODE = @company
-      AND CUSTOMER_CODE = @customer 
-      ORDER BY PRODUCT_CODE DESC
-    `);
+      AND CUSTOMER_CODE = @customer
+    `;
+    
+    if (hasTRUSER) {
+      query += ` AND TRUSER = @username`;
+    }
+    
+    query += ` ORDER BY PRODUCT_CODE DESC`;
+
+    const request = pool.request()
+      .input('company', mssql.NChar(10), company)
+      .input('customer', mssql.NChar(10), customer);
+    
+    if (hasTRUSER) {
+      request.input('username', mssql.NVarChar(50), username);
+    }
+    
+    const result = await request.query(query);
 
     const invoiceData = result.recordset;
     return res.status(200).json({ 
@@ -6763,7 +6796,42 @@ exports.getInvoiceTempData = async (req, res) => {
   }
 };
 
-// POST - Insert invoice temp item
+// GET - Companies (FIXED - Correct table name)
+exports.getCompanies = async (req, res) => {
+  try {
+    const user_ip = String(req.user.ip).trim();
+    
+    if (mssql.connected) {
+      await mssql.close();
+    }
+    
+    const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+    
+    if (!pool || !pool.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
+
+    // FIX: Use correct database and table name
+    const result = await pool.request().query(`
+      SELECT COMPANY_CODE, COMPANY_NAME 
+      FROM [RT_WEB].[dbo].[tb_COMPANY]
+      ORDER BY COMPANY_CODE
+    `);
+
+    return res.status(200).json({ 
+      userData: result.recordset 
+    });
+    
+  } catch (error) {
+    console.error("Error fetching companies:", error);
+    return res.status(500).json({ 
+      message: "Failed to fetch companies",
+      error: error.message 
+    });
+  }
+};
+
+// POST - Insert invoice temp item (FIXED - Better table creation)
 exports.insertInvoiceTemp = async (req, res) => {
   try {
     console.log("=== INSERT INVOICE TEMP START ===");
@@ -6785,7 +6853,8 @@ exports.insertInvoiceTemp = async (req, res) => {
       customerName
     } = req.body;
 
-    // Validate required fields
+    const username = req.user.username;
+
     if (!company || !productCode || !customer) {
       console.log("Validation failed:", { company, productCode, customer });
       return res.status(400).json({ 
@@ -6806,19 +6875,15 @@ exports.insertInvoiceTemp = async (req, res) => {
       return res.status(500).json({ message: "Database connection failed" });
     }
 
-    // Check if rtweb database exists
+    // Ensure rtweb database exists
     try {
       const dbCheck = await pool.request().query(`
         SELECT name FROM sys.databases WHERE name = 'rtweb'
       `);
       
       if (dbCheck.recordset.length === 0) {
-        console.log("rtweb database does not exist, creating it...");
-        
-        // Create the database if it doesn't exist
-        await pool.request().query(`
-          CREATE DATABASE rtweb
-        `);
+        console.log("Creating rtweb database...");
+        await pool.request().query(`CREATE DATABASE rtweb`);
         console.log("rtweb database created successfully");
       }
     } catch (dbError) {
@@ -6829,40 +6894,58 @@ exports.insertInvoiceTemp = async (req, res) => {
       });
     }
 
-    // Check if table exists, if not create it
+    // Create/Update table with TRUSER column
     try {
-      const tableCheck = await pool.request().query(`
+      await pool.request().query(`
         USE rtweb;
+        
+        -- Create table if not exists
         IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='tb_InvoiceTemp' AND xtype='U')
-        CREATE TABLE tb_InvoiceTemp (
-          IDX INT IDENTITY(1,1) PRIMARY KEY,
-          COMPANY_CODE NVARCHAR(10),
-          COMPANY_NAME NVARCHAR(50),
-          PRODUCT_CODE NVARCHAR(30),
-          PRODUCT_NAME NVARCHAR(100),
-          COSTPRICE MONEY,
-          UNITPRICE MONEY,
-          STOCK FLOAT,
-          QUANTITY INT,
-          DISCOUNT MONEY,
-          DISCOUNT_AMOUNT DECIMAL(10,2),
-          TOTAL MONEY,
-          CUSTOMER_CODE NVARCHAR(10),
-          CUSTOMER_NAME NVARCHAR(50),
-          CREATED_DATE DATETIME DEFAULT GETDATE()
-        )
+        BEGIN
+          CREATE TABLE tb_InvoiceTemp (
+            IDX INT IDENTITY(1,1) PRIMARY KEY,
+            COMPANY_CODE NVARCHAR(10),
+            COMPANY_NAME NVARCHAR(50),
+            PRODUCT_CODE NVARCHAR(30),
+            PRODUCT_NAME NVARCHAR(100),
+            COSTPRICE MONEY,
+            UNITPRICE MONEY,
+            STOCK FLOAT,
+            QUANTITY FLOAT,
+            DISCOUNT MONEY,
+            DISCOUNT_AMOUNT MONEY,
+            TOTAL MONEY,
+            CUSTOMER_CODE NVARCHAR(10),
+            CUSTOMER_NAME NVARCHAR(50),
+            TRUSER NVARCHAR(50),
+            CREATED_DATE DATETIME DEFAULT GETDATE()
+          )
+          PRINT 'tb_InvoiceTemp table created with TRUSER column'
+        END
+        
+        -- Add TRUSER column if table exists but column doesn't
+        IF EXISTS (SELECT * FROM sysobjects WHERE name='tb_InvoiceTemp' AND xtype='U')
+        BEGIN
+          IF NOT EXISTS (SELECT * FROM sys.columns 
+                        WHERE object_id = OBJECT_ID('tb_InvoiceTemp') 
+                        AND name = 'TRUSER')
+          BEGIN
+            ALTER TABLE tb_InvoiceTemp ADD TRUSER NVARCHAR(50)
+            PRINT 'TRUSER column added to existing tb_InvoiceTemp table'
+          END
+        END
       `);
-      console.log("Table check/creation completed");
+      console.log("Table setup completed successfully");
     } catch (tableError) {
-      console.error("Error creating table:", tableError);
+      console.error("Error creating/updating table:", tableError);
       return res.status(500).json({ 
         message: "Table setup failed",
         error: tableError.message 
       });
     }
 
-    // SAFE NUMBER PARSING
-    const qty = parseInt(quantity) || 0;
+    // Parse values safely
+    const qty = parseFloat(quantity) || 0;
     const safeCost = parseFloat(costPrice) || 0;
     const safePrice = parseFloat(unitPrice) || 0;
     const safeStock = parseFloat(stock) || 0;
@@ -6870,21 +6953,9 @@ exports.insertInvoiceTemp = async (req, res) => {
     const safeDiscountAmount = parseFloat(discountAmount) || 0;
     const safeTotal = parseFloat(total) || 0;
 
-    console.log("Parsed values:", {
-      company, 
-      companyName,
-      productCode, 
-      customer, 
-      qty,
-      safeCost,
-      safePrice,
-      safeStock,
-      safeDiscount,
-      safeDiscountAmount,
-      safeTotal
-    });
+    console.log("Inserting with username:", username);
 
-    // Execute INSERT query
+    // Insert with TRUSER
     const result = await pool.request()
       .input('company', mssql.NChar(10), company)
       .input('companyName', mssql.NVarChar(50), companyName || '')
@@ -6893,19 +6964,22 @@ exports.insertInvoiceTemp = async (req, res) => {
       .input('costPrice', mssql.Money, safeCost)
       .input('unitPrice', mssql.Money, safePrice)
       .input('stock', mssql.Float, safeStock)
-      .input('quantity', mssql.Int, qty)
+      .input('quantity', mssql.Float, qty)
       .input('discount', mssql.Money, safeDiscount)
-      .input('discountAmount', mssql.Decimal(10, 2), safeDiscountAmount)
+      .input('discountAmount', mssql.Money, safeDiscountAmount)
       .input('total', mssql.Money, safeTotal)
       .input('customer', mssql.NChar(10), customer)
       .input('customerName', mssql.NVarChar(50), customerName || '')
+      .input('username', mssql.NVarChar(50), username)
       .query(`
         USE rtweb;
         INSERT INTO tb_InvoiceTemp 
         (COMPANY_CODE, COMPANY_NAME, PRODUCT_CODE, PRODUCT_NAME, 
-        COSTPRICE, UNITPRICE, STOCK, QUANTITY, DISCOUNT, DISCOUNT_AMOUNT, TOTAL, CUSTOMER_CODE, CUSTOMER_NAME)
+        COSTPRICE, UNITPRICE, STOCK, QUANTITY, DISCOUNT, DISCOUNT_AMOUNT, TOTAL, 
+        CUSTOMER_CODE, CUSTOMER_NAME, TRUSER)
         VALUES (@company, @companyName, @productCode, @productName, 
-                @costPrice, @unitPrice, @stock, @quantity, @discount, @discountAmount, @total, @customer, @customerName)
+                @costPrice, @unitPrice, @stock, @quantity, @discount, @discountAmount, @total, 
+                @customer, @customerName, @username)
       `);
 
     console.log("Insert successful, rows affected:", result.rowsAffected);
@@ -6926,13 +7000,14 @@ exports.insertInvoiceTemp = async (req, res) => {
   }
 };
 
-// POST - Save invoice (move from temp to final table)
+// POST - Save invoice (FIXED - Better column handling)
 exports.saveInvoice = async (req, res) => {
   try {
     console.log("=== SAVE INVOICE START ===");
     const { company, customer } = req.body;
+    const username = req.user.username;
     
-    console.log("Request body:", { company, customer });
+    console.log("Request body:", { company, customer, username });
     
     if (!company || !customer) {
       return res.status(400).json({ 
@@ -6955,7 +7030,7 @@ exports.saveInvoice = async (req, res) => {
 
     console.log("Database connected successfully");
 
-    // Check if rtweb database exists
+    // Ensure database exists
     try {
       const dbCheck = await pool.request().query(`
         SELECT name FROM sys.databases WHERE name = 'rtweb'
@@ -6964,16 +7039,17 @@ exports.saveInvoice = async (req, res) => {
       if (dbCheck.recordset.length === 0) {
         console.log("Creating rtweb database...");
         await pool.request().query(`CREATE DATABASE rtweb`);
-        console.log("Database created");
       }
     } catch (dbError) {
       console.error("Database check/create error:", dbError.message);
     }
 
-    // Create tb_INVOICE_DETAILS table if not exists
+    // Create/Update tb_INVOICE_DETAILS table
     try {
       await pool.request().query(`
         USE rtweb;
+        
+        -- Create table if not exists
         IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='tb_INVOICE_DETAILS' AND xtype='U')
         BEGIN
           CREATE TABLE tb_INVOICE_DETAILS (
@@ -6987,16 +7063,29 @@ exports.saveInvoice = async (req, res) => {
             COSTPRICE MONEY,
             UNITPRICE MONEY,
             STOCK FLOAT,
-            QUANTITY INT,
+            QUANTITY FLOAT,
             DISCOUNT MONEY,
-            DISCOUNT_AMOUNT DECIMAL(10,2),
+            DISCOUNT_AMOUNT MONEY,
             TOTAL MONEY,
+            TRUSER NVARCHAR(50),
             CREATED_DATE DATETIME DEFAULT GETDATE()
           )
-          PRINT 'Table tb_INVOICE_DETAILS created successfully'
+          PRINT 'tb_INVOICE_DETAILS table created with TRUSER column'
+        END
+        
+        -- Add TRUSER column if table exists but column doesn't
+        IF EXISTS (SELECT * FROM sysobjects WHERE name='tb_INVOICE_DETAILS' AND xtype='U')
+        BEGIN
+          IF NOT EXISTS (SELECT * FROM sys.columns 
+                        WHERE object_id = OBJECT_ID('tb_INVOICE_DETAILS') 
+                        AND name = 'TRUSER')
+          BEGIN
+            ALTER TABLE tb_INVOICE_DETAILS ADD TRUSER NVARCHAR(50)
+            PRINT 'TRUSER column added to tb_INVOICE_DETAILS'
+          END
         END
       `);
-      console.log("Table check/create completed");
+      console.log("Table setup completed");
     } catch (tableError) {
       console.error("Table creation error:", tableError.message);
       return res.status(500).json({ 
@@ -7005,17 +7094,42 @@ exports.saveInvoice = async (req, res) => {
       });
     }
 
-    // Check if there are items in temp table
-    const tempCheck = await pool.request()
-      .input('company', mssql.NChar(10), company)
-      .input('customer', mssql.NChar(10), customer)
-      .query(`
-        USE rtweb;
-        SELECT COUNT(*) as count FROM tb_InvoiceTemp
-        WHERE COMPANY_CODE = @company AND CUSTOMER_CODE = @customer
-      `);
+    // Check if TRUSER column exists in temp table
+    const columnCheck = await pool.request().query(`
+      USE rtweb;
+      SELECT CASE 
+        WHEN EXISTS (SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID('tb_InvoiceTemp') 
+                    AND name = 'TRUSER')
+        THEN 1 
+        ELSE 0 
+      END as HasTRUSER
+    `);
 
+    const hasTRUSER = columnCheck.recordset[0]?.HasTRUSER === 1;
+
+    // Build query based on whether TRUSER exists
+    let countQuery = `
+      USE rtweb;
+      SELECT COUNT(*) as count FROM tb_InvoiceTemp
+      WHERE COMPANY_CODE = @company AND CUSTOMER_CODE = @customer
+    `;
+    
+    if (hasTRUSER) {
+      countQuery += ` AND TRUSER = @username`;
+    }
+
+    const request = pool.request()
+      .input('company', mssql.NChar(10), company)
+      .input('customer', mssql.NChar(10), customer);
+    
+    if (hasTRUSER) {
+      request.input('username', mssql.NVarChar(50), username);
+    }
+
+    const tempCheck = await request.query(countQuery);
     const itemCount = tempCheck.recordset[0].count;
+    
     console.log(`Temp table item count: ${itemCount}`);
 
     if (itemCount === 0) {
@@ -7024,83 +7138,67 @@ exports.saveInvoice = async (req, res) => {
       });
     }
 
-    // Get the actual temp data for verification
-    const tempData = await pool.request()
+    // Build insert query
+    let insertQuery = `
+      USE rtweb;
+      INSERT INTO tb_INVOICE_DETAILS 
+      (COMPANY_CODE, COMPANY_NAME, CUSTOMER_CODE, CUSTOMER_NAME,
+       PRODUCT_CODE, PRODUCT_NAME, COSTPRICE, UNITPRICE, 
+       STOCK, QUANTITY, DISCOUNT, DISCOUNT_AMOUNT, TOTAL${hasTRUSER ? ', TRUSER' : ''})
+      SELECT 
+        COMPANY_CODE, 
+        COMPANY_NAME, 
+        CUSTOMER_CODE, 
+        CUSTOMER_NAME,
+        PRODUCT_CODE, 
+        PRODUCT_NAME, 
+        COSTPRICE, 
+        UNITPRICE,
+        STOCK, 
+        QUANTITY, 
+        DISCOUNT, 
+        DISCOUNT_AMOUNT, 
+        TOTAL${hasTRUSER ? ', TRUSER' : ''}
+      FROM tb_InvoiceTemp
+      WHERE COMPANY_CODE = @company AND CUSTOMER_CODE = @customer
+    `;
+    
+    if (hasTRUSER) {
+      insertQuery += ` AND TRUSER = @username`;
+    }
+
+    const insertRequest = pool.request()
       .input('company', mssql.NChar(10), company)
-      .input('customer', mssql.NChar(10), customer)
-      .query(`
-        USE rtweb;
-        SELECT * FROM tb_InvoiceTemp
-        WHERE COMPANY_CODE = @company AND CUSTOMER_CODE = @customer
-      `);
+      .input('customer', mssql.NChar(10), customer);
+    
+    if (hasTRUSER) {
+      insertRequest.input('username', mssql.NVarChar(50), username);
+    }
 
-    console.log("Sample temp data:", tempData.recordset[0]);
-
-    // Move data from tb_InvoiceTemp to tb_INVOICE_DETAILS
-    const insertResult = await pool.request()
-      .input('company', mssql.NChar(10), company)
-      .input('customer', mssql.NChar(10), customer)
-      .query(`
-        USE rtweb;
-        INSERT INTO tb_INVOICE_DETAILS 
-        (COMPANY_CODE, COMPANY_NAME, CUSTOMER_CODE, CUSTOMER_NAME,
-         PRODUCT_CODE, PRODUCT_NAME, COSTPRICE, UNITPRICE, 
-         STOCK, QUANTITY, DISCOUNT, DISCOUNT_AMOUNT, TOTAL)
-        SELECT 
-          COMPANY_CODE, 
-          COMPANY_NAME, 
-          CUSTOMER_CODE, 
-          CUSTOMER_NAME,
-          PRODUCT_CODE, 
-          PRODUCT_NAME, 
-          COSTPRICE, 
-          UNITPRICE,
-          STOCK, 
-          QUANTITY, 
-          DISCOUNT, 
-          DISCOUNT_AMOUNT, 
-          TOTAL
-        FROM tb_InvoiceTemp
-        WHERE COMPANY_CODE = @company AND CUSTOMER_CODE = @customer
-      `);
-
+    const insertResult = await insertRequest.query(insertQuery);
     console.log(`Rows inserted: ${insertResult.rowsAffected[0]}`);
 
-    // Verify insertion
-    const verifyInsert = await pool.request()
+    // Build delete query
+    let deleteQuery = `
+      USE rtweb;
+      DELETE FROM tb_InvoiceTemp
+      WHERE COMPANY_CODE = @company AND CUSTOMER_CODE = @customer
+    `;
+    
+    if (hasTRUSER) {
+      deleteQuery += ` AND TRUSER = @username`;
+    }
+
+    const deleteRequest = pool.request()
       .input('company', mssql.NChar(10), company)
-      .input('customer', mssql.NChar(10), customer)
-      .query(`
-        USE rtweb;
-        SELECT COUNT(*) as count FROM tb_INVOICE_DETAILS
-        WHERE COMPANY_CODE = @company AND CUSTOMER_CODE = @customer
-      `);
+      .input('customer', mssql.NChar(10), customer);
+    
+    if (hasTRUSER) {
+      deleteRequest.input('username', mssql.NVarChar(50), username);
+    }
 
-    console.log(`Total rows in INVOICE_DETAILS: ${verifyInsert.recordset[0].count}`);
-
-    // Clear the temp table for this company and customer
-    const deleteResult = await pool.request()
-      .input('company', mssql.NChar(10), company)
-      .input('customer', mssql.NChar(10), customer)
-      .query(`
-        USE rtweb;
-        DELETE FROM tb_InvoiceTemp
-        WHERE COMPANY_CODE = @company AND CUSTOMER_CODE = @customer
-      `);
-
+    const deleteResult = await deleteRequest.query(deleteQuery);
     console.log(`Temp rows deleted: ${deleteResult.rowsAffected[0]}`);
-
-    // Final verification - temp table should be empty
-    const finalCheck = await pool.request()
-      .input('company', mssql.NChar(10), company)
-      .input('customer', mssql.NChar(10), customer)
-      .query(`
-        USE rtweb;
-        SELECT COUNT(*) as count FROM tb_InvoiceTemp
-        WHERE COMPANY_CODE = @company AND CUSTOMER_CODE = @customer
-      `);
-
-    console.log(`Remaining temp items: ${finalCheck.recordset[0].count}`);
     console.log("=== SAVE INVOICE COMPLETED SUCCESSFULLY ===");
 
     return res.status(200).json({ 
@@ -7112,7 +7210,6 @@ exports.saveInvoice = async (req, res) => {
     console.error("=== SAVE INVOICE ERROR ===");
     console.error("Error message:", error.message);
     console.error("Error stack:", error.stack);
-    console.error("Error details:", error);
     
     return res.status(500).json({ 
       message: "Failed to save invoice",
@@ -7122,85 +7219,14 @@ exports.saveInvoice = async (req, res) => {
   }
 };
 
-// Get product code from product name
-exports.getProductCodeFromName = async (req, res) => {
-  console.log("=== GET PRODUCT CODE FROM NAME START ===");
-  console.log("Request Query:", req.query);
-  
-  try {
-    const { name, company } = req.query;
-    const user_ip = String(req.user.ip).trim();
-    
-    console.log("Product Name:", name);
-    console.log("Company Code:", company);
-    console.log("User IP:", user_ip);
-    
-    if (mssql.connected) {
-      await mssql.close();
-    }
-    
-    const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
-    
-    if (!pool || !pool.connected) {
-      console.error("❌ Database connection failed");
-      return res.status(500).json({ message: "Database connection failed" });
-    }
-
-    console.log("✅ Database connected");
-
-    // Query to get product code from product name
-    const result = await pool.request()
-      .input('name', mssql.NVarChar(100), `%${name}%`)
-      .input('company', mssql.VarChar(10), company)
-      .query(`
-        SELECT TOP 1 PRODUCT_CODE 
-        FROM tb_PRN
-        WHERE PRODUCT_NAMELONG LIKE @name
-        AND COMPANY_CODE = @company
-      `);
-
-    console.log("Query executed, recordset length:", result.recordset.length);
-
-    if (result.recordset.length > 0) {
-      const productCode = result.recordset[0].PRODUCT_CODE;
-      console.log("✅ Product code found:", productCode);
-      console.log("Full result:", result.recordset[0]);
-      console.log("=== GET PRODUCT CODE FROM NAME END ===\n");
-      
-      return res.status(200).json({ 
-        success: true,
-        productCode: productCode
-      });
-    } else {
-      console.log("⚠️ Product not found");
-      console.log("=== GET PRODUCT CODE FROM NAME END ===\n");
-      
-      return res.status(404).json({ 
-        success: false,
-        message: "Product not found" 
-      });
-    }
-    
-  } catch (error) {
-    console.error("❌ Error fetching product code:", error);
-    console.error("Error details:", error.message);
-    console.log("=== GET PRODUCT CODE FROM NAME END ===\n");
-    
-    return res.status(500).json({ 
-      success: false,
-      message: "Failed to fetch product code",
-      error: error.message 
-    });
-  }
-};
-
-// DELETE - Delete invoice temp item
+// DELETE - Delete invoice temp item (FIXED - Better column handling)
 exports.deleteInvoiceTempItem = async (req, res) => {
   console.log("=== DELETE INVOICE TEMP ITEM START ===");
   console.log("Request body:", req.body);
   
   try {
-    const { id } = req.body; // IDX of the row to delete
+    const { id } = req.body;
+    const username = req.user.username;
     
     if (!id) {
       console.log("Missing ID parameter");
@@ -7224,7 +7250,7 @@ exports.deleteInvoiceTempItem = async (req, res) => {
 
     console.log("Database connected successfully");
 
-    // Check if rtweb database exists
+    // Check if database exists
     try {
       const dbCheck = await pool.request().query(`
         SELECT name FROM sys.databases WHERE name = 'rtweb'
@@ -7244,21 +7270,45 @@ exports.deleteInvoiceTempItem = async (req, res) => {
       });
     }
 
-    // Delete the item
-    const deleteResult = await pool.request()
-      .input('id', mssql.Int, id)
-      .query(`
-        USE rtweb;
-        DELETE FROM tb_InvoiceTemp
-        WHERE IDX = @id
-      `);
+    // Check if TRUSER column exists
+    const columnCheck = await pool.request().query(`
+      USE rtweb;
+      SELECT CASE 
+        WHEN EXISTS (SELECT * FROM sys.columns 
+                    WHERE object_id = OBJECT_ID('tb_InvoiceTemp') 
+                    AND name = 'TRUSER')
+        THEN 1 
+        ELSE 0 
+      END as HasTRUSER
+    `);
 
+    const hasTRUSER = columnCheck.recordset[0]?.HasTRUSER === 1;
+
+    // Build delete query
+    let deleteQuery = `
+      USE rtweb;
+      DELETE FROM tb_InvoiceTemp
+      WHERE IDX = @id
+    `;
+    
+    if (hasTRUSER) {
+      deleteQuery += ` AND TRUSER = @username`;
+    }
+
+    const deleteRequest = pool.request()
+      .input('id', mssql.Int, id);
+    
+    if (hasTRUSER) {
+      deleteRequest.input('username', mssql.NVarChar(50), username);
+    }
+
+    const deleteResult = await deleteRequest.query(deleteQuery);
     console.log(`Rows deleted: ${deleteResult.rowsAffected[0]}`);
 
     if (deleteResult.rowsAffected[0] === 0) {
-      console.log("No rows deleted - item not found");
+      console.log("No rows deleted - item not found or doesn't belong to user");
       return res.status(404).json({ 
-        message: "Item not found" 
+        message: hasTRUSER ? "Item not found or you don't have permission to delete it" : "Item not found"
       });
     }
 
@@ -7280,6 +7330,7 @@ exports.deleteInvoiceTempItem = async (req, res) => {
     });
   }
 };
+
 
 // GRN/PRN/TOG table for scan page
 exports.grnprnTableData = async (req, res) => {
