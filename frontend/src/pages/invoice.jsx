@@ -74,12 +74,14 @@ function App() {
   const [colorWiseHeaders, setColorWiseHeaders] = useState([]);
   const [invoiceTableData, setInvoiceTableData] = useState([]);
   const [invoiceTableHeaders, setInvoiceTableHeaders] = useState([]);
+  const [customUnitPrice, setCustomUnitPrice] = useState("");
   
   const quantityRef = useRef(null);
   const discountRef = useRef(null);
   const tableRef = useRef(null);
   const codeRef = useRef(null);
   const streamRef = useRef(null);
+  const productNameRef = useRef(null);
   
   const grn = decodedToken.t_grn;
   const prn = decodedToken.t_prn;
@@ -191,6 +193,14 @@ useEffect(() => {
     fetchInvoiceTableData();
   }
 }, [discount, quantity, salesData.SCALEPRICE, initialData, selectedCompany, selectedCustomer]);
+
+// Invoice page load, after initialData true focus Product Name input
+useEffect(() => {
+  if (initialData && productNameRef.current) {
+    productNameRef.current.focus();
+    productNameRef.current.select(); // text select immediate typing possible
+  }
+}, [initialData]);
 
   if (!authToken) {
     return <Navigate to="/login" replace />;
@@ -841,23 +851,20 @@ const handleRowChange = (rowIndex, colIndex, value) => {
 
   const calculateTotal = () => {
   const qty = parseFloat(quantity) || 0;
-  const price = parseFloat(salesData.SCALEPRICE) || 0;
+  const price = parseFloat(customUnitPrice) || parseFloat(salesData.SCALEPRICE) || 0; // ✅ custom unit price
   const subtotal = price * qty;
 
-  if (!discount) return subtotal;  // ✅ Return NUMBER, not string
+  if (!discount) return subtotal;
 
   let discountValue = discount.toString().trim();
   let discountAmount = 0;
 
-  // Percentage discount (contains %)
   if (discountValue.includes("%")) {
     let percent = parseFloat(discountValue.replace("%", ""));
     if (!isNaN(percent)) {
       discountAmount = subtotal * (percent / 100);
     }
-  } 
-  // Direct discount (normal amount)
-  else {
+  } else {
     let amount = parseFloat(discountValue);
     if (!isNaN(amount)) {
       discountAmount = amount;
@@ -865,7 +872,7 @@ const handleRowChange = (rowIndex, colIndex, value) => {
   }
 
   const total = subtotal - discountAmount;
-  return total;  // ✅ Return NUMBER (not .toFixed(2) string)
+  return total;
 };
 
   const fetchInvoiceTableData = async () => {
@@ -927,20 +934,7 @@ const handleRowChange = (rowIndex, colIndex, value) => {
   setDisable(true);
   e.preventDefault();
 
-  // Stock validation - Check if quantity exceeds available stock
-  
-  //const availableStock = parseFloat(amount) || 0;
   const requestedQuantity = parseFloat(quantity) || 0;
-  
-  // if (requestedQuantity > availableStock) {
-  //   setAlert({ 
-  //     message: `Insufficient stock! Available: ${availableStock.toFixed(3)}`, 
-  //     type: "error" 
-  //   });
-  //   setTimeout(() => setAlert(null), 3000);
-  //   setDisable(false);
-  //   return;
-  // }
   
   if (requestedQuantity <= 0) {
     setAlert({ 
@@ -961,27 +955,27 @@ const handleRowChange = (rowIndex, colIndex, value) => {
     try {
       const qty = parseFloat(quantity) || 0;
       
-      // ✅ FIX: Parse discount to remove % and convert to number
+      // ✅ custom unit price with 2 decimal places
+      const unitPriceValue = customUnitPrice !== "" && !isNaN(parseFloat(customUnitPrice))
+  ? parseFloat(customUnitPrice).toFixed(2)
+  : salesData.SCALEPRICE
+    ? parseFloat(salesData.SCALEPRICE).toFixed(2)
+    : "0.00";
+      
+      // ✅ FIX: Parse discount
       let discountValue = 0;
       if (discount) {
         const discountStr = discount.toString().trim();
         if (discountStr.includes("%")) {
-          // If it's a percentage, just get the number part
           discountValue = parseFloat(discountStr.replace("%", "")) || 0;
         } else {
-          // If it's a direct amount
           discountValue = parseFloat(discountStr) || 0;
         }
       }
 
-      // ✅ FIX: Parse total to number (remove any non-numeric characters except decimal point)
-      let totalValue = 0;
-      if (total) {
-        const totalStr = total.toString().trim();
-        // Remove any non-numeric characters except decimal point
-        totalValue = parseFloat(totalStr.replace(/[^\d.]/g, "")) || 0;
-      }
-    
+      // ✅ FIX: Calculate total with custom unit price
+      let totalValue = calculateTotal();
+      
       // FIXED: Add customer fields to the request
       const response = await axios.post(
         `${process.env.REACT_APP_BACKEND_URL}insert-invoice-temp`,
@@ -989,16 +983,14 @@ const handleRowChange = (rowIndex, colIndex, value) => {
           company: selectedCompany,
           companyName: selectedCompanyName,
           productCode: salesData.PRODUCT_CODE,
-          productName: salesData.PRODUCT_NAME || salesData.PRODUCT_NAMELONG, // Fixed field name
+          productName: salesData.PRODUCT_NAME || salesData.PRODUCT_NAMELONG,
           costPrice: salesData.COSTPRICE,
-          unitPrice: salesData.SCALEPRICE,
+          unitPrice: unitPriceValue, // ✅ Parse custom unit price
           stock: amount,
-          //quantity: qty,
           quantity: parseFloat(qty) || 0,
-          discount: discountValue,  // ✅ Send as number, not string with %
+          discount: discountValue,
           discountAmount: discountAmount,
-          // total: parseFloat(calculateTotal()),  // ✅ Parse to number
-          total: totalValue,  // ✅ Parse to number
+          total: totalValue,
           customer: selectedCustomer,
           customerName: selectedCustomerName 
         },
@@ -1018,8 +1010,8 @@ const handleRowChange = (rowIndex, colIndex, value) => {
         
         // Reset fields
         setQuantity("");
-        setDiscount("0");
-        setTotal(""); // Reset total
+        setDiscount("");
+        setCustomUnitPrice(""); // ✅ custom unit price reset
         setSalesData([]);
         setAmount("");
         setColorWiseTableData([]);
@@ -1030,14 +1022,15 @@ const handleRowChange = (rowIndex, colIndex, value) => {
         // Fetch updated table data
         await fetchInvoiceTableData();
         
-        // Scroll to code input
+        // ✅ FOCUS PRODUCT NAME INPUT AFTER ADDING ITEM
         setTimeout(() => {
-          if (codeRef.current) {
-            codeRef.current.scrollIntoView({
+          if (productNameRef.current) {
+            productNameRef.current.scrollIntoView({
               behavior: "smooth",
               block: "center",
             });
-            codeRef.current.focus();
+            productNameRef.current.focus();
+            productNameRef.current.select(); // text select immediate typing
           }
         }, 100);
       }
@@ -1101,14 +1094,21 @@ const handleSaveInvoice = async () => {
       // Reset form
       setSalesData([]);
       setAmount("");
-      setQuantity("1");
-      setDiscount("0");
+      setQuantity("");
+      setDiscount("");
       setColorWiseTableData([]);
       setCode("");
       setInputValue("");
       setScannedCode("");
       
       setTimeout(() => setAlert(null), 3000);
+
+      setTimeout(() => {
+        if (productNameRef.current) {
+          productNameRef.current.focus();
+          productNameRef.current.select(); // optional: select all text
+        }
+      }, 300);
     }
     
     setDisable(false);
@@ -1195,12 +1195,13 @@ const handleProductNameChange = (e) => {
   }
 };
 
-// Update the handleProductSelect function to auto-fill the code input:
+// Update the handleProductSelect function
 const handleProductSelect = async (productName) => {
   setInputValue(productName);
   setShowSuggestions(false);
   setQuantity('');
   setDiscount('0');
+  setCustomUnitPrice(""); // This clears it for next item
   
   try {
     setDisable(true);
@@ -1239,6 +1240,7 @@ const handleSearchClick = async () => {
   // Clear quantity and set discount to '0' before searching
   setQuantity('');
   setDiscount('0');
+  setCustomUnitPrice(''); // ✅ custom unit price reset 
   
   // If there's a code, use it
   if (code) {
@@ -1377,36 +1379,12 @@ const handleSearchClick = async () => {
 const handleDiscountKeyPress = (e) => {
   if (e.key === 'Enter') {
     e.preventDefault();
-    
-    // Instead of submitting, focus on total input
-    if (total && quantity && salesData.PRODUCT_CODE) {
-      // If there's a total field, focus on it
-      const totalInput = document.getElementById('total');
-      if (totalInput) {
-        totalInput.focus();
-        totalInput.select();
-      }
-    } else {
-      // If no total field found, try to find it by ID
-      const totalInput = document.getElementById('total');
-      if (totalInput) {
-        totalInput.focus();
-        totalInput.select();
-      }
+    if (quantity && parseFloat(quantity) > 0 && salesData.PRODUCT_CODE) {
+      handleProductSubmit(e);
     }
   }
 };
 
-// Enter key press handler for total input
-const handleTotalKeyPress = (e) => {
-  if (e.key === 'Enter') {
-    e.preventDefault();
-    
-    if (quantity && salesData.PRODUCT_CODE) {
-      handleProductSubmit(e); // Submit the product form
-    }
-  }
-};
 
   
   return (
@@ -1544,6 +1522,7 @@ const handleTotalKeyPress = (e) => {
                               <div className="relative w-full lg:w-1/2">
                                 <input
                                   type="text"
+                                  ref={productNameRef}
                                   value={inputValue}
                                   onChange={handleProductNameChange}
                                   onKeyDown={handleKeyPress} // Add 'Enter' key handler
@@ -1723,9 +1702,63 @@ const handleTotalKeyPress = (e) => {
                             <p className="text-sm text-gray-700">
                             <strong>Cost Price:</strong> {costPrice}
                             </p>
-                            <p className="text-sm text-gray-700">
-                              <strong>Unit Price: </strong> {salesPrice}
-                            </p>
+
+                            {/* Unit Price Input Field */}
+                            <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:space-x-0.5">
+                              <p className="text-sm text-gray-700 whitespace-nowrap">
+                                <strong>Unit Price: </strong>
+                              </p>
+                              <input
+                                type="text"
+                                id="unitPrice"
+                                value={customUnitPrice}  // ← Only use customUnitPrice (no fallback here!)
+                                onChange={(e) => {
+                                  let val = e.target.value;
+
+                                  // Allow empty string (to fully clear)
+                                  if (val === "") {
+                                    setCustomUnitPrice("");
+                                    return;
+                                  }
+
+                                  // Allow only numbers and one decimal point
+                                  val = val.replace(/[^0-9.]/g, "");
+
+                                  // Prevent multiple decimal points
+                                  const parts = val.split('.');
+                                  if (parts.length > 2) {
+                                    val = parts[0] + '.' + parts.slice(1).join('');
+                                  }
+
+                                  // Limit to 2 decimal places
+                                  if (val.includes('.')) {
+                                    const [integer, decimal] = val.split('.');
+                                    if (decimal && decimal.length > 2) {
+                                      val = integer + '.' + decimal.substring(0, 2);
+                                    }
+                                  }
+
+                                  setCustomUnitPrice(val);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    quantityRef.current?.focus();
+                                    quantityRef.current?.select();
+                                  }
+                                }}
+                                onBlur={() => {
+                                  // Only format if there's a value
+                                  if (customUnitPrice && !isNaN(parseFloat(customUnitPrice))) {
+                                    setCustomUnitPrice(parseFloat(customUnitPrice).toFixed(2));
+                                  }
+                                  // If empty, stay empty (no reset to default)
+                                }}
+                                className="w-full px-2 py-2 mt-1 text-sm text-gray-700 bg-gray-100 border border-gray-300 rounded-md sm:px-3 focus:outline-none focus:ring-0 focus:border-gray-300"
+                                placeholder={salesData.SCALEPRICE ? parseFloat(salesData.SCALEPRICE).toFixed(2) : "0.00"}
+                                inputMode="decimal"
+                              />
+                            </div>
                           </div>
 
                             <div className="pt-1 border-t sm:pt-2">
@@ -1746,7 +1779,7 @@ const handleTotalKeyPress = (e) => {
                               
                                 {/* {state && ( */}
                                   <div className="flex flex-col space-y-1 sm:space-y-2">
-                                    <div className="flex flex-col items-center sm:flex-row sm:space-x-2">
+                                    <div className="flex flex-col items-center sm:flex-row sm:space-x-6">
                                       <p className="text-sm text-gray-700">
                                         <strong>Quantity: </strong>
                                       </p>
@@ -1764,7 +1797,7 @@ const handleTotalKeyPress = (e) => {
                                       />
                                     </div>
                                     {/* Set Discount */}
-                                    <div className="flex flex-col items-center sm:flex-row sm:space-x-2">
+                                    <div className="flex flex-col items-center sm:flex-row sm:space-x-6">
                                       <p className="gap-2 text-sm text-gray-700">
                                         <strong>Discount: </strong>
                                       </p>
@@ -1813,52 +1846,14 @@ const handleTotalKeyPress = (e) => {
                                     </div>            
 
                                     {/* Display Calculations */}
-                                    {/* <div className="pt-2 mt-2 border-t">
+                                    <div className="pt-2 mt-2 border-t">
                                       <div className="flex items-center gap-2 pt-2 mt-2 text-base">
                                         <span className="font-medium text-[#bc4a17]">Total:</span>
                                         <span className="text-black">
-                                          {calculateTotal().toFixed(2)}  // ✅ Display with 2 decimals 
+                                          {calculateTotal().toFixed(2)}
                                         </span>
                                       </div>
-                                    </div> */}
-                                    {/* Total Input field add */}
-                                    <div className="flex flex-col items-start gap-8 sm:flex-row sm:items-center sm:space-x-4">
-                                      <p className="gap-2 text-sm text-gray-700">
-                                        <strong>Total: </strong>
-                                      </p>
-                                      <input
-                                      type="number"
-                                      id="total"
-                                      value={total}
-                                      onChange={(e) => {
-                                        const val = e.target.value.replace(/[^\d.]/g, "");
-                                        setTotal(val);
-                                      }}
-                                      onKeyDown={(e) => {
-                                        // Disable arrow keys
-                                        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-                                          e.preventDefault();
-                                          return;
-                                        }
-                                        handleTotalKeyPress(e);
-                                      }}
-                                      // Hide the spinner arrows in some browsers
-                                      style={{ 
-                                        MozAppearance: 'textfield',
-                                        WebkitAppearance: 'none',
-                                        margin: 0 
-                                      }}
-                                      className="w-full px-2 py-2 mt-1 text-sm text-gray-700 bg-gray-100 border border-gray-300 rounded-md sm:px-3 focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                                      placeholder="Enter total amount"
-                                      step="0.01"
-                                      min="0"
-                                    />
                                     </div>
-
-                                    {/* Optional: Show suggested total (for reference only) */}
-                                    <div className="mt-1 text-xs text-gray-500">
-                                      <span>Suggested: {((parseFloat(salesData.SCALEPRICE) || 0) * (parseFloat(quantity) || 0) - discountAmount).toFixed(2)}</span>
-                                    </div>                               
 
                                   {/* Display error message under the input field */}
                                   {quantityError && (
