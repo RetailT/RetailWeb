@@ -75,6 +75,7 @@ function App() {
   const [invoiceTableData, setInvoiceTableData] = useState([]);
   const [invoiceTableHeaders, setInvoiceTableHeaders] = useState([]);
   const [customUnitPrice, setCustomUnitPrice] = useState("");
+  const [unitPriceError, setUnitPriceError] = useState("");
   
   const quantityRef = useRef(null);
   const discountRef = useRef(null);
@@ -82,6 +83,8 @@ function App() {
   const codeRef = useRef(null);
   const streamRef = useRef(null);
   const productNameRef = useRef(null);
+  const unitRef = useRef(null); 
+  const isSubmittingRef = useRef(false);
   
   const grn = decodedToken.t_grn;
   const prn = decodedToken.t_prn;
@@ -196,11 +199,29 @@ useEffect(() => {
 
 // Invoice page load, after initialData true focus Product Name input
 useEffect(() => {
-  if (initialData && productNameRef.current) {
-    productNameRef.current.focus();
-    productNameRef.current.select(); // text select immediate typing possible
+  if (initialData && codeRef.current) {
+    codeRef.current.focus();
+    codeRef.current.select(); // text select immediate typing possible
   }
 }, [initialData]);
+
+useEffect(() => {
+  if (customUnitPrice !== "") {
+    const unitPriceNum = parseFloat(customUnitPrice);
+    if (!isNaN(unitPriceNum) && unitPriceNum === 0) {
+      setDiscount("0");
+    }
+  }
+}, [customUnitPrice]); // Runs whenever customUnitPrice changes
+
+
+useEffect(() => {
+  const qty = parseFloat(quantity) || 0;
+  if (qty === 0) {
+    setDiscount("0");
+  }
+}, [quantity]);
+
 
   if (!authToken) {
     return <Navigate to="/login" replace />;
@@ -505,6 +526,7 @@ useEffect(() => {
 
       if (response.data.salesData.length > 0) {
         setSalesData(response.data.salesData[0]);
+        setQuantityError(""); // Add this line
       }
       if (response.data.colorWiseData.length > 0) {
         const colorWiseData = response.data.colorWiseData;
@@ -813,7 +835,7 @@ const handleRowChange = (rowIndex, colIndex, value) => {
     // Re-calculate totals
     const item = updatedData[rowIndex];
     const qty = parseFloat(value) || 0;
-    const price = parseFloat(item.UNITPRICE) || 0;
+    const price = parseFloat(item.UNITPRICE);
     const discountAmount = parseFloat(item.DISCOUNT_AMOUNT) || 0;
     
     item.TOTAL = (qty * price - discountAmount).toFixed(2);
@@ -849,12 +871,20 @@ const handleRowChange = (rowIndex, colIndex, value) => {
 };
 
 
-  const calculateTotal = () => {
+const calculateTotal = () => {
   const qty = parseFloat(quantity) || 0;
-  const price = parseFloat(customUnitPrice) || parseFloat(salesData.SCALEPRICE) || 0; // ✅ custom unit price
+  
+  // Get unit price - prioritize customUnitPrice, then salesData.SCALEPRICE, default to 0
+  let price = 0;
+  if (customUnitPrice !== "" && !isNaN(parseFloat(customUnitPrice))) {
+    price = parseFloat(customUnitPrice);
+  } else if (salesData.SCALEPRICE && !isNaN(parseFloat(salesData.SCALEPRICE))) {
+    price = parseFloat(salesData.SCALEPRICE);
+  }
+  
   const subtotal = price * qty;
 
-  if (!discount) return subtotal;
+  if (!discount || discount === "0") return subtotal;
 
   let discountValue = discount.toString().trim();
   let discountAmount = 0;
@@ -872,7 +902,49 @@ const handleRowChange = (rowIndex, colIndex, value) => {
   }
 
   const total = subtotal - discountAmount;
-  return total;
+  return total < 0 ? 0 : total; // Ensure total doesn't go negative
+};
+
+// Add a new function to validate discount
+const validateDiscount = () => {
+  if (!discount || discount === "0") return { valid: true, message: "" };
+  
+  const qty = parseFloat(quantity) || 0;
+  
+  // Get unit price
+  let price = 0;
+  if (customUnitPrice !== "" && !isNaN(parseFloat(customUnitPrice))) {
+    price = parseFloat(customUnitPrice);
+  } else if (salesData.SCALEPRICE && !isNaN(parseFloat(salesData.SCALEPRICE))) {
+    price = parseFloat(salesData.SCALEPRICE);
+  }
+  
+  const subtotal = price * qty;
+  
+  let discountValue = discount.toString().trim();
+  
+  if (discountValue.includes("%")) {
+    let percent = parseFloat(discountValue.replace("%", ""));
+    if (!isNaN(percent)) {
+      // For percentage, just check if it's reasonable (0-100%)
+      if (percent < 0 || percent > 100) {
+        return { valid: false, message: "Discount percentage must be between 0% and 100%" };
+      }
+    }
+  } else {
+    let amount = parseFloat(discountValue);
+    if (!isNaN(amount)) {
+      // For fixed amount, check if it's greater than subtotal
+      if (amount > subtotal) {
+        return { valid: false, message: `Discount amount (${amount}) cannot exceed subtotal (${subtotal.toFixed(2)})` };
+      }
+      if (amount < 0) {
+        return { valid: false, message: "Discount amount cannot be negative" };
+      }
+    }
+  }
+  
+  return { valid: true, message: "" };
 };
 
   const fetchInvoiceTableData = async () => {
@@ -924,126 +996,155 @@ const handleRowChange = (rowIndex, colIndex, value) => {
   }
 };
 
-  const handleProductSubmit = async (e) => {
-  let valid = true;
-  if (!salesData.PRODUCT_CODE || salesData.PRODUCT_CODE==='' || salesData.PRODUCT_CODE === undefined) {
+// Update handleProductSubmit function
+const handleProductSubmit = async (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  
+  // ✅ Check ref instead of state (more reliable)
+  if (isSubmittingRef.current) {
+    console.log("Already submitting, blocked duplicate request");
+    return;
+  }
+
+  // ✅ Check state as backup
+  if (disable) {
+    console.log("Disabled state - blocked duplicate request");
+    return;
+  }
+
+  setQuantityError("");
+  
+  // Validate product is selected
+  if (!salesData.PRODUCT_CODE || salesData.PRODUCT_CODE === '' || salesData.PRODUCT_CODE === undefined) {
     setAlert({ message: "No product selected", type: "error" });
     setTimeout(() => setAlert(null), 3000);
     return;
   }
+  
+  // ✅ Set both ref and state
+  isSubmittingRef.current = true;
   setDisable(true);
-  e.preventDefault();
 
   const requestedQuantity = parseFloat(quantity) || 0;
   
-  if (requestedQuantity <= 0) {
+  // Validate unit price
+  const unitPriceValue = customUnitPrice !== "" && !isNaN(parseFloat(customUnitPrice))
+    ? parseFloat(customUnitPrice).toFixed(2)
+    : salesData.SCALEPRICE
+      ? parseFloat(salesData.SCALEPRICE).toFixed(2)
+      : "0.00";
+  
+  // Validate discount
+  const discountValidation = validateDiscount();
+  if (!discountValidation.valid) {
     setAlert({ 
-      message: "Quantity must be greater than 0", 
+      message: discountValidation.message, 
       type: "error" 
     });
     setTimeout(() => setAlert(null), 3000);
+    isSubmittingRef.current = false; // ✅ Reset ref
     setDisable(false);
     return;
   }
   
+  // Validate quantity
   if (!quantity) {
     setQuantityError("Quantity is required.");
-    valid = false;
-  } else {
-    setQuantityError("");
+    isSubmittingRef.current = false; // ✅ Reset ref
+    setDisable(false);
+    return;
+  }
 
-    try {
-      const qty = parseFloat(quantity) || 0;
-      
-      // ✅ custom unit price with 2 decimal places
-      const unitPriceValue = customUnitPrice !== "" && !isNaN(parseFloat(customUnitPrice))
-  ? parseFloat(customUnitPrice).toFixed(2)
-  : salesData.SCALEPRICE
-    ? parseFloat(salesData.SCALEPRICE).toFixed(2)
-    : "0.00";
-      
-      // ✅ FIX: Parse discount
-      let discountValue = 0;
-      if (discount) {
-        const discountStr = discount.toString().trim();
-        if (discountStr.includes("%")) {
-          discountValue = parseFloat(discountStr.replace("%", "")) || 0;
-        } else {
-          discountValue = parseFloat(discountStr) || 0;
-        }
+  setQuantityError("");
+
+  try {
+    const qty = parseFloat(quantity) || 0;
+    
+    // Parse discount
+    let discountValue = 0;
+    if (discount && discount !== "0") {
+      const discountStr = discount.toString().trim();
+      if (discountStr.includes("%")) {
+        discountValue = parseFloat(discountStr.replace("%", "")) || 0;
+      } else {
+        discountValue = parseFloat(discountStr) || 0;
       }
+    }
 
-      // ✅ FIX: Calculate total with custom unit price
-      let totalValue = calculateTotal();
-      
-      // FIXED: Add customer fields to the request
-      const response = await axios.post(
-        `${process.env.REACT_APP_BACKEND_URL}insert-invoice-temp`,
-        {
-          company: selectedCompany,
-          companyName: selectedCompanyName,
-          productCode: salesData.PRODUCT_CODE,
-          productName: salesData.PRODUCT_NAME || salesData.PRODUCT_NAMELONG,
-          costPrice: salesData.COSTPRICE,
-          unitPrice: unitPriceValue, // ✅ Parse custom unit price
-          stock: amount,
-          quantity: parseFloat(qty) || 0,
-          discount: discountValue,
-          discountAmount: discountAmount,
-          total: totalValue,
-          customer: selectedCustomer,
-          customerName: selectedCustomerName 
+    // Calculate total with custom unit price
+    let totalValue = calculateTotal();
+    
+    // Submit to backend
+    const response = await axios.post(
+      `${process.env.REACT_APP_BACKEND_URL}insert-invoice-temp`,
+      {
+        company: selectedCompany,
+        companyName: selectedCompanyName,
+        productCode: salesData.PRODUCT_CODE,
+        productName: salesData.PRODUCT_NAME || salesData.PRODUCT_NAMELONG,
+        costPrice: salesData.COSTPRICE,
+        unitPrice: unitPriceValue,
+        stock: amount,
+        quantity: parseFloat(qty) || 0,
+        discount: discountValue,
+        discountAmount: discountAmount,
+        total: totalValue,
+        customer: selectedCustomer,
+        customerName: selectedCustomerName 
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
         },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-      
-      if (response.data.message === "Invoice item added successfully") {
-        setAlert({
-          message: "Item added to invoice successfully",
-          type: "success",
-        });
-        setTimeout(() => setAlert(null), 3000);
-        
-        // Reset fields
-        setQuantity("");
-        setDiscount("");
-        setCustomUnitPrice(""); // ✅ custom unit price reset
-        setSalesData([]);
-        setAmount("");
-        setColorWiseTableData([]);
-        setCode("");
-        setInputValue("");
-        setScannedCode("");
-        
-        // Fetch updated table data
-        await fetchInvoiceTableData();
-        
-        // ✅ FOCUS PRODUCT NAME INPUT AFTER ADDING ITEM
-        setTimeout(() => {
-          if (productNameRef.current) {
-            productNameRef.current.scrollIntoView({
-              behavior: "smooth",
-              block: "center",
-            });
-            productNameRef.current.focus();
-            productNameRef.current.select(); // text select immediate typing
-          }
-        }, 100);
       }
-    } catch (err) {
-      console.error("Backend error details:", err.response?.data);
+    );
+    
+    if (response.data.message === "Invoice item added successfully") {
       setAlert({
-        message: err.response?.data?.message || "Failed to add item",
-        type: "error",
+        message: "Item added to invoice successfully",
+        type: "success",
       });
       setTimeout(() => setAlert(null), 3000);
+      
+      // Reset fields
+      setQuantity("");
+      setDiscount("0");
+      setCustomUnitPrice("");
+      setSalesData([]);
+      setAmount("");
+      setColorWiseTableData([]);
+      setCode("");
+      setInputValue("");
+      setScannedCode("");
+      
+      // Fetch updated table data
+      await fetchInvoiceTableData();
+      
+      // Focus product code input after adding item
+      setTimeout(() => {
+        if (codeRef.current) {
+          codeRef.current.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+          codeRef.current.focus();
+          codeRef.current.select();
+        }
+      }, 100);
     }
+  } catch (err) {
+    console.error("Backend error details:", err.response?.data);
+    setAlert({
+      message: err.response?.data?.message || "Failed to add item",
+      type: "error",
+    });
+    setTimeout(() => setAlert(null), 3000);
+  } finally {
+    // ✅ Always reset both ref and state
+    isSubmittingRef.current = false;
+    setDisable(false);
   }
-  setDisable(false);
 };
 
 // Add this function before the return statement
@@ -1104,9 +1205,9 @@ const handleSaveInvoice = async () => {
       setTimeout(() => setAlert(null), 3000);
 
       setTimeout(() => {
-        if (productNameRef.current) {
-          productNameRef.current.focus();
-          productNameRef.current.select(); // optional: select all text
+        if (codeRef.current) {
+          codeRef.current.focus();
+          codeRef.current.select(); // optional: select all text
         }
       }, 300);
     }
@@ -1181,6 +1282,7 @@ const handleProductNameChange = (e) => {
   const value = e.target.value;
   setInputValue(value);
   setScannedCode(""); // Clear scanned code when typing
+  setCodeError(""); // Clear error when typing
 
   if (value.length > 0) {
     // Filter products that START with the entered text
@@ -1211,13 +1313,13 @@ const handleProductSelect = async (productName) => {
     
     // Focus on quantity input after data loads
     setTimeout(() => {
-      if (quantityRef.current) {
-        quantityRef.current.scrollIntoView({
+      if (unitRef.current) {
+        unitRef.current.scrollIntoView({
           behavior: "smooth",
           block: "center",
         });
-        quantityRef.current.focus();
-        quantityRef.current.select();
+        unitRef.current.focus();
+        unitRef.current.select();
       }
     }, 300);
     
@@ -1248,13 +1350,13 @@ const handleSearchClick = async () => {
     
     // After data loads, focus on quantity input
     setTimeout(() => {
-      if (quantityRef.current) {
-        quantityRef.current.scrollIntoView({
+      if (unitRef.current) {
+        unitRef.current.scrollIntoView({
           behavior: "smooth",
           block: "center",
         });
-        quantityRef.current.focus();
-        quantityRef.current.select();
+        unitRef.current.focus();
+        unitRef.current.select();
       }
     }, 300);
   } 
@@ -1284,13 +1386,13 @@ const handleSearchClick = async () => {
       
       // After data loads, focus on quantity input
       setTimeout(() => {
-        if (quantityRef.current) {
-          quantityRef.current.scrollIntoView({
+        if (unitRef.current) {
+          unitRef.current.scrollIntoView({
             behavior: "smooth",
             block: "center",
           });
-          quantityRef.current.focus();
-          quantityRef.current.select();
+          unitRef.current.focus();
+          unitRef.current.select();
         }
       }, 300);
       
@@ -1299,9 +1401,9 @@ const handleSearchClick = async () => {
       
       // Still focus on quantity even if error
       setTimeout(() => {
-        if (quantityRef.current) {
-          quantityRef.current.focus();
-          quantityRef.current.select();
+        if (unitRef.current) {
+          unitRef.current.focus();
+          unitRef.current.select();
         }
       }, 300);
     } finally {
@@ -1324,61 +1426,131 @@ const handleSearchClick = async () => {
       // Clear quantity and discount
       setQuantity('');
       setDiscount('0');
+      setCustomUnitPrice(''); // ✅ custom unit price reset 
       
       // Call search and then focus on quantity
       await handleSearchClick();
       
       // After search completes, focus on quantity
       setTimeout(() => {
-        if (quantityRef.current) {
-          quantityRef.current.scrollIntoView({
+        if (unitRef.current) {
+          unitRef.current.scrollIntoView({
             behavior: "smooth",
             block: "center",
           });
-          quantityRef.current.focus();
-          quantityRef.current.select();
+          unitRef.current.focus();
+          unitRef.current.select();
         }
       }, 300);
     } else if (!code && !inputValue) {
-      setCodeError("Code or product name is required.");
+      //setCodeError("Code or product name is required.");
+      e.preventDefault();
+      if (productNameRef.current) {
+        productNameRef.current.focus();
+        productNameRef.current.select();
+      }
     }
   }
 };
 
-  // Enter key press handler function
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault(); // Prevent form submission
-      
-      if (code || inputValue) {
-        handleSearchClick(); // Call your search function
-      } else {
-        // If both fields are empty, move focus to code input
-        if (codeRef.current) {
-          codeRef.current.focus();
-        }
+  // Enter key press handler function for product name input
+const handleKeyPress = (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault(); // Prevent form submission
+    
+    if (!code && !inputValue) {
+      setCodeError("Code or product name is required.");
+      // Don't move focus, show error and stay on product name
+      if (productNameRef.current) {
+        productNameRef.current.focus();
       }
+    } else if (code || inputValue) {
+      handleSearchClick(); // Call your search function
     }
-  };
+  }
+};
 
-  // Enter key press handler for quantity input
-  const handleQuantityKeyPress = (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      
-      if (quantity && !isNaN(quantity) && parseFloat(quantity) > 0) {
-        if (discountRef.current) {
-          discountRef.current.focus();
-          discountRef.current.select();
-        }
-      }
+// Enter key press handler for quantity input
+const handleQuantityKeyPress = (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+
+    const qty = parseFloat(quantity) || 0;
+
+    if (qty <= 0) {
+      setQuantityError("Quantity must be greater than 0");
+      quantityRef.current?.focus();
+      return;
     }
-  };
 
-// Enter key press handler for discount input
+    // Clear error if valid
+    setQuantityError("");
+
+    if (!salesData.PRODUCT_CODE) {
+      setAlert({
+        message: "No product selected",
+        type: "error"
+      });
+      setTimeout(() => setAlert(null), 3000);
+      return;
+    }
+
+    // Get current unit price
+    const currentUnitPrice = customUnitPrice !== "" && !isNaN(parseFloat(customUnitPrice))
+      ? parseFloat(customUnitPrice)
+      : salesData.SCALEPRICE
+        ? parseFloat(salesData.SCALEPRICE)
+        : 0;
+
+    // If unit price is 0 → direct submit
+    if (currentUnitPrice === 0) {
+      handleProductSubmit(e);
+      return;
+    }
+
+    // Otherwise → go to discount field
+    if (discountRef.current) {
+      discountRef.current.focus();
+      discountRef.current.select();
+    }
+  }
+};
+
+// Enter key press handler for discount input (FIXED - Prevent double submission)
 const handleDiscountKeyPress = (e) => {
   if (e.key === 'Enter') {
     e.preventDefault();
+    e.stopPropagation(); // ✅ Stop event bubbling
+
+    // Check if already submitting
+    if (disable) return; // ✅ Prevent double submission
+
+    // Validate unit price
+    const unitPriceValue = customUnitPrice !== "" && !isNaN(parseFloat(customUnitPrice))
+      ? parseFloat(customUnitPrice)
+      : salesData.SCALEPRICE ? parseFloat(salesData.SCALEPRICE) : 0;
+
+    if (unitPriceValue <= 0 && parseFloat(quantity) > 0) {
+      setAlert({
+        message: "Unit price cannot be zero when quantity is entered",
+        type: "error"
+      });
+      setTimeout(() => setAlert(null), 3000);
+      return;
+    }
+
+    // Validate discount
+    const discountValidation = validateDiscount();
+    if (!discountValidation.valid) {
+      setAlert({
+        message: discountValidation.message,
+        type: "error"
+      });
+      setTimeout(() => setAlert(null), 3000);
+      return;
+    }
+
+    // All good → submit
     if (quantity && parseFloat(quantity) > 0 && salesData.PRODUCT_CODE) {
       handleProductSubmit(e);
     }
@@ -1649,7 +1821,19 @@ const handleDiscountKeyPress = (e) => {
                               </p>
                               <p className="text-sm text-gray-700">
                                 <strong>Company Name:</strong> {selectedCompanyName}
+                              </p>              
+                              <hr className="my-3 border-t border-gray-300 sm:my-4" />
+
+                              <p className="font-medium text-[#bc4a17] mb-1 sm:mb-2 text-sm sm:text-base">
+                                Customer Information
                               </p>
+                              <p className="text-sm text-gray-700">
+                                <strong>Customer Code:</strong> {selectedCustomer}
+                              </p>
+                              <p className="text-sm text-gray-700">
+                                <strong>Customer Name:</strong> {selectedCustomerName}
+                              </p>
+                              
                               {selectedType === "TOG" && (
                                 <div>
                                   <p className="text-sm text-gray-700">
@@ -1704,60 +1888,75 @@ const handleDiscountKeyPress = (e) => {
                             </p>
 
                             {/* Unit Price Input Field */}
+
                             <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:space-x-0.5">
                               <p className="text-sm text-gray-700 whitespace-nowrap">
                                 <strong>Unit Price: </strong>
                               </p>
-                              <input
-                                type="text"
-                                id="unitPrice"
-                                value={customUnitPrice}  // ← Only use customUnitPrice (no fallback here!)
-                                onChange={(e) => {
-                                  let val = e.target.value;
-
-                                  // Allow empty string (to fully clear)
-                                  if (val === "") {
-                                    setCustomUnitPrice("");
-                                    return;
-                                  }
-
-                                  // Allow only numbers and one decimal point
-                                  val = val.replace(/[^0-9.]/g, "");
-
-                                  // Prevent multiple decimal points
-                                  const parts = val.split('.');
-                                  if (parts.length > 2) {
-                                    val = parts[0] + '.' + parts.slice(1).join('');
-                                  }
-
-                                  // Limit to 2 decimal places
-                                  if (val.includes('.')) {
-                                    const [integer, decimal] = val.split('.');
-                                    if (decimal && decimal.length > 2) {
-                                      val = integer + '.' + decimal.substring(0, 2);
+                              <div className="w-full"> {/* Wrapper for error message positioning */}
+                                <input
+                                  type="text"
+                                  id="unitPrice"
+                                  ref={unitRef}
+                                  value={customUnitPrice}
+                                  onChange={(e) => {
+                                    let val = e.target.value;
+                                    if (val === "") {
+                                      setCustomUnitPrice("");
+                                      setUnitPriceError(""); // Clear error when empty
+                                      return;
                                     }
-                                  }
-
-                                  setCustomUnitPrice(val);
-                                }}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    e.preventDefault();
-                                    quantityRef.current?.focus();
-                                    quantityRef.current?.select();
-                                  }
-                                }}
-                                onBlur={() => {
-                                  // Only format if there's a value
-                                  if (customUnitPrice && !isNaN(parseFloat(customUnitPrice))) {
-                                    setCustomUnitPrice(parseFloat(customUnitPrice).toFixed(2));
-                                  }
-                                  // If empty, stay empty (no reset to default)
-                                }}
-                                className="w-full px-2 py-2 mt-1 text-sm text-gray-700 bg-gray-100 border border-gray-300 rounded-md sm:px-3 focus:outline-none focus:ring-0 focus:border-gray-300"
-                                placeholder={salesData.SCALEPRICE ? parseFloat(salesData.SCALEPRICE).toFixed(2) : "0.00"}
-                                inputMode="decimal"
-                              />
+                                    val = val.replace(/[^0-9.]/g, "");
+                                    const parts = val.split('.');
+                                    if (parts.length > 2) {
+                                      val = parts[0] + '.' + parts.slice(1).join('');
+                                    }
+                                    if (val.includes('.')) {
+                                      const [integer, decimal] = val.split('.');
+                                      if (decimal && decimal.length > 2) {
+                                        val = integer + '.' + decimal.substring(0, 2);
+                                      }
+                                    }
+                                    setCustomUnitPrice(val);
+                                    setUnitPriceError(""); // Clear error while typing
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      quantityRef.current?.focus();
+                                      quantityRef.current?.select();
+                                    }
+                                  }}
+                                  onBlur={() => {
+                                    if (customUnitPrice && !isNaN(parseFloat(customUnitPrice))) {
+                                      const formatted = parseFloat(customUnitPrice).toFixed(2);
+                                      setCustomUnitPrice(formatted);
+                                      
+                                      // // Validate after formatting
+                                      // if (parseFloat(formatted) === 0) {
+                                      //   setDiscount("0"); // Auto clear discount
+                                      //   setUnitPriceError("Unit price must be greater than 0");
+                                      // } else {
+                                      //   setUnitPriceError(""); // Clear error if valid
+                                      // }
+                                    } else if (customUnitPrice === "") {
+                                      setUnitPriceError("");
+                                    }
+                                  }}
+                                  className={`w-full px-2 py-2 mt-1 text-sm text-gray-700 bg-gray-100 border rounded-md sm:px-3 focus:outline-none focus:ring-0 ${
+                                    unitPriceError ? "border-red-500" : "border-gray-300"
+                                  }`}
+                                  placeholder={salesData.SCALEPRICE ? parseFloat(salesData.SCALEPRICE).toFixed(2) : "0.00"}
+                                  inputMode="decimal"
+                                />
+                                
+                                {/* Error Message Below Input */}
+                                {unitPriceError && (
+                                  <p className="mt-1 text-sm text-red-500">
+                                    {unitPriceError}
+                                  </p>
+                                )}
+                              </div>
                             </div>
                           </div>
 
@@ -1773,28 +1972,48 @@ const handleDiscountKeyPress = (e) => {
                               </p>
 
                               <form
-                                onSubmit={handleSubmit}
+                                onSubmit={handleProductSubmit}
                                 className="flex flex-col space-y-2 sm:space-y-4"
                               >
                               
                                 {/* {state && ( */}
                                   <div className="flex flex-col space-y-1 sm:space-y-2">
-                                    <div className="flex flex-col items-center sm:flex-row sm:space-x-6">
-                                      <p className="text-sm text-gray-700">
-                                        <strong>Quantity: </strong>
-                                      </p>
-                                      <input
-                                        type="number"
-                                        id="quantity"
-                                        ref={quantityRef}
-                                        value={quantity}
-                                        onChange={(e) => setQuantity(e.target.value)}
-                                        onKeyDown={handleQuantityKeyPress} // Add 'Enter' key handler
-                                        className="w-full px-2 py-2 mt-1 text-sm text-gray-700 bg-gray-100 border border-gray-300 rounded-md sm:px-3 focus:outline-none"
-                                        placeholder="Enter quantity"
-                                        step="0.01"
-                                        min="0"
-                                      />
+                                    <div className="flex flex-col w-full gap-1">
+                                      <div className="flex items-center gap-6">
+                                        <p className="text-sm text-gray-700 whitespace-nowrap">
+                                          <strong>Quantity: </strong>
+                                        </p>
+                                        <div className="relative flex-1">
+                                          <input
+                                            type="number"
+                                            id="quantity"
+                                            ref={quantityRef}
+                                            value={quantity}
+                                            onChange={(e) => {
+                                              setQuantity(e.target.value);
+                                              setQuantityError(""); // Clear error while typing
+                                            }}
+                                            onKeyDown={handleQuantityKeyPress}
+                                            onWheel={(e) => {
+                                              e.preventDefault();
+                                              e.target.blur();
+                                            }}
+                                            className={`w-full px-2 py-2 text-sm text-gray-700 bg-gray-100 border rounded-md sm:px-3 focus:outline-none focus:ring-0 ${
+                                              quantityError ? "border-red-500" : "border-gray-300"
+                                            }`}
+                                            placeholder="Enter quantity"
+                                            step="0.01"
+                                            min="0"
+                                            style={{ WebkitAppearance: 'none', margin: 0 }}
+                                          />
+                                        </div>
+                                      </div>
+                                      {/* Error message directly below the input field */}
+                                      {quantityError && (
+                                        <p className="mt-1 text-sm text-red-500 ml-28"> {/* ml-28 to align with input */}
+                                          {quantityError}
+                                        </p>
+                                      )}
                                     </div>
                                     {/* Set Discount */}
                                     <div className="flex flex-col items-center sm:flex-row sm:space-x-6">
@@ -1832,8 +2051,22 @@ const handleDiscountKeyPress = (e) => {
                                         step="0.01"
                                         min="0"
                                         max="100"
+                                        disabled={parseFloat(customUnitPrice || salesData.SCALEPRICE || 0) <= 0} // Disable if unit price is 0
                                       />
                                     </div>
+
+                                    {/* Show discount validation error if any */}
+                                    {(discount && discount !== "0") && (() => {
+                                      const validation = validateDiscount();
+                                      if (!validation.valid) {
+                                        return (
+                                          <p className="mt-1 text-sm text-red-500">
+                                            {validation.message}
+                                          </p>
+                                        );
+                                      }
+                                      return null;
+                                    })()}
                                     
                                     {/* Discount Amount */}
                                     <div className="flex items-center gap-2">
@@ -1854,17 +2087,15 @@ const handleDiscountKeyPress = (e) => {
                                         </span>
                                       </div>
                                     </div>
-
-                                  {/* Display error message under the input field */}
-                                  {quantityError && (
-                                    <p className="mt-1 text-sm text-red-500">
-                                      {quantityError}
-                                    </p>
-                                  )}
                                   
                                   <div className="flex items-center justify-center">
                                     <button
-                                      onClick={handleProductSubmit}
+                                      type="button"
+                                      onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation(); // ✅ Add this
+                                      handleProductSubmit(e);
+                                    }}                                   
                                       disabled={disable}
                                       className={`bg-[#f17e21] hover:bg-[#efa05f] text-white px-3 sm:px-4 py-2 rounded-lg mt-2 sm:mt-4 w-full sm:w-1/2 ${
                                         disable ? "opacity-50 cursor-not-allowed" : ""

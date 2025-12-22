@@ -6762,6 +6762,7 @@ exports.getInvoiceTempData = async (req, res) => {
       USE [RT_WEB];
       SELECT * FROM tb_InvoiceTemp
       WHERE COMPANY_CODE = @company
+        AND CUSTOMER_CODE = @customer
     `;
     
     if (hasTRUSER) {
@@ -6772,6 +6773,7 @@ exports.getInvoiceTempData = async (req, res) => {
 
     const request = pool.request()
       .input('company', mssql.NChar(10), company)
+      .input('customer', mssql.NVarChar(20), customer);
     
     if (hasTRUSER) {
       request.input('username', mssql.NVarChar(50), username);
@@ -6838,6 +6840,8 @@ exports.insertInvoiceTemp = async (req, res) => {
     const {
       company,
       companyName,
+      customer,         // NEW
+      customerName,       // NEW
       productCode,
       productName,
       costPrice,
@@ -6851,7 +6855,7 @@ exports.insertInvoiceTemp = async (req, res) => {
 
     const username = req.user.username;
 
-    if (!company || !productCode) {
+    if (!company || !productCode || !customer) {  // VALIDATE CUSTOMER
       console.log("Validation failed:", { company, productCode });
       return res.status(400).json({ 
         message: "Missing required fields: company or productCode" 
@@ -6903,6 +6907,8 @@ exports.insertInvoiceTemp = async (req, res) => {
             IDX NUMERIC(18,0) IDENTITY(1,1) PRIMARY KEY,
             COMPANY_CODE NVARCHAR(10),
             COMPANY_NAME NVARCHAR(50),
+            CUSTOMER_CODE NVARCHAR(20),        -- NEW
+            CUSTOMER_NAME NVARCHAR(100),       -- NEW
             PRODUCT_CODE NVARCHAR(30),
             PRODUCT_NAME NVARCHAR(100),
             COSTPRICE MONEY,
@@ -6954,6 +6960,8 @@ exports.insertInvoiceTemp = async (req, res) => {
     const result = await pool.request()
       .input('company', mssql.NChar(10), company)
       .input('companyName', mssql.NVarChar(50), companyName || '')
+      .input('customerCode', mssql.NVarChar(20), customer || '')
+      .input('customerName', mssql.NVarChar(100), customerName || '')
       .input('productCode', mssql.NChar(30), productCode)
       .input('productName', mssql.NVarChar(100), productName || '')
       .input('costPrice', mssql.Money, safeCost)
@@ -6967,10 +6975,10 @@ exports.insertInvoiceTemp = async (req, res) => {
       .query(`
         USE [RT_WEB];
         INSERT INTO tb_InvoiceTemp 
-        (COMPANY_CODE, COMPANY_NAME, PRODUCT_CODE, PRODUCT_NAME, 
+        (COMPANY_CODE, COMPANY_NAME, CUSTOMER_CODE, CUSTOMER_NAME, PRODUCT_CODE, PRODUCT_NAME, 
         COSTPRICE, UNITPRICE, STOCK, QUANTITY, DISCOUNT, DISCOUNT_AMOUNT, TOTAL, 
         TRUSER, INSERT_TIME)
-        VALUES (@company, @companyName, @productCode, @productName, 
+        VALUES (@company, @companyName, @customerCode, @customerName, @productCode, @productName, 
                 @costPrice, @unitPrice, @stock, @quantity, @discount, @discountAmount, @total, 
                 @username, GETDATE())
       `);
@@ -7049,6 +7057,8 @@ exports.saveInvoice = async (req, res) => {
             IDX NUMERIC(18,0) IDENTITY(1,1) PRIMARY KEY,
             COMPANY_CODE NVARCHAR(10),
             COMPANY_NAME NVARCHAR(50),  
+            CUSTOMER_CODE NVARCHAR(20),        -- ← NEW
+            CUSTOMER_NAME NVARCHAR(100),       -- ← NEW
             PRODUCT_CODE NVARCHAR(30),
             PRODUCT_NAME NVARCHAR(100),
             COSTPRICE MONEY,
@@ -7132,12 +7142,14 @@ exports.saveInvoice = async (req, res) => {
     let insertQuery = `
       USE [RT_WEB];
       INSERT INTO tb_INVOICE_DETAILS 
-      (COMPANY_CODE, COMPANY_NAME,
+      (COMPANY_CODE, COMPANY_NAME, CUSTOMER_CODE, CUSTOMER_NAME,
        PRODUCT_CODE, PRODUCT_NAME, COSTPRICE, UNITPRICE, 
        STOCK, QUANTITY, DISCOUNT, DISCOUNT_AMOUNT, TOTAL${hasTRUSER ? ', TRUSER' : ''})
       SELECT 
         COMPANY_CODE, 
         COMPANY_NAME, 
+        CUSTOMER_CODE, 
+        CUSTOMER_NAME,
         PRODUCT_CODE, 
         PRODUCT_NAME, 
         COSTPRICE, 
