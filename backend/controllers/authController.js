@@ -7057,8 +7057,8 @@ exports.saveInvoice = async (req, res) => {
             IDX NUMERIC(18,0) IDENTITY(1,1) PRIMARY KEY,
             COMPANY_CODE NVARCHAR(10),
             COMPANY_NAME NVARCHAR(50),  
-            CUSTOMER_CODE NVARCHAR(20),        -- ← NEW
-            CUSTOMER_NAME NVARCHAR(100),       -- ← NEW
+            CUSTOMER_CODE NVARCHAR(20),        -- NEW
+            CUSTOMER_NAME NVARCHAR(100),       -- NEW
             PRODUCT_CODE NVARCHAR(30),
             PRODUCT_NAME NVARCHAR(100),
             COSTPRICE MONEY,
@@ -7114,6 +7114,7 @@ exports.saveInvoice = async (req, res) => {
       USE [RT_WEB];
       SELECT COUNT(*) as count FROM tb_InvoiceTemp
       WHERE COMPANY_CODE = @company
+        AND CUSTOMER_CODE = @customer
     `;
     
     if (hasTRUSER) {
@@ -7122,6 +7123,7 @@ exports.saveInvoice = async (req, res) => {
 
     const request = pool.request()
       .input('company', mssql.NChar(10), company)
+      .input('customer', mssql.NVarChar(20), customer);
     
     if (hasTRUSER) {
       request.input('username', mssql.NVarChar(50), username);
@@ -7161,6 +7163,7 @@ exports.saveInvoice = async (req, res) => {
         TOTAL${hasTRUSER ? ', TRUSER' : ''}
       FROM tb_InvoiceTemp
       WHERE COMPANY_CODE = @company
+        AND CUSTOMER_CODE = @customer
     `;
   
     if (hasTRUSER) {
@@ -7168,7 +7171,8 @@ exports.saveInvoice = async (req, res) => {
     }
 
     const insertRequest = pool.request()
-      .input('company', mssql.NChar(10), company);
+      .input('company', mssql.NChar(10), company)
+      .input('customer', mssql.NVarChar(20), customer);
     
     if (hasTRUSER) {
       insertRequest.input('username', mssql.NVarChar(50), username);
@@ -7182,6 +7186,7 @@ exports.saveInvoice = async (req, res) => {
       USE [RT_WEB];
       DELETE FROM tb_InvoiceTemp
       WHERE COMPANY_CODE = @company
+        AND CUSTOMER_CODE = @customer
     `;
     
     if (hasTRUSER) {
@@ -7189,7 +7194,8 @@ exports.saveInvoice = async (req, res) => {
     }
 
     const deleteRequest = pool.request()
-      .input('company', mssql.NChar(10), company);
+      .input('company', mssql.NChar(10), company)
+      .input('customer', mssql.NVarChar(20), customer);
     
     if (hasTRUSER) {
       deleteRequest.input('username', mssql.NVarChar(50), username);
