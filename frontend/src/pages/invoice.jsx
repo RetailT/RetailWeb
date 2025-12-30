@@ -604,8 +604,8 @@ useEffect(() => {
   };
 
   const handleScan = (err, result) => {
-    if (err) {
-      // Only show actual issues, ignore scanning misses
+  if (err) {
+    // Only show actual issues, ignore scanning misses
       if (
         err.message?.includes("No MultiFormat Readers") ||
         err.name === "NotFoundException"
@@ -615,11 +615,11 @@ useEffect(() => {
 
       console.warn("Scanner Error:", err);
       toast.error("Scanner encountered an issue.");
-      return;
-    }
+    return;
+  }
 
-    if (result) {
-      const beep = new Audio(
+  if (result) {
+    const beep = new Audio(
         "https://www.myinstants.com/media/sounds/beep.mp3"
       );
       beep.play().catch((error) => console.error("Beep sound error:", error));
@@ -627,10 +627,12 @@ useEffect(() => {
       setCurrentData(result.text);
       setCode("");
       toast.success(`Product scanned: ${result.text}`);
-      setScannedCode(result.text); // Update scannedCode state
-      requestData(result.text, "");
-    }
-  };
+      setScannedCode(result.text); // Update scannedCode stateqq
+      
+    // Product search
+    requestData(result.text, "");
+  }
+};
 
   const requestProductNames = async () => {
     try {
@@ -1754,25 +1756,25 @@ const handleDiscountKeyPress = (e) => {
                                 height: "min(240px, 90vw)",
                               }}
                             >
-                              {scannerEnabled ? (
-                                <BarcodeScannerComponent
-                                  width={240}
-                                  height={240}
-                                  className="object-cover w-full h-full"
-                                  onUpdate={handleScan}
-                                  delay={1000}
-                                  onError={(error) => {
-                                    console.error("Scanner Error:", error);
-                                    toast.error("Scanner error: Please try again.");
-                                  }}
-                                />
-                              ) : (
-                                <CameraOff
-                                  size={40}
-                                  className="w-10 h-10 text-gray-600 sm:w-15 sm:h-15"
-                                />
-                              )}
-                            </div>
+                            {scannerEnabled ? (
+                              <BarcodeScannerComponent
+                                width={240}
+                                height={240}
+                                className="object-cover w-full h-full"
+                                onUpdate={handleScan}
+                                delay={1000}
+                                onError={(error) => {
+                                  console.error("Scanner Error:", error);
+                                  toast.error("Scanner error: Please try again.");
+                                }}
+                              />
+                            ) : (
+                              <CameraOff
+                                size={40}
+                                className="w-10 h-10 text-gray-600 sm:w-15 sm:h-15"
+                              />
+                            )}
+                          </div>
                             <button
                               className={`bg-[#f17e21] hover:bg-[#efa05f] text-white px-3 sm:px-4 py-2 rounded mt-4 sm:mt-6 text-sm
                             ${disable ? "opacity-50 cursor-not-allowed" : ""}`}
