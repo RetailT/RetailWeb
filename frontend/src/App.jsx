@@ -36,6 +36,8 @@ import ProductView from "./pages/productView";
 import Home from "./pages/home";
 import ProtectedRoute from "./ProtectedRoute";
 import { AuthProvider } from './AuthContext';
+import InvoicePreview from './pages/invoicePreview'; // new page
+
 
 function App() {
   
@@ -57,6 +59,7 @@ function App() {
         <Route path="/sub-category-dashboard" element={<ProtectedRoute> <SubCategoryDashboard /> </ProtectedRoute>}/>
         <Route path="/stock-update" element={<ProtectedRoute> <StockUpdate /> </ProtectedRoute>}/>
         <Route path="/invoice" element={<ProtectedRoute> <Invoice /> </ProtectedRoute>}/>
+        <Route path="/invoice-preview" element={<ProtectedRoute> <InvoicePreview /> </ProtectedRoute>}/>
         <Route path="/report" element={<ProtectedRoute> <Report /> </ProtectedRoute>}/>
         <Route path="/vendor-dashboard" element={<ProtectedRoute> <VendorDashboard /> </ProtectedRoute>}/>
         <Route path="/hourly-report-dashboard" element={<ProtectedRoute> <HourlyReportDashboard /> </ProtectedRoute>}/>

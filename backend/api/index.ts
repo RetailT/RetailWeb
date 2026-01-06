@@ -72,7 +72,7 @@ app.get('/product-view-sales', authenticateToken, authController.productViewSale
 app.get('/find-user-connection', authenticateToken, authController.findUserConnection);
 app.get('/connection-details', authenticateToken, authController.serverConnection);
 app.get('/invoice-temp-data', authenticateToken, authController.getInvoiceTempData);
-// app.get('/get-product-code-from-name', authenticateToken, authController.getProductCodeFromName);
+app.get('/get-invoice-preview', authenticateToken, authController.getInvoicePreview);
 
 app.post("/login", authController.login);
 app.post('/close-connection', authController.closeConnection);
@@ -93,7 +93,7 @@ app.delete('/delete-invoice-temp-item', authenticateToken, authController.delete
 app.put('/reset-database-connection', authenticateToken, authController.resetDatabaseConnection);
 
 
-// // for local development -- comment out in production
+// for local development -- comment out in production
 // if (process.env.NODE_ENV !== "production") {
 //   app.listen(5000, () => {
 //     console.log(`Server is running on http://localhost:5000/`);
@@ -103,7 +103,7 @@ app.put('/reset-database-connection', authenticateToken, authController.resetDat
 // export default handler;
 
 
-// Uncomment the following lines if you want to export the app for serverless deployment
+// // Uncomment the following lines if you want to export the app for serverless deployment
 module.exports = app;
 module.exports.handler = serverless(app);
 

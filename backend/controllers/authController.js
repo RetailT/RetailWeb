@@ -6831,6 +6831,91 @@ exports.getCompanies = async (req, res) => {
   }
 };
 
+// GET - Invoice Preview
+exports.getInvoicePreview = async (req, res) => {
+  try {
+    const { documentNo, company } = req.query;
+    const user_ip = String(req.user.ip).trim();
+
+    if (!documentNo || !company) {
+      return res.status(400).json({ message: "Document No and Company required" });
+    }
+
+    if (mssql.connected) await mssql.close();
+    
+    const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+    if (!pool || !pool.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
+
+    // Get company details (ADDRESS & PHONE)
+    const companyResult = await pool.request()
+      .input('company', mssql.NVarChar(10), company)
+      .query(`
+        USE [RT_WEB];
+        SELECT COMPANY_NAME, ADDRESS, PHONE 
+        FROM tb_COMPANY 
+        WHERE COMPANY_CODE = @company
+      `);
+
+    if (companyResult.recordset.length === 0) {
+      return res.status(404).json({ message: "Company not found in tb_COMPANY" });
+    }
+
+    const companyInfo = companyResult.recordset[0];  // <-- THIS LINE WAS MISSING / WRONG
+
+    // Get invoice items
+    const itemsResult = await pool.request()
+      .input('docNo', mssql.NVarChar(10), documentNo)
+      .input('company', mssql.NVarChar(10), company)
+      .query(`
+        USE [RT_WEB];
+        SELECT 
+          DOCUMENT_NO,
+          CUSTOMER_CODE,
+          CUSTOMER_NAME,
+          PRODUCT_CODE,
+          PRODUCT_NAME,
+          QUANTITY,
+          UNITPRICE,
+          DISCOUNT_AMOUNT,
+          TOTAL,
+          TRUSER   -- ADD THIS
+        FROM tb_INVOICE_DETAILS
+        WHERE DOCUMENT_NO = @docNo AND COMPANY_CODE = @company
+        ORDER BY PRODUCT_CODE
+      `);
+
+    if (itemsResult.recordset.length === 0) {
+      return res.status(404).json({ message: "Invoice items not found" });
+    }
+
+    const items = itemsResult.recordset;
+    const firstItem = items[0];
+
+    return res.status(200).json({
+      success: true,
+      invoice: {
+        documentNo,
+        companyCode: company,
+        companyName: companyInfo.COMPANY_NAME?.trim() || "UNKNOWN SHOP",
+        address: companyInfo.ADDRESS?.trim() || "",
+        phone: companyInfo.PHONE?.trim() || "",
+        customerName: firstItem.CUSTOMER_NAME?.trim() || "WALK-IN CUSTOMER",
+        cashierName: firstItem.TRUSER?.trim() || "CASHIER",  // <-- add this
+        items
+      }
+    });
+
+  } catch (error) {
+    console.error("Error fetching invoice preview:", error);
+    return res.status(500).json({ 
+      message: "Failed to fetch invoice preview",
+      error: error.message 
+    });
+  }
+};
+
 // POST - Insert invoice temp item (FIXED - Better table creation)
 exports.insertInvoiceTemp = async (req, res) => {
   try {
@@ -7139,7 +7224,8 @@ exports.saveInvoice = async (req, res) => {
         message: "Invoice saved successfully",
         itemsSaved,
         invoiceNumber: currentInvoiceNo,
-        documentNumber
+        documentNumber,
+        companyCode: company
       });
 
     } catch (innerError) {

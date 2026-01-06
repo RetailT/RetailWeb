@@ -85,6 +85,7 @@ function App() {
   const productNameRef = useRef(null);
   const unitRef = useRef(null); 
   const isSubmittingRef = useRef(false);
+  const saveButtonRef = useRef(null);
   
   const grn = decodedToken.t_grn;
   const prn = decodedToken.t_prn;
@@ -1203,15 +1204,21 @@ const handleSaveInvoice = async () => {
       setCode("");
       setInputValue("");
       setScannedCode("");
-      
-      setTimeout(() => setAlert(null), 3000);
 
-      setTimeout(() => {
-        if (codeRef.current) {
-          codeRef.current.focus();
-          codeRef.current.select(); // optional: select all text
-        }
-      }, 300);
+      // Open preview in new tab
+      const previewUrl = `/invoice-preview?docNo=${encodeURIComponent(response.data.documentNumber)}&company=${encodeURIComponent(response.data.companyCode)}`;
+      window.open(previewUrl, '_blank', 'noopener,noreferrer');
+
+      setTimeout(() => setAlert(null), 5000);
+      
+      // setTimeout(() => setAlert(null), 3000);
+
+      // setTimeout(() => {
+      //   if (codeRef.current) {
+      //     codeRef.current.focus();
+      //     codeRef.current.select(); // optional: select all text
+      //   }
+      // }, 300);
     }
     
     setDisable(false);
@@ -2124,6 +2131,7 @@ const handleDiscountKeyPress = (e) => {
                             {/* Button Right Align */}
                             <div className="flex justify-end w-full">
                               <button
+                                ref={saveButtonRef}
                                 onClick={handleSaveInvoice}
                                 disabled={disable || !invoiceTableData || invoiceTableData.length === 0}
                                 className={`bg-[#000000] hover:bg-gray-800 text-white py-1 sm:py-2 px-2 sm:px-4 rounded-md shadow-md transition-all lg:w-56 text-sm ${
@@ -2132,7 +2140,7 @@ const handleDiscountKeyPress = (e) => {
                                     : ""
                                 }`}
                               >
-                                Save
+                                Save & Preview Invoice
                               </button>
                             </div>
                           </div>
