@@ -6853,7 +6853,7 @@ exports.getInvoicePreview = async (req, res) => {
       .input('company', mssql.NVarChar(10), company)
       .query(`
         USE [RT_WEB];
-        SELECT COMPANY_NAME, ADDRESS, PHONE 
+        SELECT COMPANY_NAME, ADDRESS, PHONE, RECEIPT_TEXT
         FROM tb_COMPANY 
         WHERE COMPANY_CODE = @company
       `);
@@ -6901,6 +6901,7 @@ exports.getInvoicePreview = async (req, res) => {
         companyName: companyInfo.COMPANY_NAME?.trim() || "UNKNOWN SHOP",
         address: companyInfo.ADDRESS?.trim() || "",
         phone: companyInfo.PHONE?.trim() || "",
+        message: companyInfo.RECEIPT_TEXT?.trim()?.length > 0 ? companyInfo.RECEIPT_TEXT.trim() : "",
         customerName: firstItem.CUSTOMER_NAME?.trim() || "WALK-IN CUSTOMER",
         cashierName: firstItem.TRUSER?.trim() || "CASHIER",  // <-- add this
         items
@@ -6958,6 +6959,53 @@ exports.insertInvoiceTemp = async (req, res) => {
     if (!pool || !pool.connected) {
       console.log("Database connection failed");
       return res.status(500).json({ message: "Database connection failed" });
+    }
+
+    // ✅ NEW: Check product UNIT type from database
+    // Try posback database first (without COMPANY_CODE)
+    let productCheck;
+    try {
+      productCheck = await pool.request()
+        .input('productCode', mssql.NVarChar(30), productCode)
+        .query(`
+          USE [${posback}];
+          SELECT UNIT FROM tb_PRODUCT 
+          WHERE PRODUCT_CODE = @productCode
+        `);
+    } catch (err) {
+      // If fails, try RT_WEB database with COMPANY_CODE
+      try {
+        productCheck = await pool.request()
+          .input('productCode', mssql.NVarChar(30), productCode)
+          .input('company', mssql.NVarChar(10), company)
+          .query(`
+            USE [RT_WEB];
+            SELECT UNIT FROM tb_PRODUCT 
+            WHERE PRODUCT_CODE = @productCode 
+            AND COMPANY_CODE = @company
+          `);
+      } catch (err2) {
+        console.log("Could not check UNIT type from database:", err2.message);
+        // Continue without validation if both fail
+        productCheck = { recordset: [] };
+      }
+    }
+
+    // ✅ NEW: Validate quantity for NOS items
+    if (productCheck.recordset.length > 0) {
+      const unitType = productCheck.recordset[0].UNIT;
+      
+      if (unitType && unitType.trim().toUpperCase() === "NOS") {
+        const qty = parseFloat(quantity) || 0;
+        
+        // Check if quantity is a whole number
+        if (!Number.isInteger(qty)) {
+          console.log(`NOS validation failed: quantity ${qty} is not a whole number`);
+          return res.status(400).json({ 
+            message: "NOS items must have whole number quantities only" 
+          });
+        }
+      }
     }
 
     // Check if RT_WEB database exists

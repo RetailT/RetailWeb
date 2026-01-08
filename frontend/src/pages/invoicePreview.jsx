@@ -76,11 +76,22 @@ const InvoicePreview = () => {
 
   return (
     <div className="w-[420px] mx-auto my-2 bg-white font-mono text-sm leading-tight shadow-lg border border-gray-300">
-      {/* Header */}
+      {/* Header - Only show lines that have actual content */}
       <div className="text-center py-3 px-3 border-b-2 border-dashed border-black">
-        <h1 className="text-2xl font-bold uppercase">{shopName}</h1>
-        <p className="text-sm">{shopAddress}</p>
-        <p className="text-sm">TEL - {shopTel}</p>
+        {/* Company Name - Always show (fallback to "SHOP NAME" if completely missing) */}
+        <h1 className="text-2xl font-bold uppercase">
+          {shopName && shopName.trim() !== "" && shopName}
+        </h1>
+
+        {/* Address - Only show if has content */}
+        {shopAddress && shopAddress.trim() !== "" && shopAddress.trim() !== "ADDRESS NOT AVAILABLE" && (
+          <p className="text-sm mt-1">{shopAddress.trim()}</p>
+        )}
+
+        {/* Phone - Only show if has actual number */}
+        {shopTel && shopTel.trim() !== "" && shopTel.trim() !== "N/A" && (
+          <p className="text-sm mt-1">TEL - {shopTel.trim()}</p>
+        )}
       </div>
 
       {/* Cashier & Invoice Info */}
@@ -156,11 +167,19 @@ const InvoicePreview = () => {
         {totalDiscount.toFixed(2)}
       </div>
 
-      {/* Footer */}
+      {/* Footer - No extra space if message is empty */}
       <div className="text-center text-sm px-3 pb-1">
-        <p>WE ARE HAPPY TO EXCHANGE PRODUCTS RETURNED IN</p>
-        <p>SALEABLE CONDITION. ALONG WITH RECEIPT.</p>
-        <p className="font-bold text-lg mt-1">THANK YOU COME AGAIN</p>
+        {invoiceData.message && invoiceData.message.trim() !== "" && (
+          <>
+            <div className="whitespace-pre-line leading-snug mb-3 text-xs">
+              {invoiceData.message.trim()}
+            </div>
+            {/* Extra spacing only if message exists */}
+            <div className="mb-2"></div>
+          </>
+        )}
+
+        <p className="font-bold text-lg">THANK YOU COME AGAIN</p>
       </div>
 
       {/* Retail Target Footer */}

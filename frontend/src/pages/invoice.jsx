@@ -76,6 +76,7 @@ function App() {
   const [invoiceTableHeaders, setInvoiceTableHeaders] = useState([]);
   const [customUnitPrice, setCustomUnitPrice] = useState("");
   const [unitPriceError, setUnitPriceError] = useState("");
+  const [unitType, setUnitType] = useState("");
   
   const quantityRef = useRef(null);
   const discountRef = useRef(null);
@@ -527,6 +528,7 @@ useEffect(() => {
 
       if (response.data.salesData.length > 0) {
         setSalesData(response.data.salesData[0]);
+        setUnitType(response.data.salesData[0].UNIT || ""); // ✅ Capture UNIT type
         setQuantityError(""); // Add this line
       }
       if (response.data.colorWiseData.length > 0) {
@@ -581,8 +583,7 @@ useEffect(() => {
       }
       else{
         setState(true); 
-      }
-      
+      }    
 
       setAmount(response.data.amount);
 
@@ -590,6 +591,7 @@ useEffect(() => {
       setInputValue("");
     } catch (err) {
       setSalesData([]);
+      setUnitType(""); // ✅ Reset unit type on error
       setState(false);
       setAmount("");
       setAlert({
@@ -1120,6 +1122,7 @@ const handleProductSubmit = async (e) => {
       setCode("");
       setInputValue("");
       setScannedCode("");
+      setUnitType(""); // ✅ Reset unit type
       
       // Fetch updated table data
       await fetchInvoiceTableData();
@@ -1138,13 +1141,23 @@ const handleProductSubmit = async (e) => {
     }
   } catch (err) {
     console.error("Backend error details:", err.response?.data);
+
+    // ✅ Handle NOS validation error → inline red message + STOP submit (no discount focus)
+    const backendMessage = err.response?.data?.message;
+    if (backendMessage && backendMessage.includes("NOS items must have whole number quantities only")) {
+      setQuantityError("Please enter a whole number (decimals not allowed)");
+      quantityRef.current?.focus();
+      quantityRef.current?.select();
+      return; // ← This stops further execution → no discount focus, no alert
+    }
+
+    // Other errors → normal alert
     setAlert({
-      message: err.response?.data?.message || "Failed to add item",
+      message: backendMessage || "Failed to add item",
       type: "error",
     });
     setTimeout(() => setAlert(null), 3000);
   } finally {
-    // ✅ Always reset both ref and state
     isSubmittingRef.current = false;
     setDisable(false);
   }
@@ -1351,7 +1364,8 @@ const handleSearchClick = async () => {
   // Clear quantity and set discount to '0' before searching
   setQuantity('');
   setDiscount('0');
-  setCustomUnitPrice(''); // ✅ custom unit price reset 
+  setCustomUnitPrice(''); // ✅ custom unit price reset
+  setUnitType(''); // ✅ Reset unit type when searching new product 
   
   // If there's a code, use it
   if (code) {
@@ -1479,45 +1493,81 @@ const handleKeyPress = (e) => {
   }
 };
 
-// Enter key press handler for quantity input
+// Enter key press handler for quantity input (UPDATED - with NOS decimal validation)
 const handleQuantityKeyPress = (e) => {
   if (e.key === 'Enter') {
     e.preventDefault();
 
     const qty = parseFloat(quantity) || 0;
+    const qtyStr = quantity.toString().trim();
 
+    // Reset any previous error
+    setQuantityError("");
+
+    // Check if input contains decimal point
+    const hasDecimal = qtyStr.includes('.');
+
+    // Critical: NOS items → must be whole number
+    if (unitType && unitType.trim().toUpperCase() === "NOS") {
+      if (hasDecimal) {
+        // Show validation message and prevent focus change
+        setQuantityError("NOS products cannot have decimal quantities");
+        
+        // Clear the decimal input and keep focus on quantity field
+        const wholeNumber = Math.floor(qty);
+        setQuantity(wholeNumber.toString());
+        
+        // IMPORTANT: Keep focus on quantity field - DON'T move to discount
+        if (quantityRef.current) {
+          quantityRef.current.focus();
+          quantityRef.current.select();
+        }
+        return; // Stop execution - don't move to discount
+      }
+      
+      // Also check if it's not an integer
+      if (!Number.isInteger(qty)) {
+        setQuantityError("NOS products must have whole number quantities");
+        quantityRef.current?.focus();
+        quantityRef.current?.select();
+        return; // Stop execution - don't move to discount
+      }
+    }
+
+    // Quantity must be greater than 0
     if (qty <= 0) {
       setQuantityError("Quantity must be greater than 0");
       quantityRef.current?.focus();
-      return;
+      quantityRef.current?.select();
+      return; // Stop execution - don't move to discount
     }
 
-    // Clear error if valid
+    // All validations passed
     setQuantityError("");
 
+    // Move to discount field if:
+    // 1. Product is selected
+    // 2. Quantity is valid (greater than 0)
+    // 3. For NOS: whole number validation passed
+    // 4. Unit price is valid
+    
     if (!salesData.PRODUCT_CODE) {
-      setAlert({
-        message: "No product selected",
-        type: "error"
-      });
+      setAlert({ message: "No product selected", type: "error" });
       setTimeout(() => setAlert(null), 3000);
       return;
     }
 
-    // Get current unit price
     const currentUnitPrice = customUnitPrice !== "" && !isNaN(parseFloat(customUnitPrice))
       ? parseFloat(customUnitPrice)
-      : salesData.SCALEPRICE
-        ? parseFloat(salesData.SCALEPRICE)
-        : 0;
+      : salesData.SCALEPRICE ? parseFloat(salesData.SCALEPRICE) : 0;
 
-    // If unit price is 0 → direct submit
     if (currentUnitPrice === 0) {
+      // If unit price is 0, submit directly
       handleProductSubmit(e);
       return;
     }
 
-    // Otherwise → go to discount field
+    // Move to discount field only if quantity is valid
     if (discountRef.current) {
       discountRef.current.focus();
       discountRef.current.select();
@@ -1559,7 +1609,6 @@ const handleDiscountKeyPress = (e) => {
       return;
     }
 
-    // All good → submit
     if (quantity && parseFloat(quantity) > 0 && salesData.PRODUCT_CODE) {
       handleProductSubmit(e);
     }
@@ -1992,17 +2041,33 @@ const handleDiscountKeyPress = (e) => {
                                         <p className="text-sm text-gray-700 whitespace-nowrap">
                                           <strong>Quantity: </strong>
                                         </p>
-                                        <div className="relative flex-1">
+                                        <div className="flex-1">
                                           <input
                                             type="number"
                                             id="quantity"
                                             ref={quantityRef}
                                             value={quantity}
                                             onChange={(e) => {
-                                              setQuantity(e.target.value);
-                                              setQuantityError(""); // Clear error while typing
+                                              let value = e.target.value;
+                                              if (unitType && unitType.trim().toUpperCase() === "NOS") {
+                                                if (value.includes('.')) {
+                                                  value = value.split('.')[0];
+                                                }
+                                                value = value.replace(/[^0-9]/g, "");
+                                              }
+                                              setQuantity(value);
+                                              if (quantityError) {
+                                                setQuantityError("");
+                                              }
                                             }}
-                                            onKeyDown={handleQuantityKeyPress}
+                                            onKeyDown={(e) => {
+                                              if (unitType && unitType.trim().toUpperCase() === "NOS" && (e.key === "." || e.key === ",")) {
+                                                e.preventDefault();
+                                              }
+                                              if (e.key === "Enter") {
+                                                handleQuantityKeyPress(e);
+                                              }
+                                            }}
                                             onWheel={(e) => {
                                               e.preventDefault();
                                               e.target.blur();
@@ -2011,15 +2076,16 @@ const handleDiscountKeyPress = (e) => {
                                               quantityError ? "border-red-500" : "border-gray-300"
                                             }`}
                                             placeholder="Enter quantity"
-                                            step="0.01"
+                                            step={unitType && unitType.trim().toUpperCase() === "NOS" ? "1" : "0.01"}
                                             min="0"
+                                            inputMode={unitType && unitType.trim().toUpperCase() === "NOS" ? "numeric" : "decimal"}
                                             style={{ WebkitAppearance: 'none', margin: 0 }}
                                           />
                                         </div>
                                       </div>
-                                      {/* Error message directly below the input field */}
+                                      {/* Inline red error message – BELOW the input, properly spaced */}
                                       {quantityError && (
-                                        <p className="mt-1 text-sm text-red-500 ml-28"> {/* ml-28 to align with input */}
+                                        <p className="mt-1 text-sm text-red-500 ml-24">
                                           {quantityError}
                                         </p>
                                       )}
