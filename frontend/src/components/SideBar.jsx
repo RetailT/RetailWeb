@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 // import axios from "axios";
 import {FaChevronDown } from "react-icons/fa";
 import { MdManageAccounts, MdSpaceDashboard } from "react-icons/md";
@@ -9,16 +9,29 @@ import { NavLink } from "react-router-dom";
 import { jwtDecode } from "jwt-decode";
 
 const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
-  // const [isOpen, setIsOpen] = useState(false);
-  const [adminOpen, setAdminOpen] = useState(false); // Admin dropdown toggle
+  const [adminOpen, setAdminOpen] = useState(false);
   const [dashboardOpen, setDashboardOpen] = useState(false);
   const [stockWiseReportOpen, setStockWiseReportOpen] = useState(false);
   const [colorWiseOpen, setColorWiseOpen] = useState(false);
   const [transactionOpen, setTransactionOpen] = useState(false);
   const [colorWiseSalesOpen, setColorWiseSalesOpen] = useState(false);
   const [colorWiseStockOpen, setColorWiseStockOpen] = useState(false);
+  const sidebarRef = useRef(null);
 
-  // Get the token from localStorage
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (isOpen && sidebarRef.current && !sidebarRef.current.contains(event.target)) {
+        toggleSidebar();
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen, toggleSidebar]);
+
   const token = localStorage.getItem("authToken");
   let a_permission = "";
   let a_sync = "";
@@ -63,7 +76,6 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
     d_sales_comparison = decodedToken.d_sales_comparison;
     d_invoice = decodedToken.d_invoice;
     d_productView = decodedToken.d_productView;
-    d_productView = decodedToken.d_productView;
     t_scan = decodedToken.t_scan;
     t_invoice = decodedToken.t_invoice;
     t_stock_update = decodedToken.t_stock_update;
@@ -87,21 +99,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
   }
 
   const establishConnection = async () => {
-    // try {
-    //   const response = await axios.get(
-    //           `${process.env.REACT_APP_BACKEND_URL}dbConnection`,
-    //           {
-    //             headers: {
-    //               Authorization: `Bearer ${token}`,
-    //             }
-    //           }
-    //         );
-
-    // } catch (error) {
-    //   console.error("Backend call failed", error);
-    // }
-
-    
+    // Backend connection logic here
   };
 
   const toggleAdmin = () => {
@@ -132,8 +130,14 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
     setTransactionOpen(!transactionOpen);
   };
 
+  const handleNavLinkClick = () => {
+    establishConnection();
+    toggleSidebar();
+  };
+
   return (
     <div
+      ref={sidebarRef}
       className={`fixed top-10 left-0 h-full bg-gradient-to-t from-[#ce521a] to-[#000000] text-white shadow-md transition-all duration-300 ${
         isOpen ? "w-80" : "w-0 overflow-hidden"
       }`}
@@ -141,7 +145,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
     >
       <div className="flex flex-col w-full h-full">
         <ul className="flex-1 overflow-y-auto mt-14">
-          {/* dashboard */}
+          {/* Dashboard */}
           {((d_company && d_company.toLowerCase() === "t") ||
             (d_department && d_department.toLowerCase() === "t") ||
             (d_category && d_category.toLowerCase() === "t") ||
@@ -173,11 +177,10 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
             </li>
           )}
 
-          {/* submenu of dashboard */}
           <ul className="pl-8 ml-8">
             {d_company?.toLowerCase() === "t" && dashboardOpen && isOpen && (
               <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
-                <NavLink to="/company-dashboard" onClick={establishConnection} className="w-full">
+                <NavLink to="/company-dashboard" onClick={handleNavLinkClick} className="w-full">
                   Summary
                 </NavLink>
               </li>
@@ -185,7 +188,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
 
             {d_department?.toLowerCase() === "t" && dashboardOpen && isOpen && (
               <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
-                <NavLink to="/department-dashboard" onClick={establishConnection} className="w-full">
+                <NavLink to="/department-dashboard" onClick={handleNavLinkClick} className="w-full">
                   Departments
                 </NavLink>
               </li>
@@ -193,7 +196,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
 
             {d_category?.toLowerCase() === "t" && dashboardOpen && isOpen && (
               <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
-                <NavLink to="/category-dashboard" onClick={establishConnection} className="w-full">
+                <NavLink to="/category-dashboard" onClick={handleNavLinkClick} className="w-full">
                   Category
                 </NavLink>
               </li>
@@ -201,7 +204,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
 
             {d_scategory?.toLowerCase() === "t" && dashboardOpen && isOpen && (
               <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
-                <NavLink to="/sub-category-dashboard" onClick={establishConnection} className="w-full">
+                <NavLink to="/sub-category-dashboard" onClick={handleNavLinkClick} className="w-full">
                   Sub Category
                 </NavLink>
               </li>
@@ -209,7 +212,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
 
             {d_vendor?.toLowerCase() === "t" && dashboardOpen && isOpen && (
               <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
-                <NavLink to="/vendor-dashboard" onClick={establishConnection} className="w-full">
+                <NavLink to="/vendor-dashboard" onClick={handleNavLinkClick} className="w-full">
                   Vendor
                 </NavLink>
               </li>
@@ -217,7 +220,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
 
             {d_hourlyReport?.toLowerCase() === "t" && dashboardOpen && isOpen && (
               <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
-                <NavLink to="/hourly-report-dashboard" onClick={establishConnection} className="w-full">
+                <NavLink to="/hourly-report-dashboard" onClick={handleNavLinkClick} className="w-full">
                   Hourly Report
                 </NavLink>
               </li>
@@ -225,7 +228,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
 
             {d_sales_comparison?.toLowerCase() === "t" && dashboardOpen && isOpen && (
               <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
-                <NavLink to="/sales-comparison" onClick={establishConnection} className="w-full"> 
+                <NavLink to="/sales-comparison" onClick={handleNavLinkClick} className="w-full"> 
                   Sales Comparison
                 </NavLink>
               </li>
@@ -233,23 +236,22 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
 
             {d_invoice?.toLowerCase() === "t" && dashboardOpen && isOpen && (
               <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
-                <NavLink to="/report" onClick={establishConnection} className="w-full">
+                <NavLink to="/report" onClick={handleNavLinkClick} className="w-full">
                   Invoice Wise Report
                 </NavLink>
               </li>
             )}
-            {d_productView?.toLowerCase() === "t" &&
-              dashboardOpen &&
-              isOpen && (
-                <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
-                  <NavLink to="/product-view" onClick={establishConnection} className="w-full">
-                    Product View
-                  </NavLink>
-                </li>
-              )}
+
+            {d_productView?.toLowerCase() === "t" && dashboardOpen && isOpen && (
+              <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
+                <NavLink to="/product-view" onClick={handleNavLinkClick} className="w-full">
+                  Product View
+                </NavLink>
+              </li>
+            )}
           </ul>
 
-          {/* stock wise report */}
+          {/* Stock Wise Report */}
           {((s_product && s_product.toLowerCase() === "t") ||
             (s_department && s_department.toLowerCase() === "t") ||
             (s_category && s_category.toLowerCase() === "t") ||
@@ -277,11 +279,10 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
             </li>
           )}
 
-          {/* submenu of stock wise report */}
           <ul className="pl-8 ml-8">
             {s_product?.toLowerCase() === "t" && stockWiseReportOpen && isOpen && (
               <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
-                <NavLink to="/stock-wise-product" onClick={establishConnection} className="w-full">
+                <NavLink to="/stock-wise-product" onClick={handleNavLinkClick} className="w-full">
                   Product Wise
                 </NavLink>
               </li>
@@ -289,7 +290,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
 
             {s_department?.toLowerCase() === "t" && stockWiseReportOpen && isOpen && (
               <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
-                <NavLink to="/stock-wise-department" onClick={establishConnection} className="w-full">
+                <NavLink to="/stock-wise-department" onClick={handleNavLinkClick} className="w-full">
                   Department
                 </NavLink>
               </li>
@@ -297,7 +298,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
 
             {s_category?.toLowerCase() === "t" && stockWiseReportOpen && isOpen && (
               <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
-                <NavLink to="/stock-wise-category" onClick={establishConnection} className="w-full">
+                <NavLink to="/stock-wise-category" onClick={handleNavLinkClick} className="w-full">
                   Category
                 </NavLink>
               </li>
@@ -305,7 +306,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
 
             {s_scategory?.toLowerCase() === "t" && stockWiseReportOpen && isOpen && (
               <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
-                <NavLink to="/stock-wise-sub-category" onClick={establishConnection} className="w-full">
+                <NavLink to="/stock-wise-sub-category" onClick={handleNavLinkClick} className="w-full">
                   Sub Category
                 </NavLink>
               </li>
@@ -313,15 +314,14 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
 
             {s_vendor?.toLowerCase() === "t" && stockWiseReportOpen && isOpen && (
               <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
-                <NavLink to="/stock-wise-vendor" onClick={establishConnection} className="w-full">
+                <NavLink to="/stock-wise-vendor" onClick={handleNavLinkClick} className="w-full">
                   Vendor
                 </NavLink>
               </li>
             )}
-
           </ul>
 
-          {/* Color Wise Section */}
+          {/* Color Size */}
           {(c_st_product_wise?.toLowerCase() === "t" ||
             c_st_department?.toLowerCase() === "t" ||
             c_st_category?.toLowerCase() === "t" ||
@@ -333,7 +333,6 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
             c_sa_scategory?.toLowerCase() === "t" ||
             c_sa_vendor?.toLowerCase() === "t") && (
             <>
-              {/* Color Size Main Toggle */}
               <li
                 className="flex items-center p-2 hover:bg-[#000000] cursor-pointer"
                 onClick={toggleColorWise}
@@ -355,10 +354,8 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
                 )}
               </li>
 
-              {/* Submenu - Stock and Sales */}
               {colorWiseOpen && isOpen && (
                 <ul className="pl-4 ml-8">
-                  {/* Stock Toggle */}
                   {(c_st_product_wise?.toLowerCase() === "t" ||
                     c_st_department?.toLowerCase() === "t" ||
                     c_st_category?.toLowerCase() === "t" ||
@@ -380,46 +377,39 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
                     </li>
                   )}
 
-                  {/* Stock Submenu */}
                   {colorWiseStockOpen && (
                     <ul className="pl-4 ml-4">
                       {c_st_product_wise?.toLowerCase() === "t" && (
                         <li className="flex items-center p-2 mt-2 hover:bg-[#000000]">
-                          <NavLink to="/color-size-stock-product" onClick={establishConnection} className="w-full">
+                          <NavLink to="/color-size-stock-product" onClick={handleNavLinkClick} className="w-full">
                             Product Wise
                           </NavLink>
                         </li>
                       )}
                       {c_st_department?.toLowerCase() === "t" && (
                         <li className="flex items-center p-2 mt-2 hover:bg-[#000000]">
-                          <NavLink
-                            to="/color-size-stock-department"
-                            className="w-full"
-                          >
+                          <NavLink to="/color-size-stock-department" onClick={handleNavLinkClick} className="w-full">
                             Departments
                           </NavLink>
                         </li>
                       )}
                       {c_st_category?.toLowerCase() === "t" && (
                         <li className="flex items-center p-2 mt-2 hover:bg-[#000000]">
-                          <NavLink to="/color-size-stock-category" onClick={establishConnection} className="w-full">
+                          <NavLink to="/color-size-stock-category" onClick={handleNavLinkClick} className="w-full">
                             Category
                           </NavLink>
                         </li>
                       )}
                       {c_st_scategory?.toLowerCase() === "t" && (
                         <li className="flex items-center p-2 mt-2 hover:bg-[#000000]">
-                          <NavLink
-                            to="/color-size-stock-subcategory"
-                            className="w-full"
-                          >
+                          <NavLink to="/color-size-stock-subcategory" onClick={handleNavLinkClick} className="w-full">
                             Sub Category
                           </NavLink>
                         </li>
                       )}
                       {c_st_vendor?.toLowerCase() === "t" && (
                         <li className="flex items-center p-2 mt-2 hover:bg-[#000000]">
-                          <NavLink to="/color-size-stock-vendor" onClick={establishConnection} className="w-full">
+                          <NavLink to="/color-size-stock-vendor" onClick={handleNavLinkClick} className="w-full">
                             Vendor
                           </NavLink>
                         </li>
@@ -427,7 +417,6 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
                     </ul>
                   )}
 
-                  {/* Sales Toggle */}
                   {(c_sa_product_wise?.toLowerCase() === "t" ||
                     c_sa_department?.toLowerCase() === "t" ||
                     c_sa_category?.toLowerCase() === "t" ||
@@ -449,46 +438,39 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
                     </li>
                   )}
 
-                  {/* Sales Submenu */}
                   {colorWiseSalesOpen && (
                     <ul className="pl-4 ml-4">
                       {c_sa_product_wise?.toLowerCase() === "t" && (
                         <li className="flex items-center p-2 mt-2 hover:bg-[#000000]">
-                          <NavLink to="/color-size-sales-product" onClick={establishConnection} className="w-full">
+                          <NavLink to="/color-size-sales-product" onClick={handleNavLinkClick} className="w-full">
                             Product Wise
                           </NavLink>
                         </li>
                       )}
                       {c_sa_department?.toLowerCase() === "t" && (
                         <li className="flex items-center p-2 mt-2 hover:bg-[#000000]">
-                          <NavLink
-                            to="/color-size-sales-department"
-                            className="w-full"
-                          >
+                          <NavLink to="/color-size-sales-department" onClick={handleNavLinkClick} className="w-full">
                             Department
                           </NavLink>
                         </li>
                       )}
                       {c_sa_category?.toLowerCase() === "t" && (
                         <li className="flex items-center p-2 mt-2 hover:bg-[#000000]">
-                          <NavLink to="/color-size-sales-category" onClick={establishConnection} className="w-full">
+                          <NavLink to="/color-size-sales-category" onClick={handleNavLinkClick} className="w-full">
                             Category
                           </NavLink>
                         </li>
                       )}
                       {c_sa_scategory?.toLowerCase() === "t" && (
                         <li className="flex items-center p-2 mt-2 hover:bg-[#000000]">
-                          <NavLink
-                            to="/color-size-sales-subcategory"
-                            className="w-full"
-                          >
+                          <NavLink to="/color-size-sales-subcategory" onClick={handleNavLinkClick} className="w-full">
                             Sub Category
                           </NavLink>
                         </li>
                       )}
                       {c_sa_vendor?.toLowerCase() === "t" && (
                         <li className="flex items-center p-2 mt-2 hover:bg-[#000000]">
-                          <NavLink to="/color-size-sales-vendor" onClick={establishConnection} className="w-full">
+                          <NavLink to="/color-size-sales-vendor" onClick={handleNavLinkClick} className="w-full">
                             Vendor
                           </NavLink>
                         </li>
@@ -500,12 +482,10 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
             </>
           )}
 
-          {/* stock */}
-          {(
-            (t_scan?.toLowerCase() === "t") ||
+          {/* Transaction */}
+          {((t_scan?.toLowerCase() === "t") ||
             (t_stock_update?.toLowerCase() === "t") ||
-            (t_invoice?.toLowerCase() === "t")
-          ) && (
+            (t_invoice?.toLowerCase() === "t")) && (
             <li
               className="flex items-center p-2 hover:bg-[#000000] cursor-pointer"
               onClick={toggleReport}
@@ -528,12 +508,11 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
             </li>
           )}
 
-          {/* submenu of stock */}
           {transactionOpen && isOpen && (
             <ul className="pl-8 ml-8">
               {t_scan?.toLowerCase() === "t" && (
                 <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
-                  <NavLink to="/scan" onClick={establishConnection} className="w-full">
+                  <NavLink to="/scan" onClick={handleNavLinkClick} className="w-full">
                     Quick Scan
                   </NavLink>
                 </li>
@@ -541,7 +520,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
 
               {t_stock_update?.toLowerCase() === "t" && (
                 <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
-                  <NavLink to="/stock-update" onClick={establishConnection} className="w-full">
+                  <NavLink to="/stock-update" onClick={handleNavLinkClick} className="w-full">
                     Scan Data
                   </NavLink>
                 </li>
@@ -549,7 +528,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
 
               {t_invoice?.toLowerCase() === "t" && (
                 <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
-                  <NavLink to="/invoice" onClick={establishConnection} className="w-full">
+                  <NavLink to="/invoice" onClick={handleNavLinkClick} className="w-full">
                     Invoice
                   </NavLink>
                 </li>
@@ -557,7 +536,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
             </ul>
           )}
 
-          {/* admin */}
+          {/* Administration */}
           {((a_permission && a_permission.toLowerCase() === "t") ||
             (a_sync && a_sync.toLowerCase() === "t")) && (
             <li
@@ -582,12 +561,10 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
             </li>
           )}
 
-          {/* submenu of admin */}
-
           <ul className="pl-8 ml-8">
             {a_permission?.toLowerCase() === "t" && adminOpen && isOpen && (
               <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
-                <NavLink to="/reset" onClick={establishConnection} className="w-full">
+                <NavLink to="/reset" onClick={handleNavLinkClick} className="w-full">
                   Reset Connection
                 </NavLink>
               </li>
@@ -595,7 +572,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
 
             {a_sync?.toLowerCase() === "t" && adminOpen && isOpen && (
               <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
-                <NavLink to="/sync-databases" onClick={establishConnection} className="w-full">
+                <NavLink to="/sync-databases" onClick={handleNavLinkClick} className="w-full">
                   Sync Databases
                 </NavLink>
               </li>
