@@ -27,7 +27,6 @@ function App() {
   const [selectedCustomer, setSelectedCustomer] = useState("");
   const [customerError, setCustomerError] = useState("");
   const [selectedCustomerName, setSelectedCustomerName] = useState(null);
-  const [remarks, setRemarks] = useState("");
   const token = localStorage.getItem("authToken");
   const editableColumns = [{ index: 17, type: "number", step: "any" }];
   const decodedToken = jwtDecode(token);
@@ -36,24 +35,11 @@ function App() {
   const [currentData, setCurrentData] = useState("No result");
   const [cameraError, setCameraError] = useState(null);
   const [selectedCompanyName, setSelectedCompanyName] = useState(null);
-  const [selectedToCompanyName, setSelectedToCompanyName] = useState(null);
-  const [selectedVendorName, setSelectedVendorName] = useState(null);
   const [companies, setCompanies] = useState([]);
-  const [selectedCount, setSelectedCount] = useState("");
-  const [selectedVendor, setSelectedVendor] = useState("");
-  const [enteredProduct, setEnteredProduct] = useState("");
-  const [selectedType, setSelectedType] = useState("");
   const [selectedCompany, setSelectedCompany] = useState("");
-  const [selectedToCompany, setSelectedToCompany] = useState("");
   const [codeError, setCodeError] = useState("");
-  const [invoiceNo, setInvoiceNo] = useState("");
   const [state, setState] = useState(false);
   const [companyError, setCompanyError] = useState("");
-  const [companyToError, setCompanyToError] = useState("");
-  const [newTableData, setTableData] = useState([]);
-  const [typeError, setTypeError] = useState("");
-  const [countError, setCountError] = useState("");
-  const [invoiceNoError, setInvoiceNoError] = useState("");
   const [code, setCode] = useState("");
   const [scannedCode, setScannedCode] = useState("");
   const [initialData, setInitialData] = useState(false);
@@ -64,7 +50,6 @@ function App() {
   const [quantity, setQuantity] = useState("");
   const [discount, setDiscount] = useState("0");
   const [discountAmount, setDiscountAmount] = useState(0);
-  const [total, setTotal] = useState("");
   const [salesData, setSalesData] = useState([]);
   const [inputValue, setInputValue] = useState("");
   const [filteredSuggestions, setFilteredSuggestions] = useState([]);
@@ -78,6 +63,7 @@ function App() {
   const [unitPriceError, setUnitPriceError] = useState("");
   const [unitType, setUnitType] = useState("");
   
+  // ── Refs ──
   const quantityRef = useRef(null);
   const discountRef = useRef(null);
   const tableRef = useRef(null);
@@ -88,12 +74,7 @@ function App() {
   const isSubmittingRef = useRef(false);
   const saveButtonRef = useRef(null);
   
-  const grn = decodedToken.t_grn;
-  const prn = decodedToken.t_prn;
-  const tog = decodedToken.t_tog;
-  const stock_scan = decodedToken.t_stock;
-  const stock_update = decodedToken.t_stock_update;
-
+  // ── Effects ──
   useEffect(() => {
     if (headers.length > 0 && data.length > 0) {
       const repUserIndex = headers.indexOf("REPUSER");
@@ -135,11 +116,7 @@ function App() {
     } else {
       stopCameraStream();
     }
-
-    if (selectedType && selectedCompany) {
-      tableData();
-    }
-  }, [scannerEnabled, selectedType, selectedCompany, colorWiseTableData]);
+  }, [scannerEnabled, selectedCompany, colorWiseTableData]);
 
   useEffect(() => {
     if (salesData.SCALEPRICE && quantity) {
@@ -150,10 +127,6 @@ function App() {
       const subtotal = unitPrice * qty;
       const discountAmount = subtotal * (disc / 100);
       const total = subtotal - discountAmount;
-      
-      // You can set these to state if needed
-      // setSubtotal(subtotal);
-      // setTotal(total);
     }
   }, [salesData.SCALEPRICE, quantity, discount]);
   
@@ -664,150 +637,6 @@ useEffect(() => {
         type: "error",
       });
       setTimeout(() => setAlert(null), 3000);
-    }
-  };
-
-  const tableData = async () => {
-    try {
-      if (selectedCompany === selectedToCompany) {
-        setCompanyToError("Company and Company To cannot be the same.");
-      }
-      setDisable(true);
-      const response = await axios.get(
-        `${process.env.REACT_APP_BACKEND_URL}grnprn-table-data`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          params: {
-            name: username,
-            code: selectedCompany,
-            selectedType: selectedType,
-            // vendor: selectedVendor,
-            // invoice_no: invoiceNo,
-            // company_to: selectedToCompany
-          },
-        }
-      );
-
-      const message = response.data.message;
-
-      if (message === "Data Found Successfully") {
-        const tableData = response.data.tableData;
-
-        if (selectedType === "GRN" && tableData.length > 0) {
-          // Extract keys from the first object, excluding "IDX"
-          const keys = Object.keys(tableData[0]).filter((key) => key !== "IDX");
-
-          // Custom heading mapping
-          const customHeadingMap = {
-            INVOICE_NO: "Invoice No",
-            COMPANY_CODE: "Company Code",
-            VENDOR_CODE: "Vendor Code",
-            VENDOR_NAME: "Vendor Name",
-            REPUSER: "REPUSER",
-          };
-
-          const customHeaders = keys.map((key) => customHeadingMap[key] || key);
-
-          setHeaders(customHeaders);
-
-          // Map the data, include "IDX" as hidden in each row
-          const gData = tableData.map((row) => ({
-            idx: row.IDX, // Store IDX for later reference
-            rowData: keys.map((key) => row[key]), // Data excluding IDX
-          }));
-          setEnteredProduct("submitted");
-          setTableData(gData);
-          // setInitialData(true);
-        } else if (selectedType === "PRN" && tableData.length > 0) {
-          // Extract keys from the first object, excluding "IDX"
-          const keys = Object.keys(tableData[0]).filter((key) => key !== "IDX");
-
-          // Custom heading mapping
-          const customHeadingMap = {
-            INVOICE_NO: "Invoice No",
-            COMPANY_CODE: "Company Code",
-            VENDOR_CODE: "Vendor Code",
-            VENDOR_NAME: "Vendor Name",
-            REPUSER: "REPUSER",
-          };
-
-          const customHeaders = keys.map((key) => customHeadingMap[key] || key);
-
-          setHeaders(customHeaders);
-
-          // Map the data, include "IDX" as hidden in each row
-          const pData = tableData.map((row) => ({
-            idx: row.IDX, // Store IDX for later reference
-            rowData: keys.map((key) => row[key]), // Data excluding IDX
-          }));
-          setEnteredProduct("submitted");
-          setTableData(pData);
-          // console.log('pData',pData);
-          // setInitialData(true);
-        } else if (selectedType === "TOG" && tableData.length > 0) {
-          // Extract keys from the first object, excluding "IDX"
-          const keys = Object.keys(tableData[0]).filter((key) => key !== "IDX");
-
-          // Custom heading mapping
-          const customHeadingMap = {
-            COMPANY_CODE: "Company Code",
-            COMPANY_TO_CODE: "Company To Code",
-            REPUSER: "REPUSER",
-          };
-
-          const customHeaders = keys.map((key) => customHeadingMap[key] || key);
-
-          setHeaders(customHeaders);
-
-          // Map the data, include "IDX" as hidden in each row
-          const tData = tableData.map((row) => ({
-            idx: row.IDX, // Store IDX for later reference
-            rowData: keys.map((key) => row[key]), // Data excluding IDX
-          }));
-          setEnteredProduct("submitted");
-          setTableData(tData);
-          // setInitialData(true);
-        } else {
-          if (selectedType !== "STOCK") {
-            setAlert({
-              message: "No data found",
-              type: "error",
-            });
-          }
-        }
-
-        const repUsers = [
-          ...new Set(
-            (tableData || tableData || tableData).map((item) =>
-              item.REPUSER?.trim()
-            )
-          ),
-        ];
-        setUniqueRepUsers(repUsers);
-      }
-      else{
-        setDisable(false);
-        setAlert({ message: response.data.message || "Error Occured", type: "error" });
-      setTimeout(() => setAlert(null), 3000);
-      }
-
-      setDisable(false);
-    } catch (err) {
-      setDisable(false);
-      if (selectedType !== "STOCK") {
-        setAlert({
-          message: err.response?.data?.message || "Stock data finding failed",
-          type: "error",
-        });
-
-        setTimeout(() => {
-          setAlert(null);
-        }, 3000);
-
-        setTableData([]);
-      }
     }
   };
 
@@ -1544,12 +1373,6 @@ const handleQuantityKeyPress = (e) => {
 
     // All validations passed
     setQuantityError("");
-
-    // Move to discount field if:
-    // 1. Product is selected
-    // 2. Quantity is valid (greater than 0)
-    // 3. For NOS: whole number validation passed
-    // 4. Unit price is valid
     
     if (!salesData.PRODUCT_CODE) {
       setAlert({ message: "No product selected", type: "error" });
@@ -1891,43 +1714,7 @@ const handleDiscountKeyPress = (e) => {
                               <p className="text-sm text-gray-700">
                                 <strong>Customer Name:</strong> {selectedCustomerName}
                               </p>
-                              
-                              {selectedType === "TOG" && (
-                                <div>
-                                  <p className="text-sm text-gray-700">
-                                    <strong>To Company Code:</strong>{" "}
-                                    {selectedToCompany}
-                                  </p>
-                                  <p className="text-sm text-gray-700">
-                                    <strong>To Company Name:</strong>{" "}
-                                    {selectedToCompanyName}
-                                  </p>
-                                </div>
-                              )}
-
-                              {selectedType === "STOCK" && (
-                                <p className="text-sm text-gray-700">
-                                  <strong>Count Status:</strong> {selectedCount}
-                                </p>
-                              )}
                             </div>
-
-                            {(selectedType === "GRN" || selectedType === "PRN") && (
-                              <div className="pt-1 border-t sm:pt-2">
-                                <p className="font-medium text-[#bc4a17] mb-1 sm:mb-2 text-sm sm:text-base">
-                                  Vendor Information
-                                </p>
-                                <p className="text-sm text-gray-700">
-                                  <strong>Vendor Code:</strong> {selectedVendor}
-                                </p>
-                                <p className="text-sm text-gray-700">
-                                  <strong>Vendor Name:</strong> {selectedVendorName}
-                                </p>
-                                <p className="text-sm text-gray-700">
-                                  <strong>Invoice No:</strong> {invoiceNo}
-                                </p>
-                              </div>
-                            )}
 
                             <div className="pt-1 border-t sm:pt-2">
                             <p className="font-medium text-[#bc4a17] mb-1 sm:mb-2 text-sm sm:text-base">
@@ -1989,14 +1776,6 @@ const handleDiscountKeyPress = (e) => {
                                     if (customUnitPrice && !isNaN(parseFloat(customUnitPrice))) {
                                       const formatted = parseFloat(customUnitPrice).toFixed(2);
                                       setCustomUnitPrice(formatted);
-                                      
-                                      // // Validate after formatting
-                                      // if (parseFloat(formatted) === 0) {
-                                      //   setDiscount("0"); // Auto clear discount
-                                      //   setUnitPriceError("Unit price must be greater than 0");
-                                      // } else {
-                                      //   setUnitPriceError(""); // Clear error if valid
-                                      // }
                                     } else if (customUnitPrice === "") {
                                       setUnitPriceError("");
                                     }
