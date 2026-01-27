@@ -62,6 +62,8 @@ function App() {
   const [customUnitPrice, setCustomUnitPrice] = useState("");
   const [unitPriceError, setUnitPriceError] = useState("");
   const [unitType, setUnitType] = useState("");
+  const [previewInvoiceNo, setPreviewInvoiceNo] = useState("");
+  const [previewCompany, setPreviewCompany] = useState(""); // optional – can auto-fill
   
   // ── Refs ──
   const quantityRef = useRef(null);
@@ -1438,6 +1440,36 @@ const handleDiscountKeyPress = (e) => {
   }
 };
 
+// Add this handlePreviewInvoice function
+const handlePreviewInvoice = () => {
+  if (!previewInvoiceNo.trim()) {
+    setAlert({
+      message: "Please enter an invoice number",
+      type: "error"
+    });
+    setTimeout(() => setAlert(null), 3000);
+    return;
+  }
+
+  // ← Important change here
+  const companyCode = previewCompany.trim() || selectedCompany || '';
+
+  if (!companyCode) {
+    setAlert({
+      message: "Company is required to preview invoice",
+      type: "error"
+    });
+    setTimeout(() => setAlert(null), 3000);
+    return;
+  }
+
+  const previewUrl = `/invoice-preview?docNo=${encodeURIComponent(previewInvoiceNo.trim().toUpperCase())}&company=${encodeURIComponent(companyCode)}`;
+  window.open(previewUrl, '_blank', 'noopener,noreferrer');
+
+  // Clear the input field after opening preview
+  setPreviewInvoiceNo("");
+};
+
 
   
   return (
@@ -1465,78 +1497,108 @@ const handleDiscountKeyPress = (e) => {
 
             {/* Company & Customer Selector Section */}
             {!initialData && (
-              <div className="bg-[#d8d8d8] p-2 sm:p-4 rounded-md ml-0 md:ml-4 shadow-md mb-2 sm:mb-4 mt-10 w-full max-w-full"
-              onKeyDown={handleEnterSubmit} // Add 'Enter' key handler
-              >
-                <div className="flex flex-col gap-2 mb-2 justify-left lg:flex-row lg:items-end sm:gap-4 sm:mb-4">
-
-                  {/* Company Dropdown */}
-                  <div className="flex flex-col w-full gap-1 mb-2 lg:w-1/3 sm:mb-0">
-                    <label className="text-sm font-medium text-gray-700">
-                      Select a Company
-                    </label>
-                    <select
-                      value={selectedCompany}
-                      onChange={handleCompanyChange}
-                      className="w-full p-1 text-sm bg-white border border-gray-300 rounded-md shadow-sm sm:p-2"
-                    >
-                      <option value="" disabled>
+              <>
+                {/* First gray box: Company + Customer + Submit */}
+                <div
+                  className="bg-[#d8d8d8] p-4 sm:p-6 rounded-md ml-0 md:ml-4 shadow-md mb-4 mt-10 w-full max-w-full"
+                  onKeyDown={handleEnterSubmit}
+                >
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:gap-6">
+                    {/* Company */}
+                    <div className="flex flex-col flex-1 min-w-[240px]">
+                      <label className="text-sm font-medium text-gray-700 mb-1.5">
                         Select a Company
-                      </option>
-                      {companies.map((company) => (
-                        <option key={company.code} value={company.code}>
-                          {company.code} {company.name}
-                        </option>
-                      ))}
-                    </select>
-                    {companyError ? (
-                      <p className="mt-1 mb-2 text-sm text-red-500">{companyError}</p>
-                    ) : (
-                      <p className="invisible mt-1 mb-2 text-sm">Placeholder</p>
-                    )}
-                  </div>
+                      </label>
+                      <select
+                        value={selectedCompany}
+                        onChange={handleCompanyChange}
+                        className="w-full p-2.5 text-sm bg-white border border-gray-300 rounded-md focus:outline-none"
+                      >
+                        <option value="" disabled>Select a Company</option>
+                        {companies.map((company) => (
+                          <option key={company.code} value={company.code}>
+                            {company.code} {company.name}
+                          </option>
+                        ))}
+                      </select>
+                      {companyError && <p className="mt-1.5 text-sm text-red-600">{companyError}</p>}
+                    </div>
 
-                  {/* Customer Dropdown */}
-                  <div className="flex flex-col w-full gap-1 mb-2 lg:w-1/3 sm:mb-0">
-                    <label className="text-sm font-medium text-gray-700">
-                      Select a Customer
-                    </label>
-                    <select
-                      value={selectedCustomer}
-                      onChange={handleCustomerChange}
-                      className="w-full p-1 text-sm bg-white border border-gray-300 rounded-md shadow-sm sm:p-2"
-                    >
-                      <option value="" disabled>
+                    {/* Customer */}
+                    <div className="flex flex-col flex-1 min-w-[240px]">
+                      <label className="text-sm font-medium text-gray-700 mb-1.5">
                         Select a Customer
-                      </option>
-                      {customers.map((customer) => (
-                        <option key={customer.code} value={customer.code}>
-                          {customer.code} {customer.name}
-                        </option>
-                      ))}
-                    </select>
-                    {customerError ? (
-                      <p className="mt-1 mb-2 text-sm text-red-500">{customerError}</p>
-                    ) : (
-                      <p className="invisible mt-1 mb-2 text-sm">Placeholder</p>
-                    )}
-                  </div>
+                      </label>
+                      <select
+                        value={selectedCustomer}
+                        onChange={handleCustomerChange}
+                        className="w-full p-2.5 text-sm bg-white border border-gray-300 rounded-md focus:outline-none"
+                      >
+                        <option value="" disabled>Select a Customer</option>
+                        {customers.map((customer) => (
+                          <option key={customer.code} value={customer.code}>
+                            {customer.code} {customer.name}
+                          </option>
+                        ))}
+                      </select>
+                      {customerError && <p className="mt-1.5 text-sm text-red-600">{customerError}</p>}
+                    </div>
 
-                  {/* Submit Button */}
-                  {/* <div className="flex justify-end w-full lg:w-auto"> */}
-                  <div className="flex flex-row justify-end w-full mb-9 lg:w-1/3">
-                    <button
-                      onClick={handleSubmit}
-                      disabled={disable}
-                      className={`bg-black hover:bg-gray-800 text-white font-semibold py-1 sm:py-2 px-2 sm:px-4 rounded-md shadow-md transition-all w-full lg:w-auto text-sm ${
-                        disable ? "opacity-50 cursor-not-allowed" : ""
-                      }`}
-                    >
-                      Submit
-                    </button>
+                    {/* Submit Button */}
+                    <div className="flex items-end lg:self-end">
+                      <button
+                        onClick={handleSubmit}
+                        disabled={disable}
+                        className={`bg-black hover:bg-gray-800 text-white font-medium py-2.5 px-8 rounded-md shadow transition min-w-[140px] ${
+                          disable ? "opacity-60 cursor-not-allowed" : ""
+                        }`}
+                      >
+                        Submit
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
+
+                {/* Second separate gray box: View Saved Invoice */}
+                <div className="bg-[#d8d8d8] p-4 sm:p-6 rounded-md ml-0 md:ml-4 shadow-md mb-6 w-full max-w-full">
+                  <div className="flex flex-col gap-4">
+                    <div className="text-center sm:text-left">
+                      <h3 className="text-base font-semibold text-gray-800">View Previously Saved Invoice</h3>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row sm:items-end gap-4">
+                      <div className="flex-1">
+                        <label className="text-sm font-medium text-gray-700 mb-1.5 block">
+                          Invoice Number
+                        </label>
+                        <input
+                          type="text"
+                          value={previewInvoiceNo}
+                          onChange={(e) => setPreviewInvoiceNo(e.target.value.trim().toUpperCase())}
+                          placeholder="Enter Invoice Number"
+                          className="w-full p-2.5 text-sm bg-white border border-gray-300 rounded-md focus:outline-none"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handlePreviewInvoice();
+                            }
+                          }}
+                        />
+                      </div>
+
+                      <button
+                        onClick={handlePreviewInvoice}
+                        disabled={disable || !previewInvoiceNo.trim()}
+                        className={`bg-black hover:bg-gray-800 text-white font-medium py-2.5 px-8 rounded-md shadow transition min-w-[140px] ${
+                          disable || !previewInvoiceNo.trim() ? "opacity-60 cursor-not-allowed" : ""
+                        }`}
+                      >
+                        Preview
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </>
             )}
 
             {/* Upload Section */}

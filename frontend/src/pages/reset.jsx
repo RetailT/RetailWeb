@@ -35,6 +35,7 @@ const Reset = () => {
   const [hourlyReport, setHourlyReport] = useState(false);
   const [salesComparison, setSalesComparison] = useState(false);
   const [invoice, setInvoice] = useState(false);
+  const [invoicePreview, setInvoicePreview] = useState(false);
   const [transInvoice, setTransInvoice] = useState(false);
   const [productView, setProductView] = useState(false);
   const [scan, setScan] = useState(false);
@@ -209,6 +210,7 @@ useEffect(() => {
             t_prn: prn,
             t_tog: tog,
             t_invoice: transInvoice,
+            t_invoicePreview: invoicePreview,
           },
         ],
         colorSize_stock: [
@@ -230,6 +232,9 @@ useEffect(() => {
           },
         ],
       };
+
+      console.log("Submitting data:", data); // DEBUG: Check what's being sent
+      console.log("Invoice Preview value:", invoicePreview); // DEBUG: Check state value
 
       const config1 = {
         headers: {
@@ -343,6 +348,7 @@ setNewCustomerID("");
             setProductView(user.d_productView === "T");
             setScan(user.t_scan === "T");
             setTransInvoice(user.t_invoice === "T");
+            setInvoicePreview(user.t_invoicePreview === "T");
             setStock(user.t_stock === "T");
             setStockUpdate(user.t_stock_update === "T");
             setGRN(user.t_grn === "T");
@@ -365,8 +371,7 @@ setNewCustomerID("");
             setSVendor(user.s_vendor === "T");
             setCompanyName(user.COMPANY_NAME || "");
             setStartDate(user.START_DATE || "");
-            setEndDate(user.END_DATE || "");
-            
+            setEndDate(user.END_DATE || "");           
 
             // setData(user);
             // userPermisionDetails(user);
@@ -385,6 +390,7 @@ setNewCustomerID("");
             setSalesComparison(false);
             setInvoice(false);
             setTransInvoice(false);
+            setInvoicePreview(false);
             setProductView(false);
             setScan(false);
             setStock(false);
@@ -427,8 +433,9 @@ setNewCustomerID("");
             setVendor(false);
             setHourlyReport(false);
             setSalesComparison(false);
-            setInvoice(false);
+            setInvoice(false);            
             setTransInvoice(false);
+            setInvoicePreview(false);
             setProductView(false);
             setScan(false);
             setStock(false);
@@ -860,6 +867,17 @@ const autoFill = (customerID) => {
                         />
                         <span className="text-sm text-gray-700">
                           Invoice
+                        </span>
+                      </label>
+                      <label className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          checked={invoicePreview}
+                          onChange={(e) => setInvoicePreview(e.target.checked)}
+                          className="w-4 h-4 sm:w-5 sm:h-5"
+                        />
+                        <span className="text-sm text-gray-700">
+                          Invoice Preview
                         </span>
                       </label>
                     </div>
