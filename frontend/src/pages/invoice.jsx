@@ -996,6 +996,11 @@ const handleProductSubmit = async (e) => {
 
 // Add this function before the return statement
 const handleSaveInvoice = async () => {
+  // ✅ Prevent duplicate submission
+  if (disable || isSubmittingRef.current) {
+    console.log("Save already in progress");
+    return;
+  }
   if (!selectedCompany || !selectedCustomer) {
     setAlert({
       message: "Company and Customer are required",
@@ -1015,6 +1020,8 @@ const handleSaveInvoice = async () => {
   }
 
   try {
+    // ✅ Set both ref and state
+    isSubmittingRef.current = true;
     setDisable(true);
     
     const response = await axios.post(
@@ -1036,36 +1043,36 @@ const handleSaveInvoice = async () => {
         type: "success"
       });
       
-      // Clear the invoice table data
+      // ✅ Clear ALL form data
       setInvoiceTableData([]);
-      
-      // Reset form
       setSalesData([]);
       setAmount("");
       setQuantity("");
-      setDiscount("");
+      setDiscount("0");
+      setDiscountAmount(0);
       setColorWiseTableData([]);
       setCode("");
       setInputValue("");
       setScannedCode("");
+      setUnitType("");
+      setCustomUnitPrice("");
+      setQuantityError("");
+      setCodeError("");
 
       // Open preview in new tab
       const previewUrl = `/invoice-preview?docNo=${encodeURIComponent(response.data.documentNumber)}&company=${encodeURIComponent(response.data.companyCode)}`;
       window.open(previewUrl, '_blank', 'noopener,noreferrer');
 
       setTimeout(() => setAlert(null), 5000);
-      
-      // setTimeout(() => setAlert(null), 3000);
 
-      // setTimeout(() => {
-      //   if (codeRef.current) {
-      //     codeRef.current.focus();
-      //     codeRef.current.select(); // optional: select all text
-      //   }
-      // }, 300);
+      setTimeout(() => {
+        if (codeRef.current) {
+          codeRef.current.focus();
+          codeRef.current.select(); // optional: select all text
+        }
+      }, 300);
     }
-    
-    setDisable(false);
+
   } catch (err) {
     console.error("Error saving invoice:", err);
     setAlert({
@@ -1073,6 +1080,9 @@ const handleSaveInvoice = async () => {
       type: "error"
     });
     setTimeout(() => setAlert(null), 3000);
+    } finally {
+    // ✅ Always reset ref and disable state
+    isSubmittingRef.current = false;
     setDisable(false);
   }
 };
@@ -1451,7 +1461,7 @@ const handlePreviewInvoice = () => {
     return;
   }
 
-  // ← Important change here
+  // Important change here
   const companyCode = previewCompany.trim() || selectedCompany || '';
 
   if (!companyCode) {
@@ -1463,6 +1473,7 @@ const handlePreviewInvoice = () => {
     return;
   }
 
+  
   const previewUrl = `/invoice-preview?docNo=${encodeURIComponent(previewInvoiceNo.trim().toUpperCase())}&company=${encodeURIComponent(companyCode)}`;
   window.open(previewUrl, '_blank', 'noopener,noreferrer');
 
