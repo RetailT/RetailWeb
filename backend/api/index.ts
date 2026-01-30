@@ -73,6 +73,7 @@ app.get('/find-user-connection', authenticateToken, authController.findUserConne
 app.get('/connection-details', authenticateToken, authController.serverConnection);
 app.get('/invoice-temp-data', authenticateToken, authController.getInvoiceTempData);
 app.get('/get-invoice-preview', authenticateToken, authController.getInvoicePreview);
+app.get('/saved-invoice-numbers', authenticateToken, authController.savedInvoiceNumbers);
 
 app.post("/login", authController.login);
 app.post('/close-connection', authController.closeConnection);

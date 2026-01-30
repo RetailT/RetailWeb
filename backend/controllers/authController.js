@@ -6983,159 +6983,124 @@ exports.getInvoicePreview = async (req, res) => {
   }
 };
 
-// GET - Invoice Preview (FIXED - User can only see their own invoices)
-// exports.getInvoicePreview = async (req, res) => {
-//   try {
-//     let { documentNo, company } = req.query;
-//     documentNo = (documentNo || '').trim().toUpperCase();
-//     company = (company || '').trim().toUpperCase();
+// GET - List of saved (unique) invoice numbers for preview dropdown
+exports.savedInvoiceNumbers = async (req, res) => {
+  let pool = null;
 
-//     if (!documentNo) {
-//       return res.status(400).json({ message: "Document number is required" });
-//     }
+  try {
+    const { company } = req.query; // optional filter
+    const username = req.user?.username || 'UNKNOWN'; // safeguard
+    const user_ip = String(req.user?.ip || '').trim();
 
-//     // ── Authentication & user validation ──────────────────────────────────
-//     if (!req.user || !req.user.username) {
-//       return res.status(401).json({ message: "Unauthorized - please log in" });
-//     }
+    console.log(`[savedInvoiceNumbers] Called with company: "${company}", username: "${username}"`);
 
-//     const username = req.user.username;
-//     const user_ip = String(req.user.ip).trim();
+    if (mssql.connected) await mssql.close();
 
-//     // ── Permission check ───────────────────────────────────────────────────
-//     if (mssql.connected) await mssql.close();
-//     const mainPool = await connectToDatabase(); // This connects to RTPOS_MAIN
+    pool = await connectToUserDatabase(user_ip, req.user?.port?.trim() || '');
 
-//     if (!mainPool || !mainPool.connected) {
-//       return res.status(500).json({ message: "Database connection failed" });
-//     }
+    if (!pool || !pool.connected) {
+      console.error("[savedInvoiceNumbers] Pool not connected");
+      return res.status(500).json({ 
+        success: false, 
+        message: "Database connection failed" 
+      });
+    }
 
-//     const permResult = await mainPool.request()
-//       .input('username', mssql.NVarChar(100), username)
-//       .query(`
-//         USE [RTPOS_MAIN];
-//         SELECT t_invoicePreview 
-//         FROM tb_USERS
-//         WHERE username = @username
-//       `);
+    // Check if table exists
+    const tableCheck = await pool.request().query(`
+      USE [RT_WEB];
+      SELECT COUNT(*) as TableExists 
+      FROM INFORMATION_SCHEMA.TABLES 
+      WHERE TABLE_NAME = 'tb_INVOICE_DETAILS'
+    `);
 
-//     if (permResult.recordset.length === 0) {
-//       return res.status(403).json({ message: "No permission record found for the user" });
-//     }
+    if (tableCheck.recordset[0].TableExists === 0) {
+      console.log("[savedInvoiceNumbers] Table tb_INVOICE_DETAILS does not exist");
+      return res.status(200).json({
+        success: true,
+        invoices: []
+      });
+    }
 
-//     const hasPermission = permResult.recordset[0].t_invoicePreview === 'T';
+    // Build safe query
+    let query = `
+      USE [RT_WEB];
+      SELECT DISTINCT DOCUMENT_NO
+      FROM tb_INVOICE_DETAILS
+    `;
 
-//     if (!hasPermission) {
-//       return res.status(403).json({
-//         message: "You do not have permission to view the invoice preview"
-//       });
-//     }
+    const request = pool.request();
 
-//     // ── Now connect to user database for invoice data ──────────────────────
-//     if (mssql.connected) await mssql.close();
-//     const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+    let whereParts = [];
 
-//     if (!pool || !pool.connected) {
-//       return res.status(500).json({ message: "User database connection failed" });
-//     }
+    // Company filter (safe)
+    if (company && typeof company === 'string' && company.trim() !== '') {
+      whereParts.push(`COMPANY_CODE = @company`);
+      request.input('company', mssql.NChar(10), company.trim());
+    }
 
-//     // ── Auto-detect company if not provided ────────────────────────────────
-//     if (!company) {
-//       const detect = await pool.request()
-//         .input('docNo', mssql.NVarChar(30), documentNo)
-//         .input('username', mssql.NVarChar(50), username)  // ← ADDED: Check username
-//         .query(`
-//           USE [RT_WEB];
-//           SELECT TOP 1 COMPANY_CODE 
-//           FROM tb_INVOICE_DETAILS 
-//           WHERE DOCUMENT_NO = @docNo
-//             AND TRUSER = @username  -- ← ADDED: Only invoices created by this user
-//         `);
+    // TRUSER filter - only if column exists and we have username
+    const columnCheck = await pool.request().query(`
+      SELECT 1 as HasTRUSER
+      FROM sys.columns 
+      WHERE object_id = OBJECT_ID('tb_INVOICE_DETAILS') 
+      AND name = 'TRUSER'
+    `);
 
-//       if (detect.recordset.length === 0) {
-//         return res.status(404).json({
-//           message: "Invoice not found or you don't have permission to view it."
-//         });
-//       }
+    const hasTRUSER = columnCheck.recordset.length > 0;
 
-//       company = detect.recordset[0].COMPANY_CODE.trim();
-//     }
+    if (hasTRUSER && username && username !== 'UNKNOWN') {
+      whereParts.push(`TRUSER = @username`);
+      request.input('username', mssql.NVarChar(50), username);
+    }
 
-//     // ── Fetch company information ─────────────────────────────────────────
-//     const companyResult = await pool.request()
-//       .input('company', mssql.NVarChar(10), company)
-//       .query(`
-//         USE [RT_WEB];
-//         SELECT COMPANY_NAME, ADDRESS, PHONE, RECEIPT_TEXT
-//         FROM tb_COMPANY 
-//         WHERE COMPANY_CODE = @company
-//       `);
+    if (whereParts.length > 0) {
+      query += ` WHERE ` + whereParts.join(' AND ');
+    }
 
-//     if (companyResult.recordset.length === 0) {
-//       return res.status(404).json({
-//         message: `Company not found (code: ${company})`
-//       });
-//     }
+    query += ` ORDER BY DOCUMENT_NO DESC`;
 
-//     const companyInfo = companyResult.recordset[0];
+    console.log("[savedInvoiceNumbers] Executing query:", query);
 
-//     // ── Fetch invoice items (ONLY if created by this user) ────────────────
-//     const itemsResult = await pool.request()
-//       .input('docNo', mssql.NVarChar(30), documentNo)
-//       .input('company', mssql.NVarChar(10), company)
-//       .input('username', mssql.NVarChar(50), username)  // ← ADDED: Check username
-//       .query(`
-//         USE [RT_WEB];
-//         SELECT 
-//           DOCUMENT_NO,
-//           CUSTOMER_CODE,
-//           CUSTOMER_NAME,
-//           PRODUCT_CODE,
-//           PRODUCT_NAME,
-//           QUANTITY,
-//           UNITPRICE,
-//           DISCOUNT_AMOUNT,
-//           TOTAL,
-//           TRUSER
-//         FROM tb_INVOICE_DETAILS
-//         WHERE DOCUMENT_NO = @docNo 
-//           AND COMPANY_CODE = @company
-//           AND TRUSER = @username  -- ← ADDED: Only invoices created by this user
-//         ORDER BY PRODUCT_CODE
-//       `);
+    const result = await request.query(query);
 
-//     if (itemsResult.recordset.length === 0) {
-//       return res.status(404).json({
-//         message: `Invoice not found or you don't have permission to view it.`
-//       });
-//     }
+    // Safeguard against null/undefined recordset
+    const records = result?.recordset || [];
 
-//     const items = itemsResult.recordset;
-//     const firstItem = items[0];
+    const invoiceNumbers = records
+      .map(row => (row.DOCUMENT_NO || '').trim())
+      .filter(docNo => docNo.length > 0);
 
-//     return res.status(200).json({
-//       success: true,
-//       invoice: {
-//         documentNo,
-//         companyCode: company,
-//         companyName: companyInfo.COMPANY_NAME?.trim() || "UNKNOWN SHOP",
-//         address: companyInfo.ADDRESS?.trim() || "",
-//         phone: companyInfo.PHONE?.trim() || "",
-//         message: companyInfo.RECEIPT_TEXT?.trim() || "",
-//         customerName: firstItem.CUSTOMER_NAME?.trim() || "WALK-IN CUSTOMER",
-//         cashierName: firstItem.TRUSER?.trim() || "CASHIER",
-//         items,
-//       }
-//     });
+    console.log(`[savedInvoiceNumbers] Found ${invoiceNumbers.length} invoices`);
 
-//   } catch (error) {
-//     console.error("Error in getInvoicePreview:", error);
-//     return res.status(500).json({
-//       message: "Failed to fetch invoice preview",
-//       error: error.message
-//     });
-//   }
-// };
+    return res.status(200).json({
+      success: true,
+      invoices: invoiceNumbers
+    });
+
+  } catch (error) {
+    console.error("Error in savedInvoiceNumbers:", error.message, error.stack);
+
+    // Graceful fallback for common errors
+    if (error.message?.includes('Invalid object name') || 
+        error.message?.includes('Invalid column name')) {
+      return res.status(200).json({
+        success: true,
+        invoices: []
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch saved invoice numbers",
+      error: error.message
+    });
+  } finally {
+    if (pool) {
+      try { await pool.close(); } catch (e) {}
+    }
+  }
+};
 
 // POST - Insert invoice temp item (FIXED - Better table creation)
 exports.insertInvoiceTemp = async (req, res) => {

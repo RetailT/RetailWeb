@@ -221,12 +221,14 @@ const InvoicePreview = () => {
         </span>
       </div>
 
-      {/* Discount Box */}
-      <div className="text-center border-4 border-black py-3 mx-8 my-3 font-bold text-xl">
-        YOU HAVE TOTAL DISCOUNT
-        <br />
-        {totalDiscount.toFixed(2)}
-      </div>
+      {/* Discount Box – only show if there is actual discount */}
+      {totalDiscount > 0.001 && (  // hide if = 0
+        <div className="text-center border-4 border-black py-3 mx-8 my-3 font-bold text-xl">
+          YOU HAVE TOTAL DISCOUNT
+          <br />
+          {totalDiscount.toFixed(2)}
+        </div>
+      )}
 
       {/* Footer Message */}
       <div className="text-center text-sm px-4 pb-2">

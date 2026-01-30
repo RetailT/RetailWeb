@@ -64,8 +64,10 @@ function App() {
   const [unitType, setUnitType] = useState("");
   const [previewInvoiceNo, setPreviewInvoiceNo] = useState("");
   const [previewCompany, setPreviewCompany] = useState(""); // optional – can auto-fill
+  const [savedInvoiceNumbers, setSavedInvoiceNumbers] = useState([]);
+  const [selectedPreviewInvoice, setSelectedPreviewInvoice] = useState("");
   
-  // ── Refs ──
+  // Refs
   const quantityRef = useRef(null);
   const discountRef = useRef(null);
   const tableRef = useRef(null);
@@ -76,7 +78,7 @@ function App() {
   const isSubmittingRef = useRef(false);
   const saveButtonRef = useRef(null);
   
-  // ── Effects ──
+  // Effects
   useEffect(() => {
     if (headers.length > 0 && data.length > 0) {
       const repUserIndex = headers.indexOf("REPUSER");
@@ -198,6 +200,16 @@ useEffect(() => {
     setDiscount("0");
   }
 }, [quantity]);
+
+useEffect(() => {
+  if (selectedCompany) {
+    fetchSavedInvoiceNumbers(selectedCompany);
+  } else {
+    // When no company selected → clear the list
+    setSavedInvoiceNumbers([]);
+    setSelectedPreviewInvoice("");
+  }
+}, [selectedCompany]);
 
 
   if (!authToken) {
@@ -1481,6 +1493,53 @@ const handlePreviewInvoice = () => {
   setPreviewInvoiceNo("");
 };
 
+const fetchSavedInvoiceNumbers = async (companyCode = "") => {
+  // If no company selected, just clear and return (no API call)
+  if (!companyCode.trim()) {
+    setSavedInvoiceNumbers([]);
+    setSelectedPreviewInvoice("");
+    return;
+  }
+
+  try {
+    const response = await axios.get(
+      `${process.env.REACT_APP_BACKEND_URL}saved-invoice-numbers`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { company: companyCode }
+      }
+    );
+
+    if (response.data.success) {
+      const invoices = response.data.invoices || [];
+      const sorted = invoices.sort((a, b) => b.localeCompare(a)); // newest first
+
+      setSavedInvoiceNumbers(sorted);
+
+      if (sorted.length > 0) {
+        setSelectedPreviewInvoice(sorted[0]); // auto-select first
+      } else {
+        setSelectedPreviewInvoice(""); // clear if empty
+      }
+    } else {
+      setSavedInvoiceNumbers([]);
+      setSelectedPreviewInvoice("");
+    }
+  } catch (err) {
+    console.error("Failed to fetch invoice numbers:", err);
+    setSavedInvoiceNumbers([]);
+    setSelectedPreviewInvoice("");
+
+    if (err.response?.status >= 500) {
+      setAlert({
+        message: "Server error loading saved invoices",
+        type: "error"
+      });
+      setTimeout(() => setAlert(null), 4000);
+    }
+  }
+};
+
 
   
   return (
@@ -1576,32 +1635,81 @@ const handlePreviewInvoice = () => {
                     <div className="text-center sm:text-left">
                       <h3 className="text-base font-semibold text-gray-800">View Previously Saved Invoice</h3>
                     </div>
-
                     <div className="flex flex-col sm:flex-row sm:items-end gap-4">
+                      {/* Company (optional - filter invoices by company) */}
+                      <div className="flex-1">
+                        <label className="text-sm font-medium text-gray-700 mb-1.5 block">
+                          Select a Company
+                        </label>
+                        <select
+                          value={previewCompany || selectedCompany}
+                          onChange={(e) => {
+                            setPreviewCompany(e.target.value);
+                            fetchSavedInvoiceNumbers(e.target.value);
+                          }}
+                          className="w-full p-2.5 text-sm bg-white border border-gray-300 rounded-md focus:outline-none"
+                        >
+                          <option value="">Select a Company</option>
+                          {companies.map((company) => (
+                            <option key={company.code} value={company.code}>
+                              {company.code} - {company.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Invoice Number Dropdown */}
                       <div className="flex-1">
                         <label className="text-sm font-medium text-gray-700 mb-1.5 block">
                           Invoice Number
                         </label>
-                        <input
-                          type="text"
-                          value={previewInvoiceNo}
-                          onChange={(e) => setPreviewInvoiceNo(e.target.value.trim().toUpperCase())}
-                          placeholder="Enter Invoice Number"
+                        <select
+                          value={selectedPreviewInvoice}
+                          onChange={(e) => setSelectedPreviewInvoice(e.target.value)}
                           className="w-full p-2.5 text-sm bg-white border border-gray-300 rounded-md focus:outline-none"
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              handlePreviewInvoice();
-                            }
-                          }}
-                        />
+                          disabled={savedInvoiceNumbers.length === 0}
+                        >
+                          {savedInvoiceNumbers.length === 0 ? (
+                            <option value="" disabled>
+                              No saved invoices found
+                            </option>
+                          ) : (
+                            <>
+                              <option value="" disabled>
+                                Select Invoice Number
+                              </option>
+                              {savedInvoiceNumbers.map((invNo) => (
+                                <option key={invNo} value={invNo}>
+                                  {invNo}
+                                </option>
+                              ))}
+                            </>
+                          )}
+                        </select>
                       </div>
 
+                      {/* Preview Button */}
                       <button
-                        onClick={handlePreviewInvoice}
-                        disabled={disable || !previewInvoiceNo.trim()}
+                        onClick={() => {
+                          if (!selectedPreviewInvoice) {
+                            setAlert({
+                              message: "Please select an invoice number",
+                              type: "error"
+                            });
+                            setTimeout(() => setAlert(null), 3000);
+                            return;
+                          }
+                          const companyCode = previewCompany || selectedCompany || "";
+                          const previewUrl = `/invoice-preview?docNo=${encodeURIComponent(selectedPreviewInvoice)}&company=${encodeURIComponent(companyCode)}`;
+                          window.open(previewUrl, '_blank', 'noopener,noreferrer');
+
+                          // Clear both selections
+                          setSelectedPreviewInvoice("");
+                          setPreviewCompany("");
+                        }}
+                        disabled={disable || !selectedPreviewInvoice}
                         className={`bg-black hover:bg-gray-800 text-white font-medium py-2.5 px-8 rounded-md shadow transition min-w-[140px] ${
-                          disable || !previewInvoiceNo.trim() ? "opacity-60 cursor-not-allowed" : ""
+                          disable || !selectedPreviewInvoice ? "opacity-60 cursor-not-allowed" : ""
                         }`}
                       >
                         Preview
