@@ -63,7 +63,7 @@ function App() {
   const [unitPriceError, setUnitPriceError] = useState("");
   const [unitType, setUnitType] = useState("");
   const [previewInvoiceNo, setPreviewInvoiceNo] = useState("");
-  const [previewCompany, setPreviewCompany] = useState(""); // optional – can auto-fill
+  const [previewCompany, setPreviewCompany] = useState(localStorage.getItem("lastPreviewCompany") || "");
   const [savedInvoiceNumbers, setSavedInvoiceNumbers] = useState([]);
   const [selectedPreviewInvoice, setSelectedPreviewInvoice] = useState("");
   
@@ -201,15 +201,22 @@ useEffect(() => {
   }
 }, [quantity]);
 
+// useEffect(() => {
+//   if (selectedCompany) {
+//     fetchSavedInvoiceNumbers(selectedCompany);
+//   } else {
+//     // When no company selected → clear the list
+//     setSavedInvoiceNumbers([]);
+//     setSelectedPreviewInvoice("");
+//   }
+// }, [selectedCompany]);
+
+// Load once on mount if there's a saved company
 useEffect(() => {
-  if (selectedCompany) {
-    fetchSavedInvoiceNumbers(selectedCompany);
-  } else {
-    // When no company selected → clear the list
-    setSavedInvoiceNumbers([]);
-    setSelectedPreviewInvoice("");
+  if (previewCompany) {
+    fetchSavedInvoiceNumbers(previewCompany);
   }
-}, [selectedCompany]);
+}, []); // ← empty dependency = only on first render
 
 
   if (!authToken) {
@@ -1054,9 +1061,33 @@ const handleSaveInvoice = async () => {
         message: `Invoice saved successfully! ${response.data.itemsSaved} items saved.`,
         type: "success"
       });
+
+      // Safely get document number and company code
+      const docNo = response.data.documentNumber || response.data.invoiceNo || response.data.docNo || "";
+      const compCode = response.data.companyCode || response.data.company || selectedCompany || "";
+
+      if (docNo) {
+        const previewUrl = `/invoice-preview?docNo=${encodeURIComponent(docNo)}&company=${encodeURIComponent(compCode)}`;
+        window.open(previewUrl, '_blank', 'noopener,noreferrer');
+      } else {
+        console.error("Backend did not return any document/invoice number");
+        setAlert({
+          message: "Invoice saved, but preview could not be opened (missing invoice number)",
+          type: "warning"
+        });
+      }
       
       // ✅ Clear ALL form data
+      setInitialData(false);
+      setSelectedCompany("");
+      setSelectedCompanyName(null);
+      setSelectedCustomer("");
+      setSelectedCustomerName(null);
       setInvoiceTableData([]);
+      setSavedInvoiceNumbers([]);           // optional
+      setSelectedPreviewInvoice("");        // optional
+
+      // Clear product-related fields too
       setSalesData([]);
       setAmount("");
       setQuantity("");
@@ -1071,16 +1102,12 @@ const handleSaveInvoice = async () => {
       setQuantityError("");
       setCodeError("");
 
-      // Open preview in new tab
-      const previewUrl = `/invoice-preview?docNo=${encodeURIComponent(response.data.documentNumber)}&company=${encodeURIComponent(response.data.companyCode)}`;
-      window.open(previewUrl, '_blank', 'noopener,noreferrer');
-
       setTimeout(() => setAlert(null), 5000);
 
       setTimeout(() => {
-        if (codeRef.current) {
-          codeRef.current.focus();
-          codeRef.current.select(); // optional: select all text
+        const customerSelect = document.getElementById('customer-select');
+        if (customerSelect) {
+          customerSelect.focus();
         }
       }, 300);
     }
@@ -1474,7 +1501,7 @@ const handlePreviewInvoice = () => {
   }
 
   // Important change here
-  const companyCode = previewCompany.trim() || selectedCompany || '';
+  const companyCode = previewCompany.trim() || '';
 
   if (!companyCode) {
     setAlert({
@@ -1642,10 +1669,11 @@ const fetchSavedInvoiceNumbers = async (companyCode = "") => {
                           Select a Company
                         </label>
                         <select
-                          value={previewCompany || selectedCompany}
+                          value={previewCompany}
                           onChange={(e) => {
-                            setPreviewCompany(e.target.value);
-                            fetchSavedInvoiceNumbers(e.target.value);
+                            const newCompany = e.target.value;
+                              setPreviewCompany(newCompany);   // update its own state
+                              fetchSavedInvoiceNumbers(newCompany); // fetch invoices for selected company
                           }}
                           className="w-full p-2.5 text-sm bg-white border border-gray-300 rounded-md focus:outline-none"
                         >

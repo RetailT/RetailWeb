@@ -7341,6 +7341,71 @@ exports.saveInvoice = async (req, res) => {
       return res.status(500).json({ message: "Database connection failed" });
     }
 
+    // 1. Ensure RT_WEB database exists
+    await pool.request().query(`
+      IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = 'RT_WEB')
+      BEGIN
+        CREATE DATABASE [RT_WEB];
+      END
+    `);
+
+    // 2. Create tb_InvoiceTemp if missing (with TRUSER)
+    await pool.request().query(`
+      USE [RT_WEB];
+
+      IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='tb_InvoiceTemp' AND xtype='U')
+      BEGIN
+        CREATE TABLE tb_InvoiceTemp (
+          IDX NUMERIC(18,0) IDENTITY(1,1) PRIMARY KEY,
+          COMPANY_CODE NVARCHAR(10),
+          COMPANY_NAME NVARCHAR(50),
+          CUSTOMER_CODE NVARCHAR(20),
+          CUSTOMER_NAME NVARCHAR(100),
+          PRODUCT_CODE NVARCHAR(30),
+          PRODUCT_NAME NVARCHAR(100),
+          COSTPRICE MONEY,
+          UNITPRICE MONEY,
+          STOCK FLOAT,
+          QUANTITY FLOAT,
+          DISCOUNT MONEY,
+          DISCOUNT_AMOUNT MONEY,
+          TOTAL MONEY,
+          TRUSER NVARCHAR(50),
+          INSERT_TIME DATETIME DEFAULT GETDATE()
+        );
+        PRINT 'Created tb_InvoiceTemp';
+      END
+
+      -- Add TRUSER if missing
+      IF NOT EXISTS (
+        SELECT * FROM sys.columns 
+        WHERE object_id = OBJECT_ID('tb_InvoiceTemp') AND name = 'TRUSER'
+      )
+      BEGIN
+        ALTER TABLE tb_InvoiceTemp ADD TRUSER NVARCHAR(50);
+        PRINT 'Added TRUSER column';
+      END
+    `);
+
+    // 3. Create tb_DOCUMENT if missing
+    await pool.request().query(`
+      USE [RT_WEB];
+
+      IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='tb_DOCUMENT' AND xtype='U')
+      BEGIN
+        CREATE TABLE tb_DOCUMENT (
+          COMPANY_CODE NVARCHAR(10) PRIMARY KEY,
+          GRN NUMERIC(18,0) DEFAULT 1,
+          PRN NUMERIC(18,0) DEFAULT 1,
+          TOG NUMERIC(18,0) DEFAULT 1,
+          INVOICE NUMERIC(18,0) DEFAULT 1,
+          REPUSER NVARCHAR(50),
+          INSERT_TIME DATETIME DEFAULT GETDATE()
+        );
+        PRINT 'Created tb_DOCUMENT';
+      END
+    `);
+
     transaction = pool.transaction();
     await transaction.begin();
 
