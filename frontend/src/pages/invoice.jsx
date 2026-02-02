@@ -2079,8 +2079,8 @@ const fetchSavedInvoiceNumbers = async (companyCode = "") => {
                                       )}
                                     </div>
                                     {/* Set Discount */}
-                                    <div className="flex flex-col items-center sm:flex-row sm:space-x-6">
-                                      <p className="gap-2 text-sm text-gray-700">
+                                    <div className="flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-6">
+                                      <p className="text-sm text-gray-700 whitespace-nowrap">
                                         <strong>Discount: </strong>
                                       </p>
                                     
