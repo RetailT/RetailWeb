@@ -1942,11 +1942,11 @@ const fetchSavedInvoiceNumbers = async (companyCode = "") => {
                             </p>
 
                             {/* Unit Price Input Field */}
-
-                            <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:space-x-0.5">
-                              <p className="text-sm text-gray-700 whitespace-nowrap">
-                                <strong>Unit Price: </strong>
-                              </p>
+                            <div className="flex flex-col w-full gap-1">
+                              <div className="flex items-center gap-6"> 
+                                <p className="text-sm text-gray-700 whitespace-nowrap min-w-[80px]">  {/* min-w same */}
+                                  <strong>Unit Price: </strong>
+                                </p>
                               <div className="w-full"> {/* Wrapper for error message positioning */}
                                 <input
                                   type="text"
@@ -2005,6 +2005,7 @@ const fetchSavedInvoiceNumbers = async (companyCode = "") => {
                               </div>
                             </div>
                           </div>
+                        </div>
 
                             <div className="pt-1 border-t sm:pt-2">
                               <p className="font-medium text-[#bc4a17] mb-1 sm:mb-2 text-sm sm:text-base">
@@ -2026,7 +2027,7 @@ const fetchSavedInvoiceNumbers = async (companyCode = "") => {
                                   <div className="flex flex-col space-y-1 sm:space-y-2">
                                     <div className="flex flex-col w-full gap-1">
                                       <div className="flex items-center gap-6">
-                                        <p className="text-sm text-gray-700 whitespace-nowrap">
+                                        <p className="text-sm text-gray-700 whitespace-nowrap min-w-[80px]">
                                           <strong>Quantity: </strong>
                                         </p>
                                         <div className="flex-1">
@@ -2078,44 +2079,57 @@ const fetchSavedInvoiceNumbers = async (companyCode = "") => {
                                         </p>
                                       )}
                                     </div>
-                                    {/* Set Discount */}
-                                    <div className="flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-6">
-                                      <p className="text-sm text-gray-700 whitespace-nowrap">
-                                        <strong>Discount: </strong>
-                                      </p>
-                                    
-                                      <input
-                                        type="text"
-                                        id="discount"
-                                        ref={discountRef}
-                                        value={discount}
-                                        onChange={(e) => {
-                                          let val = e.target.value;
-                                        
-                                          // Allow digits, decimal point, and % symbol
-                                          val = val.replace(/[^0-9.%]/g, "");
-                                        
-                                          // Only allow ONE % symbol at the end
-                                          if ((val.match(/%/g) || []).length > 1) {
-                                            val = val.replace(/%/g, "") + "%";
-                                          }
-                                        
-                                          // Ensure % is only at the end
-                                          if (val.includes("%") && !val.endsWith("%")) {
-                                            const parts = val.split("%");
-                                            val = parts[0] + "%";
-                                          }
-                                        
-                                          setDiscount(val);
-                                        }}
-                                        onKeyDown={handleDiscountKeyPress} // Add 'Enter' key handler
-                                        className="w-full px-2 py-2 mt-1 text-sm text-gray-700 bg-gray-100 border border-gray-300 rounded-md sm:px-3 focus:outline-none"
-                                        placeholder="Enter discount 5% or 100)"
-                                        step="0.01"
-                                        min="0"
-                                        max="100"
-                                        disabled={parseFloat(customUnitPrice || salesData.SCALEPRICE || 0) <= 0} // Disable if unit price is 0
-                                      />
+                                    {/* Set Discount – exact same layout as Quantity */}
+                                    <div className="flex flex-col w-full gap-1">
+                                      <div className="flex items-center gap-6">
+                                        <p className="text-sm text-gray-700 whitespace-nowrap min-w-[80px]">
+                                          <strong>Discount: </strong>
+                                        </p>
+                                        <div className="flex-1">
+                                          <input
+                                            type="text"
+                                            id="discount"
+                                            ref={discountRef}
+                                            value={discount}
+                                            onChange={(e) => {
+                                              let val = e.target.value;
+                                              // Allow digits, decimal point, and % symbol
+                                              val = val.replace(/[^0-9.%]/g, "");
+                                              // Only allow ONE % symbol at the end
+                                              if ((val.match(/%/g) || []).length > 1) {
+                                                val = val.replace(/%/g, "") + "%";
+                                              }
+                                              // Ensure % is only at the end
+                                              if (val.includes("%") && !val.endsWith("%")) {
+                                                const parts = val.split("%");
+                                                val = parts[0] + "%";
+                                              }
+                                              setDiscount(val);
+                                            }}
+                                            onKeyDown={handleDiscountKeyPress}
+                                            className={`w-full px-2 py-2 text-sm text-gray-700 bg-gray-100 border rounded-md sm:px-3 focus:outline-none focus:ring-0 ${
+                                              discount && discount !== "0" && !validateDiscount().valid 
+                                                ? "border-red-500" 
+                                                : "border-gray-300"
+                                            }`}
+                                            placeholder="5% or 100"
+                                            disabled={parseFloat(customUnitPrice || salesData.SCALEPRICE || 0) <= 0}
+                                          />
+                                        </div>
+                                      </div>
+
+                                      {/* Discount validation error (aligned under input like Quantity) */}
+                                      {discount && discount !== "0" && (() => {
+                                        const validation = validateDiscount();
+                                        if (!validation.valid) {
+                                          return (
+                                            <p className="mt-1 text-sm text-red-500 ml-[90px]">
+                                              {validation.message}
+                                            </p>
+                                          );
+                                        }
+                                        return null;
+                                      })()}
                                     </div>
 
                                     {/* Show discount validation error if any */}
