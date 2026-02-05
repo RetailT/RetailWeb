@@ -352,28 +352,57 @@ useEffect(() => {
     }
   };
   
-  const fetchCustomers = async () => {
-    try {
-      const response = await axios.get(
-        `${process.env.REACT_APP_BACKEND_URL}customers`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      if (response.data.userData && response.data.userData.length > 0) {
-        const customers = response.data.userData.map((data) => ({
-          code: data.CUSTOMER ? data.CUSTOMER.trim() : "",
-          name: data.CUSTOMER_NAME ? data.CUSTOMER_NAME.trim() : "",
-        })).filter(c => c.code && c.name);
-        setCustomers(customers);
-      } else {
-        setAlert({ message: response.data.message || "No customers found", type: "error" });
-        setTimeout(() => setAlert(null), 3000);
+const fetchCustomers = async () => {
+  try {
+    const response = await axios.get(
+      `${process.env.REACT_APP_BACKEND_URL}customers`,
+      { 
+        headers: { Authorization: `Bearer ${token}` },
+        timeout: 10000 // 10 second timeout
       }
-    } catch (err) {
-      setError("Failed to fetch customers");
-      console.error("Error fetching customers:", err);
+    );
+
+    if (response.data.success && Array.isArray(response.data.userData)) {
+      const customers = response.data.userData
+        .map((data) => ({
+          code: data.CUSTOMER?.trim() || "",
+          name: data.CUSTOMER_NAME?.trim() || "",
+        }))
+        .filter(c => c.code && c.name);
+
+      setCustomers(customers);
+
+      if (customers.length === 0) {
+        setAlert({ message: "No customers found in database", type: "warning" });
+        setTimeout(() => setAlert(null), 4000);
+      }
+    } else {
+      setCustomers([]);
+      setAlert({ 
+        message: response.data.message || "No customer data received", 
+        type: "warning" 
+      });
     }
-  };
+  } catch (err) {
+    console.error("Customers fetch failed:", err);
+    // Set empty customers but don't block the page
+    setCustomers([]);
+    
+    // Show user-friendly error
+    if (err.response?.status === 500) {
+      setAlert({ 
+        message: "Customer data temporarily unavailable. Please proceed with manual entry.", 
+        type: "warning" 
+      });
+    } else {
+      setAlert({ 
+        message: err.response?.data?.message || "Failed to load customers", 
+        type: "error" 
+      });
+    }
+    setTimeout(() => setAlert(null), 4000);
+  }
+};
   
 
   const handleCompanyChange = (event) => {
@@ -1659,7 +1688,7 @@ const fetchSavedInvoiceNumbers = async (companyCode = "") => {
                 {/* Second separate gray box: View Saved Invoice */}
                 <div className="bg-[#d8d8d8] p-4 sm:p-6 rounded-md ml-0 md:ml-4 shadow-md mb-6 w-full max-w-full">
                   <div className="flex flex-col gap-4">
-                    <div className="text-center sm:text-left">
+                    <div className="text-left">
                       <h3 className="text-base font-semibold text-gray-800">View Previously Saved Invoice</h3>
                     </div>
                     <div className="flex flex-col sm:flex-row sm:items-end gap-4">
@@ -1925,7 +1954,7 @@ const fetchSavedInvoiceNumbers = async (companyCode = "") => {
                               </p>
                             </div>
 
-                            <div className="pt-1 border-t sm:pt-2">
+                          <div className="pt-1 border-t sm:pt-2">
                             <p className="font-medium text-[#bc4a17] mb-1 sm:mb-2 text-sm sm:text-base">
                               Product Information
                             </p>
@@ -2023,7 +2052,6 @@ const fetchSavedInvoiceNumbers = async (companyCode = "") => {
                                 className="flex flex-col space-y-2 sm:space-y-4"
                               >
                               
-                                {/* {state && ( */}
                                   <div className="flex flex-col space-y-1 sm:space-y-2">
                                     <div className="flex flex-col w-full gap-1">
                                       <div className="flex items-center gap-6">

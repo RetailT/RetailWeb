@@ -81,7 +81,7 @@ const InvoicePreview = () => {
     window.print();
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // Render
 
   if (loading) {
     return (
@@ -139,24 +139,24 @@ const InvoicePreview = () => {
   const shopTel = (invoiceData.phone || "").trim() || "N/A";
 
   return (
-    <div className="w-[420px] mx-auto my-4 bg-white font-mono text-sm leading-tight shadow-lg border border-gray-300 print-container">
+    <div className="w-full sm:w-[420px] mx-auto my-2 sm:my-4 bg-white font-mono text-xs sm:text-sm leading-tight shadow-lg border border-gray-300 print-container">
       {/* Header */}
-      <div className="text-center py-3 px-4 border-b-2 border-dashed border-black">
-        <h1 className="text-2xl font-bold uppercase">{shopName}</h1>
-        {shopAddress && <p className="text-sm mt-1">{shopAddress}</p>}
-        {shopTel !== "N/A" && <p className="text-sm mt-1">TEL - {shopTel}</p>}
+      <div className="text-center py-2 sm:py-3 px-3 sm:px-4 border-b-2 border-dashed border-black">
+        <h1 className="text-xl sm:text-2xl font-bold uppercase">{shopName}</h1>
+        {shopAddress && <p className="text-xs sm:text-sm mt-1">{shopAddress}</p>}
+        {shopTel !== "N/A" && <p className="text-xs sm:text-sm mt-1">TEL - {shopTel}</p>}
       </div>
 
       {/* Invoice Info */}
-      <div className="grid grid-cols-2 text-sm px-4 py-2 border-b border-dashed border-black">
+      <div className="grid grid-cols-1 sm:grid-cols-2 text-xs sm:text-sm px-3 sm:px-4 py-2 border-b border-dashed border-black gap-1">
         <div>CASHIER: {invoiceData.cashierName || "CASHIER"}</div>
-        <div className="text-right">INVOICE NO: {documentNo}</div>
-        <div className>CUSTOMER: {invoiceData.customerName || "WALK-IN"}</div>
+        <div className="sm:text-right">INVOICE NO: {documentNo}</div>
+        <div>CUSTOMER: {invoiceData.customerName || "WALK-IN"}</div>
       </div>
 
       {/* Items */}
-      <div className="border-t-2 border-b-2 border-dashed border-black py-2 px-4">
-        <div className="grid grid-cols-5 text-xs border-b border-black pb-1 mb-1 font-bold">
+      <div className="border-t-2 border-b-2 border-dashed border-black py-2 px-3 sm:px-4">
+        <div className="grid grid-cols-5 text-[10px] sm:text-xs border-b border-black pb-1 mb-1 font-bold">
           <div>PRODUCT</div>
           <div className="text-center">QTY</div>
           <div className="text-right">U/PRICE</div>
@@ -166,10 +166,10 @@ const InvoicePreview = () => {
 
         {invoiceData.items.map((item, idx) => (
           <div key={idx} className="mb-2">
-            <div className="font-bold">
+            <div className="font-bold text-[10px] sm:text-xs break-words">
               {item.PRODUCT_CODE} {item.PRODUCT_NAME}
             </div>
-            <div className="grid grid-cols-5 text-xs">
+            <div className="grid grid-cols-5 text-[10px] sm:text-xs">
               <div></div>
               <div className="text-center">
                 {parseFloat(item.QUANTITY || 0).toFixed(3)}
@@ -189,13 +189,13 @@ const InvoicePreview = () => {
       </div>
 
       {/* Totals */}
-      <div className="px-4 text-sm">
+      <div className="px-3 sm:px-4 text-xs sm:text-sm">
         <div className="flex justify-between border-b-2 border-dashed border-black py-1 font-bold">
           <span>SUB TOTAL</span>
           <span>{subTotal.toFixed(2)}</span>
         </div>
 
-        <div className="flex justify-between font-bold text-lg mt-3">
+        <div className="flex justify-between font-bold text-base sm:text-lg mt-3">
           <span>CREDIT</span>
           <span>{subTotal.toFixed(2)}</span>
         </div>
@@ -203,7 +203,7 @@ const InvoicePreview = () => {
       </div>
 
       {/* Summary */}
-      <div className="grid grid-cols-2 text-sm px-4 mt-2">
+      <div className="grid grid-cols-2 text-xs sm:text-sm px-3 sm:px-4 mt-2">
         <div>NO OF PIECES</div>
         <div className="text-right">{noOfPieces.toFixed(3)}</div>
         <div>NO OF PRODUCTS</div>
@@ -211,7 +211,7 @@ const InvoicePreview = () => {
       </div>
 
       {/* Date & Time */}
-      <div className="flex justify-between text-xs px-4 mt-3 pb-2">
+      <div className="flex flex-col sm:flex-row justify-between text-[10px] sm:text-xs px-3 sm:px-4 mt-3 pb-2 gap-1">
         <span>DATE : {new Date().toLocaleDateString('en-GB')}</span>
         <span>
           END TIME :{" "}
@@ -223,8 +223,8 @@ const InvoicePreview = () => {
       </div>
 
       {/* Discount Box – only show if there is actual discount */}
-      {totalDiscount > 0.001 && (  // hide if = 0
-        <div className="text-center border-4 border-black py-3 mx-8 my-3 font-bold text-xl">
+      {totalDiscount > 0.001 && (
+        <div className="text-center border-4 border-black py-2 sm:py-3 mx-4 sm:mx-8 my-3 font-bold text-base sm:text-xl">
           YOU HAVE TOTAL DISCOUNT
           <br />
           {totalDiscount.toFixed(2)}
@@ -232,17 +232,17 @@ const InvoicePreview = () => {
       )}
 
       {/* Footer Message */}
-      <div className="text-center text-sm px-4 pb-2">
+      <div className="text-center text-xs sm:text-sm px-3 sm:px-4 pb-2">
         {invoiceData.message?.trim() && (
-          <div className="whitespace-pre-line leading-snug mb-3 text-xs">
+          <div className="whitespace-pre-line leading-snug mb-3 text-[10px] sm:text-xs">
             {invoiceData.message.trim()}
           </div>
         )}
-        <p className="font-bold text-lg">THANK YOU COME AGAIN</p>
+        <p className="font-bold text-base sm:text-lg">THANK YOU COME AGAIN</p>
       </div>
 
       {/* Signature */}
-      <div className="text-center text-xs px-4 pb-4 border-t border-dashed border-black pt-2">
+      <div className="text-center text-[10px] sm:text-xs px-3 sm:px-4 pb-4 border-t border-dashed border-black pt-2">
         <p className="font-bold">
           © Retail Target Software Solutions (Pvt) Ltd Sri Lanka.
         </p>
@@ -250,10 +250,10 @@ const InvoicePreview = () => {
       </div>
 
       {/* Print Button */}
-      <div className="text-center pb-6 no-print">
+      <div className="text-center pb-4 sm:pb-6 no-print px-3">
         <button
           onClick={handlePrint}
-          className="bg-black text-white px-10 py-4 rounded-xl text-xl hover:bg-gray-800 transition shadow-md"
+          className="bg-black text-white px-6 sm:px-10 py-3 sm:py-4 rounded-xl text-base sm:text-xl hover:bg-gray-800 transition shadow-md w-full sm:w-auto"
         >
           🖨️ Print Invoice
         </button>

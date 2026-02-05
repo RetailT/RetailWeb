@@ -1935,19 +1935,54 @@ exports.dashboardOptions = async (req, res) => {
 // Get dashboard Customer data function
 exports.dashboardCustomerOptions = async (req, res) => { 
   try {
+    console.log("User IP:", req.user?.ip);
+    console.log("User Port:", req.user?.port);
+    
     const user_ip = String(req.user.ip).trim();
+    
     if (mssql.connected) {
       await mssql.close();
       console.log("✅ Database connection closed successfully");
     }
+    
     const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
 
-    if (!pool.connected) {
-      return res.status(500).json({ message: "Database connection failed" });
+    if (!pool || !pool.connected) {
+      console.error("❌ Database connection failed");
+      return res.status(500).json({ 
+        success: false,
+        message: "Database connection failed" 
+      });
     }
     
-    // Switch database context to posback for CUSTOMER table
-    await pool.request().query(`USE [${posback}];`);
+    try {
+      // Switch database context to posback for CUSTOMER table
+      await pool.request().query(`USE [${posback}];`);
+    } catch (dbError) {
+      console.error(`❌ Failed to switch to database ${posback}:`, dbError.message);
+      return res.status(500).json({ 
+        success: false,
+        message: `Database ${posback} not accessible` 
+      });
+    }
+
+    // Check if table exists
+    try {
+      const tableCheck = await pool.request().query(`
+        SELECT TABLE_NAME 
+        FROM INFORMATION_SCHEMA.TABLES 
+        WHERE TABLE_NAME = 'tb_CUSTOMER'
+      `);   
+      
+      if (tableCheck.recordset.length === 0) {
+        return res.status(404).json({ 
+          success: false,
+          message: "Customer table not found" 
+        });
+      }
+    } catch (tableError) {
+      console.error("Table check error:", tableError.message);
+    }
 
     const result = await pool.request().query(`
       SELECT CUSTOMER, CUSTOMER_NAME 
@@ -1957,23 +1992,32 @@ exports.dashboardCustomerOptions = async (req, res) => {
     const records = result.recordset || [];
 
     if (records.length === 0) {
-      return res.status(404).json({ message: "No customers found" });
+      return res.status(200).json({ 
+        success: true,
+        message: "No customers found",
+        userData: []
+      });
     }
 
     const userData = records.map(({ CUSTOMER, CUSTOMER_NAME }) => ({
       CUSTOMER: CUSTOMER?.trim(),
       CUSTOMER_NAME: CUSTOMER_NAME?.trim(),
     }));
-
+    
     return res.status(200).json({
+      success: true,
       message: "Dashboard data retrieved successfully",
       userData,
     });
+    
   } catch (error) {
-    console.error("Error retrieving dashboard data:", error);
-    return res
-      .status(500)
-      .json({ message: "Failed to retrieve customer names" });
+    console.error("❌ Error retrieving dashboard data:", error.message);
+    console.error("Stack trace:", error.stack);
+    return res.status(500).json({ 
+      success: false,
+      message: "Failed to retrieve customer names",
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
 
