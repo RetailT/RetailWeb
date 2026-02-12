@@ -42,6 +42,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
   let d_vendor = "";
   let d_hourlyReport = "";
   let d_sales_comparison = "";
+  let d_sales_report = "";
   let d_invoice = "";
   let d_productView = "";
   let t_scan = "";
@@ -74,6 +75,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
     d_vendor = decodedToken.d_vendor;
     d_hourlyReport = decodedToken.d_hourlyReport;
     d_sales_comparison = decodedToken.d_sales_comparison;
+    d_sales_report = decodedToken.d_sales_report;
     d_invoice = decodedToken.d_invoice;
     d_productView = decodedToken.d_productView;
     t_scan = decodedToken.t_scan;
@@ -153,6 +155,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
             (d_vendor && d_vendor.toLowerCase() === "t") ||
             (d_hourlyReport && d_hourlyReport.toLowerCase() === "t") ||
             (d_sales_comparison && d_sales_comparison.toLowerCase() === "t") ||
+            (d_sales_report && d_sales_report.toLowerCase() === "t") ||
             (d_invoice && d_invoice.toLowerCase() === "t") ||
             (d_productView && d_productView.toLowerCase() === "t")) && (
             <li
@@ -233,6 +236,22 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
                 </NavLink>
               </li>
             )}
+
+            {d_sales_report?.toLowerCase() === "t" && dashboardOpen && isOpen && (
+              <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
+                <NavLink to="/sales-report" onClick={handleNavLinkClick} className="w-full">
+                  Sales Report
+                </NavLink>
+              </li>
+            )}
+            
+            {/* {d_sales_report?.toLowerCase() === "t" && dashboardOpen && isOpen && ( */}
+              {/* <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
+  <NavLink to="/sales-report" onClick={handleNavLinkClick} className="w-full"> 
+    Sales Report (forced)
+  </NavLink>
+</li> */}
+            
 
             {d_invoice?.toLowerCase() === "t" && dashboardOpen && isOpen && (
               <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">

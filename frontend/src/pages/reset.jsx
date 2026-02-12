@@ -34,6 +34,7 @@ const Reset = () => {
   const [vendor, setVendor] = useState(false);
   const [hourlyReport, setHourlyReport] = useState(false);
   const [salesComparison, setSalesComparison] = useState(false);
+  const [salesReport, setSalesReport] = useState(false);
   const [invoice, setInvoice] = useState(false);
   const [invoicePreview, setInvoicePreview] = useState(false);
   const [transInvoice, setTransInvoice] = useState(false);
@@ -188,6 +189,7 @@ useEffect(() => {
             d_vendor: vendor,
             d_hourly_report: hourlyReport,
             d_sales_comparison: salesComparison,
+            d_sales_report: salesReport,
             d_invoice: invoice,
             d_productView: productView,
           },
@@ -344,6 +346,7 @@ setNewCustomerID("");
             setVendor(user.d_vendor === "T");
             setHourlyReport(user.d_hourly_report === "T");
             setSalesComparison(user.d_sales_comparison === "T");
+            setSalesReport(user.d_sales_report === "T");
             setInvoice(user.d_invoice === "T");
             setProductView(user.d_productView === "T");
             setScan(user.t_scan === "T");
@@ -388,6 +391,7 @@ setNewCustomerID("");
             setVendor(false);
             setHourlyReport(false);
             setSalesComparison(false);
+            setSalesReport(false);
             setInvoice(false);
             setTransInvoice(false);
             setInvoicePreview(false);
@@ -433,6 +437,7 @@ setNewCustomerID("");
             setVendor(false);
             setHourlyReport(false);
             setSalesComparison(false);
+            setSalesReport(false);
             setInvoice(false);            
             setTransInvoice(false);
             setInvoicePreview(false);
@@ -772,6 +777,15 @@ const autoFill = (customerID) => {
                           className="w-4 h-4 sm:w-5 sm:h-5"
                         />
                         <span className="text-sm text-gray-700">Sales Comparison</span>
+                      </label>
+                      <label className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          checked={salesReport}
+                          onChange={(e) => setSalesReport(e.target.checked)}
+                          className="w-4 h-4 sm:w-5 sm:h-5"
+                        />
+                        <span className="text-sm text-gray-700">Sales Report</span>
                       </label>
                       <label className="flex items-center space-x-2">
                         <input
