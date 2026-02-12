@@ -697,6 +697,7 @@ exports.login = async (req, res) => {
         d_vendor: user.d_vendor,
         d_hourlyReport: user.d_hourly_report,
         d_sales_comparison: user.d_sales_comparison,
+        d_sales_report: user.d_sales_report,
         d_invoice: user.d_invoice,
         d_productView: user.d_productView,
         t_scan: user.t_scan,
@@ -802,8 +803,8 @@ exports.register = async (req, res) => {
       .input("password", mssql.VarChar, hashedPassword).query(`
         USE [${posmain}];
         INSERT INTO tb_USERS (username, email, password, resetToken, resetTokenExpiry, ip_address, port, CUSTOMERID, a_permission,
-        a_sync, d_company, d_department, d_category, d_scategory, d_vendor, d_invoice, d_productView, t_scan, t_invoice, t_invoicePreview, t_stock, t_grn, t_prn, t_tog, t_stock_update)
-        VALUES (@username, @email, @password, '', '', '', '', NULL, 'F', 'F', 'F', 'F','F', 'F','F', 'F','F', 'F','F', 'F','F', 'F', 'F', 'F', 'F')
+        a_sync, d_company, d_department, d_category, d_scategory, d_vendor, d_invoice, d_sales_report, d_productView, t_scan, t_invoice, t_invoicePreview, t_stock, t_grn, t_prn, t_tog, t_stock_update)
+        VALUES (@username, @email, @password, '', '', '', '', NULL, 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F','F', 'F','F', 'F','F', 'F', 'F', 'F', 'F', 'F')
       `);
 
     return res.status(201).json({ message: "User added successfully" });
@@ -2225,6 +2226,190 @@ exports.reportData = async (req, res) => {
   } catch (error) {
     console.error("Error generating report:", error);
     res.status(500).json({ message: "Failed to find report data" });
+  }
+};
+
+// Sales report data
+exports.salesReportData = async (req, res) => {
+  let pool = null;
+
+  try {
+    // 1. Token validation
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ message: "Invalid or missing authorization token" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const username = decoded.username;
+
+    // 2. Parse query parameters
+    let { fromDate, toDate, selectedOptions, months } = req.query;
+
+    console.log("📋 Query Parameters:", { fromDate, toDate, selectedOptions, months, username });
+
+    if (!fromDate || !toDate) {
+      return res.status(200).json({
+        message: "No date range selected",
+        tableRecords: [],
+      });
+    }
+
+    let companyCodes = [];
+    if (typeof selectedOptions === "string") {
+      companyCodes = selectedOptions.split(",").map((code) => code.trim()).filter(Boolean);
+    }
+
+    if (companyCodes.length === 0) {
+      return res.status(400).json({ message: "No company codes provided" });
+    }
+
+    // 3. Establish database connection
+    if (mssql.connected) {
+      await mssql.close();
+      console.log("✅ Closed previous global connection");
+    }
+
+    const user_ip = String(req.user?.ip || "").trim();
+    const user_port = req.user?.port?.trim() || "";
+    pool = await connectToUserDatabase(user_ip, user_port);
+
+    if (!pool || !pool.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
+
+    console.log("✅ Connected to user database");
+
+    // 4. Get year range
+    const fromYear = new Date(fromDate).getFullYear();
+    const toYear = new Date(toDate).getFullYear();
+
+    if (isNaN(fromYear) || isNaN(toYear)) {
+      return res.status(400).json({ message: "Invalid date format" });
+    }
+
+    console.log("📅 Year Range:", { fromYear, toYear });
+
+    // Safe company codes list (SQL injection safe)
+    const companyCodesList = companyCodes.map(c => `'${c.replace(/'/g, "''")}'`).join(",");
+
+    // 5. Optional month filter + dynamic Months CTE
+    let monthFilter = "";
+    let monthsCTE = `
+      Months AS (
+        SELECT 1 AS MonthNo, 'January'   AS MonthName UNION ALL
+        SELECT 2, 'February'  UNION ALL
+        SELECT 3, 'March'     UNION ALL
+        SELECT 4, 'April'     UNION ALL
+        SELECT 5, 'May'       UNION ALL
+        SELECT 6, 'June'      UNION ALL
+        SELECT 7, 'July'      UNION ALL
+        SELECT 8, 'August'    UNION ALL
+        SELECT 9, 'September' UNION ALL
+        SELECT 10,'October'   UNION ALL
+        SELECT 11,'November'  UNION ALL
+        SELECT 12,'December'
+      )
+    `;
+
+    if (months && months.trim() !== "") {
+      const monthNumbers = months
+        .split(",")
+        .map(m => parseInt(m.trim(), 10))
+        .filter(n => !isNaN(n) && n >= 1 && n <= 12);
+
+      if (monthNumbers.length > 0) {
+        monthFilter = `AND vw.MonthNo IN (${monthNumbers.join(",")})`;
+
+        const monthValues = monthNumbers.map(num => {
+          const names = ["", "January", "February", "March", "April", "May", "June", 
+                         "July", "August", "September", "October", "November", "December"];
+          return `(${num}, '${names[num]}')`;
+        }).join(",\n          ");
+
+        monthsCTE = `
+          Months AS (
+            SELECT MonthNo, MonthName 
+            FROM (VALUES 
+              ${monthValues}
+            ) AS m(MonthNo, MonthName)
+          )
+        `;
+
+        console.log("📅 Selected months only:", monthNumbers.join(", "));
+      }
+    }
+
+    // 6. Build and execute query
+    const salesQuery = `
+      WITH Years AS (
+        SELECT year = @fromYear
+        UNION ALL
+        SELECT year + 1
+        FROM Years
+        WHERE year < @toYear
+      ),
+      ${monthsCTE}
+      SELECT 
+        y.year,
+        m.MonthName AS month,
+        m.MonthNo   AS month_num,
+        COALESCE(SUM(vw.TotalSales), 0) AS total_sales,
+        COUNT(*) AS record_count
+      FROM Years y
+      CROSS JOIN Months m
+      LEFT JOIN vw_SALES_COMPARISON vw
+        ON vw.SALESYEAR = y.year
+        AND vw.MonthNo  = m.MonthNo
+        AND vw.COMPANY_CODE IN (${companyCodesList})
+        ${monthFilter}
+      GROUP BY y.year, m.MonthNo, m.MonthName
+      ORDER BY y.year, m.MonthNo;
+    `;
+
+    console.log("🔍 Executing sales query...");
+
+    const request = pool.request();
+    request.input("fromYear", mssql.Int, fromYear);
+    request.input("toYear", mssql.Int, toYear);
+
+    const result = await request.query(salesQuery);
+
+    const records = result.recordset || [];
+
+    console.log(`✅ Sales data fetched: ${records.length} records`);
+
+    if (records.length > 0) {
+      console.log("📊 Sample data:", records.slice(0, 3));
+    }
+
+    // 7. Send successful response
+    return res.status(200).json({
+      success: true,
+      message: records.length > 0 
+        ? "Sales data retrieved successfully" 
+        : "No sales data found in the selected period (showing zeros)",
+      tableRecords: records
+    });
+
+  } catch (error) {
+    console.error("❌ Unhandled error in salesReportData:", error);
+    return res.status(500).json({ 
+      success: false,
+      message: "Failed to load sales report", 
+      error: error.message 
+    });
+  } finally {
+    // Clean up connection safely
+    if (pool && pool.connected) {
+      try {
+        await pool.close();
+        console.log("✅ Database connection closed");
+      } catch (closeErr) {
+        console.error("Error closing pool:", closeErr);
+      }
+    }
   }
 };
 
@@ -7810,6 +7995,7 @@ exports.findUserConnection = async (req, res) => {
         u.[d_vendor],
         u.[d_hourly_report], 
         u.[d_sales_comparison],
+        u.[d_sales_report],
         u.[d_invoice],
         u.[d_productView], 
         u.[t_scan],
@@ -8160,6 +8346,7 @@ exports.resetDatabaseConnection = async (req, res) => {
         "d_vendor",
         "d_hourly_report",
         "d_sales_comparison",
+        "d_sales_report",
         "d_invoice",
         "d_productView",
         "t_scan",

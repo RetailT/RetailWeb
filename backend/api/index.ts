@@ -34,6 +34,7 @@ app.get('/sub-category-data', authenticateToken, authController.subCategoryDashb
 app.get('/vendor-data', authenticateToken, authController.vendorDashboard);
 app.get('/hourly-report-data', authenticateToken, authController.hourlyReportDashboard);
 app.get('/sales-comparison-data', authenticateToken, authController.salesComparisonData);
+app.get('/sales-report-data', authenticateToken, authController.salesReportData);
 app.get('/report-data', authenticateToken, authController.reportData);
 
 app.get('/color-size-sales-product-dashboard', authenticateToken, authController.colorSizeSalesProductDashboard);
@@ -104,7 +105,7 @@ app.put('/reset-database-connection', authenticateToken, authController.resetDat
 // export default handler;
 
 
-// // Uncomment the following lines if you want to export the app for serverless deployment
+// Uncomment the following lines if you want to export the app for serverless deployment
 module.exports = app;
 module.exports.handler = serverless(app);
 
