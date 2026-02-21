@@ -190,7 +190,6 @@ const SalesReportDashboard = () => {
     setTableHeadings(headers);
     setTableRecords(rows);
 
-    // Chart data - show all months that have data
     const chartLabels = monthOrder.filter(month => monthTotals[month] !== undefined);
     const chartData = chartLabels.map(month => monthTotals[month].toFixed(2));
 
@@ -258,13 +257,19 @@ const SalesReportDashboard = () => {
         <div className="mt-4">
           {alert && <Alert message={alert.message} type={alert.type} onClose={() => setAlert(null)} />}
 
-          <div className="p-4 mt-4 bg-gray-200 rounded-lg shadow-md" style={{ backgroundColor: "#d8d8d8" }}>
+          <div className="p-4 mt-4 rounded-lg shadow-md" style={{ backgroundColor: "#d8d8d8" }}>
             <div className="mt-10">
-              <div className="flex flex-col justify-between gap-6 sm:flex-row sm:items-end">
-                <div className="flex flex-col gap-6 sm:flex-row sm:items-end flex-wrap">
-                  <DatePicker label="Select Date Range:" onDateChange={setSelectedDates} />
+              {/* KEY FIX */}
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:flex-nowrap sm:justify-between">
+                {/* Left: filters */}
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:flex-nowrap">
+                  {/* Date Picker */}
+                  <div className="shrink-0">
+                    <DatePicker label="Select Date Range:" onDateChange={setSelectedDates} />
+                  </div>
 
-                  <div>
+                  {/* Company */}
+                  <div className="shrink-0">
                     <label className="block text-sm font-medium text-gray-700">
                       Select Company:
                     </label>
@@ -282,7 +287,8 @@ const SalesReportDashboard = () => {
                     />
                   </div>
 
-                  <div>
+                  {/* Months */}
+                  <div className="shrink-0">
                     <label className="block text-sm font-medium text-gray-700">
                       Select Months (Optional):
                     </label>
@@ -294,7 +300,8 @@ const SalesReportDashboard = () => {
                   </div>
                 </div>
 
-                <div className="flex gap-4">
+                {/* Right: buttons */}
+                <div className="flex gap-4 shrink-0">
                   <button
                     onClick={handleSubmit}
                     disabled={isSubmitDisabled}
@@ -314,6 +321,7 @@ const SalesReportDashboard = () => {
                     Refresh
                   </button>
                 </div>
+
               </div>
             </div>
           </div>
@@ -343,7 +351,7 @@ const SalesReportDashboard = () => {
                   cursor: default !important;
                 }
                 .sales-report-table-container tbody tr:hover {
-                  background-color: transparent !important; 
+                  background-color: transparent !important;
                 }
               `}</style>
 
@@ -360,7 +368,6 @@ const SalesReportDashboard = () => {
 
               {/* Charts - Pie + Bar */}
               <div className="mt-12 space-y-12">
-                {/* Pie Chart */}
                 {monthlyAmountData.length > 0 && (
                   <div className="bg-white p-6 border border-gray-300 rounded-md shadow-md">
                     <h3 className="text-xl font-bold text-center mb-6">
@@ -377,7 +384,6 @@ const SalesReportDashboard = () => {
                   </div>
                 )}
 
-                {/* Bar Chart */}
                 {monthlyAmountData.length > 0 && (
                   <div className="bg-white p-6 border border-gray-300 rounded-md shadow-md">
                     <h3 className="text-xl font-bold text-center mb-6">
