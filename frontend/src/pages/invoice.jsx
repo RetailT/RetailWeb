@@ -66,6 +66,9 @@ function App() {
   const [previewCompany, setPreviewCompany] = useState(localStorage.getItem("lastPreviewCompany") || "");
   const [savedInvoiceNumbers, setSavedInvoiceNumbers] = useState([]);
   const [selectedPreviewInvoice, setSelectedPreviewInvoice] = useState("");
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [filteredCustomers, setFilteredCustomers] = useState([]);
+  const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
   
   // Refs
   const quantityRef = useRef(null);
@@ -419,19 +422,48 @@ const fetchCustomers = async () => {
   }
   };
   
-  const handleCustomerChange = (event) => {
-    const selectedCustomer = event.target.value;
-    const selectedCustomerName = customers.find(
-      (customer) => customer.code === selectedCustomer
+  // const handleCustomerChange = (event) => {
+  //   const selectedCustomer = event.target.value;
+  //   const selectedCustomerName = customers.find(
+  //     (customer) => customer.code === selectedCustomer
+  //   );
+
+  //   // Store the customer code in setSelectedCustomer
+  //   setSelectedCustomer(selectedCustomer);
+
+  //   // Store the customer name in setSelectedCustomerName
+  //   if (selectedCustomerName) {
+  //     setSelectedCustomerName(selectedCustomerName.name);
+  //   }
+  // };
+
+  const handleCustomerSearch = (e) => {
+  const value = e.target.value;
+  setCustomerSearch(value);
+  setSelectedCustomer("");
+  setSelectedCustomerName(null);
+
+  if (value.length > 0) {
+    const filtered = customers.filter(
+      (c) =>
+        c.name.toLowerCase().includes(value.toLowerCase()) ||
+        c.code.toLowerCase().includes(value.toLowerCase())
     );
+    setFilteredCustomers(filtered);
+    setShowCustomerSuggestions(true);
+  } else {
+    // when value is empty, show all customers
+    setFilteredCustomers(customers);
+    setShowCustomerSuggestions(true);
+  }
+};
 
-    // Store the customer code in setSelectedCustomer
-    setSelectedCustomer(selectedCustomer);
-
-    // Store the customer name in setSelectedCustomerName
-    if (selectedCustomerName) {
-      setSelectedCustomerName(selectedCustomerName.name);
-    }
+  const handleCustomerSelect = (customer) => {
+    setSelectedCustomer(customer.code);
+    setSelectedCustomerName(customer.name);
+    setCustomerSearch(`${customer.code} ${customer.name}`);
+    setShowCustomerSuggestions(false);
+    setCustomerError("");
   };
 
   // Handle Enter key press for company dropdown
@@ -452,7 +484,6 @@ const fetchCustomers = async () => {
     handleSubmit(event);
   }
 };
-
 
   const handleSubmit = async (e) => {
   e.preventDefault();
@@ -1650,23 +1681,58 @@ const fetchSavedInvoiceNumbers = async (companyCode = "") => {
                       {companyError && <p className="mt-1.5 text-sm text-red-600">{companyError}</p>}
                     </div>
 
-                    {/* Customer */}
+                    {/* Customer Search with Autocomplete */}
                     <div className="flex flex-col flex-1 min-w-[240px]">
                       <label className="text-sm font-medium text-gray-700 mb-1.5">
                         Select a Customer
                       </label>
-                      <select
-                        value={selectedCustomer}
-                        onChange={handleCustomerChange}
-                        className="w-full p-2.5 text-sm bg-white border border-gray-300 rounded-md focus:outline-none"
-                      >
-                        <option value="" disabled>Select a Customer</option>
-                        {customers.map((customer) => (
-                          <option key={customer.code} value={customer.code}>
-                            {customer.code} {customer.name}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          id="customer-select"
+                          value={customerSearch}
+                          onChange={handleCustomerSearch}
+                          onFocus={() => {
+                            if (filteredCustomers.length > 0) setShowCustomerSuggestions(true);
+                            else if (customerSearch.length === 0) {
+                              setFilteredCustomers(customers);
+                              setShowCustomerSuggestions(true);
+                            }
+                          }}
+                          onBlur={() => setTimeout(() => setShowCustomerSuggestions(false), 200)}
+                          placeholder="Search customer..."
+                          className="w-full p-2.5 text-sm bg-white border border-gray-300 rounded-md focus:outline-none"
+                          autoComplete="off"
+                        />
+
+                        {/* Dropdown List */}
+                        {showCustomerSuggestions && filteredCustomers.length > 0 && (
+                          <ul className="absolute z-50 w-full mt-1 overflow-y-auto bg-white border border-gray-300 rounded-md shadow-lg max-h-52 top-full">
+                            {filteredCustomers.map((customer) => (
+                              <li
+                                key={customer.code}
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  handleCustomerSelect(customer);
+                                }}
+                                className={`p-2.5 text-sm cursor-pointer hover:bg-gray-100 border-b border-gray-100 last:border-b-0 flex justify-between items-center ${
+                                  selectedCustomer === customer.code ? "bg-gray-100 font-medium" : ""
+                                }`}
+                              >
+                                <span>{customer.name}</span>
+                                <span className="text-xs text-gray-400 ml-2">{customer.code}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+
+                        {/* No results message */}
+                        {showCustomerSuggestions && customerSearch.length > 0 && filteredCustomers.length === 0 && (
+                          <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg p-2.5 text-sm text-gray-500 top-full">
+                            No customers found
+                          </div>
+                        )}
+                      </div>
                       {customerError && <p className="mt-1.5 text-sm text-red-600">{customerError}</p>}
                     </div>
 

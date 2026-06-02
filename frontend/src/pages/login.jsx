@@ -29,8 +29,8 @@ const Login = ({ setAuthToken }) => {
 }, []);
 
   const handleSubmit = async (e) => {
-    setDisable(true);
     e.preventDefault();
+    setDisable(true);
     setUsernameError("");
     setPasswordError("");
     setServerError("");

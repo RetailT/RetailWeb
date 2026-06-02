@@ -11,7 +11,7 @@ const debugRoutes = require('../routes/debug');
 
 app.use(
   cors({
-    origin: ["https://retailtarget.lk", "https://retail-web-xo4u.vercel.app", "http://localhost:3000"],
+    origin: ["https://retailtarget.lk", "https://retail-web-xo4u.vercel.app", "http://localhost:3000", "http://localhost:3001"],
     credentials: true,
   })
 );
