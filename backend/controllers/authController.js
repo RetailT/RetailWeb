@@ -723,6 +723,7 @@ exports.login = async (req, res) => {
         s_category: user.s_category,
         s_scategory: user.s_scategory,
         s_vendor: user.s_vendor,
+        u_cashier_controller: user.u_cashier_controller,
       },
       process.env.JWT_SECRET,
       { expiresIn: "1h" }
@@ -803,8 +804,8 @@ exports.register = async (req, res) => {
       .input("password", mssql.VarChar, hashedPassword).query(`
         USE [${posmain}];
         INSERT INTO tb_USERS (username, email, password, resetToken, resetTokenExpiry, ip_address, port, CUSTOMERID, a_permission,
-        a_sync, d_company, d_department, d_category, d_scategory, d_vendor, d_invoice, d_sales_report, d_productView, t_scan, t_invoice, t_invoicePreview, t_stock, t_grn, t_prn, t_tog, t_stock_update)
-        VALUES (@username, @email, @password, '', '', '', '', NULL, 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F','F', 'F','F', 'F','F', 'F', 'F', 'F', 'F', 'F')
+        a_sync, d_company, d_department, d_category, d_scategory, d_vendor, d_invoice, d_sales_report, d_productView, t_scan, t_invoice, t_invoicePreview, t_stock, t_grn, t_prn, t_tog, t_stock_update, u_cashier_controller)
+        VALUES (@username, @email, @password, '', '', '', '', NULL, 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F','F', 'F','F', 'F','F', 'F', 'F', 'F', 'F', 'F', 'F')
       `);
 
     return res.status(201).json({ message: "User added successfully" });
@@ -7939,6 +7940,174 @@ if (!pool || !pool.connected) {
   }
 };
 
+// GET - all cashiers (Cashier Controller page)
+exports.getCashiers = async (req, res) => {
+  let pool;
+  try {
+    if (mssql.connected) await mssql.close();
+
+    const user_ip = String(req.user.ip).trim();
+    pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+
+    if (!pool || !pool.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
+
+    const result = await pool.request().query(`
+      USE [${posback}];
+      SELECT * FROM tb_CASHIER ORDER BY CASHIER_CODE;
+    `);
+
+    const cashiers = (result.recordset || []).map((row) => {
+      const trimmed = {};
+      for (const key in row) {
+        trimmed[key] = typeof row[key] === "string" ? row[key].trim() : row[key];
+      }
+      return trimmed;
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Cashiers fetched successfully",
+      cashiers,
+    });
+  } catch (error) {
+    console.error("Error fetching cashiers:", error);
+    return res.status(500).json({ message: "Failed to fetch cashiers", error: error.message });
+  }
+};
+
+// POST - save/update cashier (uses Sp_CashierUpdate)
+exports.updateCashier = async (req, res) => {
+  let pool;
+  try {
+    const {
+      CASHIER_CODE, CASHIER_NAME, PASSWORD,
+      PLULOCK, PAYMENTLOCK, SEEK, REFUND, CORRECTION, VOID, CANCEL, SUSPEND,
+      RECALL, DEPARTMENT, PO, REPORTS, CURRSALES, CASHIERSALE, SALSMANSALE,
+      CUSTOMERSALE, CREDITCARDSALE, GIFTSALE, LOYALTYSALE, DAYENDSALE,
+      SMANLOCK, CUSTLOCK, WSALELOCK, FLOATCASH, CUSTPAYLOCK, BILLSEEKLOCK,
+      BACKUPLOCK, BACKUPUSER, ROUNDUPLOCK, CREDITNOTELOCK, CUSTOMERNAMELOCK,
+      PRICELOCK, GUIDELOCK, SALESLOCK, MDCLOCK, FREELOCK,
+      SDISCTIME, ITDISCPRECNT, ITDISCAMT, SDISCPRECNT, SDISCAMT,
+      DISC_REMOVELOCK, PCARDSLOCK, DOPENLOCK, AUTOLOGOFF, CASHREFUNDLOCK,
+      BILLCOPYLOCK, BILLCOPYCOUNT, LOYALTYREGLOCK, DAILY_DISCLIMIT,
+    } = req.body;
+
+    if (!CASHIER_CODE) {
+      return res.status(400).json({ message: "Cashier code is required" });
+    }
+
+    if (mssql.connected) await mssql.close();
+    const user_ip = String(req.user.ip).trim();
+    pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+
+    if (!pool || !pool.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
+
+    const request = pool.request();
+    const T = (v) => (v ? "T" : "F");
+
+    request.input("CASHIER_CODE", mssql.Char(10), CASHIER_CODE.trim());
+    request.input("CASHIER_NAME", mssql.Char(50), (CASHIER_NAME || "").trim());
+    request.input("PASSWORD", mssql.Char(10), (PASSWORD || "").trim());
+    request.input("PLULOCK", mssql.Char(1), T(PLULOCK));
+    request.input("PAYMENTLOCK", mssql.Char(1), T(PAYMENTLOCK));
+    request.input("SEEK", mssql.Char(1), T(SEEK));
+    request.input("REFUND", mssql.Char(1), T(REFUND));
+    request.input("CORRECTION", mssql.Char(1), T(CORRECTION));
+    request.input("VOID", mssql.Char(1), T(VOID));
+    request.input("CANCEL", mssql.Char(1), T(CANCEL));
+    request.input("SUSPEND", mssql.Char(1), T(SUSPEND));
+    request.input("RECALL", mssql.Char(1), T(RECALL));
+    request.input("DEPARTMENT", mssql.Char(1), T(DEPARTMENT));
+    request.input("PO", mssql.Char(1), T(PO));
+    request.input("REPORTS", mssql.Char(1), T(REPORTS));
+    request.input("CURRSALES", mssql.Char(1), T(CURRSALES));
+    request.input("CASHIERSALE", mssql.Char(1), T(CASHIERSALE));
+    request.input("SALSMANSALE", mssql.Char(1), T(SALSMANSALE));
+    request.input("CUSTOMERSALE", mssql.Char(1), T(CUSTOMERSALE));
+    request.input("CREDITCARDSALE", mssql.Char(1), T(CREDITCARDSALE));
+    request.input("GIFTSALE", mssql.Char(1), T(GIFTSALE));
+    request.input("LOYALTYSALE", mssql.Char(1), T(LOYALTYSALE));
+    request.input("DAYENDSALE", mssql.Char(1), T(DAYENDSALE));
+    request.input("SMANLOCK", mssql.Char(1), T(SMANLOCK));
+    request.input("CUSTLOCK", mssql.Char(1), T(CUSTLOCK));
+    request.input("WSALELOCK", mssql.Char(1), T(WSALELOCK));
+    request.input("FLOATCASH", mssql.Char(1), T(FLOATCASH));
+    request.input("CUSTPAYLOCK", mssql.Char(1), T(CUSTPAYLOCK));
+    request.input("BILLSEEKLOCK", mssql.Char(1), T(BILLSEEKLOCK));
+    request.input("BACKUPLOCK", mssql.Char(1), T(BACKUPLOCK));
+    request.input("BACKUPUSER", mssql.Char(1), T(BACKUPUSER));
+    request.input("ROUNDUPLOCK", mssql.Char(1), T(ROUNDUPLOCK));
+    request.input("CREDITNOTELOCK", mssql.Char(1), T(CREDITNOTELOCK));
+    request.input("CUSTOMERNAMELOCK", mssql.Char(1), T(CUSTOMERNAMELOCK));
+    request.input("PRICELOCK", mssql.Char(1), T(PRICELOCK));
+    request.input("GUIDELOCK", mssql.Char(1), T(GUIDELOCK));
+    request.input("SALESLOCK", mssql.Char(1), T(SALESLOCK));
+    request.input("MDCLOCK", mssql.Char(1), T(MDCLOCK));
+    request.input("FREELOCK", mssql.Char(1), T(FREELOCK));
+    request.input("SDISCTIME", mssql.Numeric(18, 2), parseFloat(SDISCTIME) || 0);
+    request.input("ITDISCPRECNT", mssql.Numeric(18, 2), parseFloat(ITDISCPRECNT) || 0);
+    request.input("ITDISCAMT", mssql.Numeric(18, 2), parseFloat(ITDISCAMT) || 0);
+    request.input("SDISCPRECNT", mssql.Numeric(18, 2), parseFloat(SDISCPRECNT) || 0);
+    request.input("SDISCAMT", mssql.Numeric(18, 2), parseFloat(SDISCAMT) || 0);
+    request.input("DISC_REMOVELOCK", mssql.Char(1), T(DISC_REMOVELOCK));
+    request.input("PCARDSLOCK", mssql.Char(1), T(PCARDSLOCK));
+    request.input("DOPENLOCK", mssql.Char(1), T(DOPENLOCK));
+    request.input("AUTOLOGOFF", mssql.Char(1), T(AUTOLOGOFF));
+    request.input("CASHREFUNDLOCK", mssql.Char(1), T(CASHREFUNDLOCK));
+    request.input("RECOPY", mssql.Char(1), T(BILLCOPYLOCK));
+    request.input("RECOPYCOUNT", mssql.Numeric(18, 2), parseFloat(BILLCOPYCOUNT) || 0);
+    request.input("LOYALTYREGLOCK", mssql.Char(1), T(LOYALTYREGLOCK));
+    request.input("DAILY_DISCLIMIT", mssql.Numeric(18, 2), parseFloat(DAILY_DISCLIMIT) || 0);
+
+    await request.execute(`[${posback}].dbo.Sp_CashierUpdate`);
+
+    return res.status(200).json({ success: true, message: "Cashier saved successfully" });
+  } catch (error) {
+    console.error("Error saving cashier:", error);
+    return res.status(500).json({ message: "Failed to save cashier", error: error.message });
+  }
+};
+
+// DELETE - delete a cashier
+exports.deleteCashier = async (req, res) => {
+  let pool;
+  try {
+    const cashierCode = (req.query.code || "").trim();
+    if (!cashierCode) {
+      return res.status(400).json({ message: "Cashier code is required" });
+    }
+
+    if (mssql.connected) await mssql.close();
+    const user_ip = String(req.user.ip).trim();
+    pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+
+    if (!pool || !pool.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
+
+    const result = await pool
+      .request()
+      .input("code", mssql.Char(10), cashierCode)
+      .query(`
+        USE [${posback}];
+        DELETE FROM tb_CASHIER WHERE CASHIER_CODE = @code;
+      `);
+
+    if (result.rowsAffected[0] === 0) {
+      return res.status(404).json({ message: "Cashier not found" });
+    }
+
+    return res.status(200).json({ success: true, message: "Cashier deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting cashier:", error);
+    return res.status(500).json({ message: "Failed to delete cashier", error: error.message });
+  }
+};
+
 // Get user connection details
 exports.findUserConnection = async (req, res) => {
   const name = req.query.name;
@@ -8021,6 +8190,7 @@ exports.findUserConnection = async (req, res) => {
         u.[s_category],
         u.[s_scategory],
         u.[s_vendor],
+        u.[u_cashier_controller],
         s.[COMPANY_NAME],
         s.[PORTNO] AS port,
         s.[START_DATE],
@@ -8077,6 +8247,7 @@ exports.resetDatabaseConnection = async (req, res) => {
     stock = [],
     colorSize_stock = [],
     colorSize_sales = [],
+    user_controller = [],
   } = req.body;
 
   const trimmedName = name?.trim();
@@ -8372,6 +8543,7 @@ exports.resetDatabaseConnection = async (req, res) => {
         "s_category",
         "s_scategory",
         "s_vendor",
+        "u_cashier_controller",
       ];
 
       for (const permissionObject of permissionArray) {
@@ -8429,6 +8601,7 @@ exports.resetDatabaseConnection = async (req, res) => {
     await updatePermissions(stock_wise, "stock_wise");
     await updatePermissions(colorSize_stock, "colorSize_stock");
     await updatePermissions(colorSize_sales, "colorSize_sales");
+    await updatePermissions(user_controller, "user_controller");
 
     // Check if nothing was sent
     const isEmptyOrAllFalse = (arr) => {
@@ -8452,7 +8625,8 @@ exports.resetDatabaseConnection = async (req, res) => {
       isEmptyOrAllFalse(stock_wise) &&
       isEmptyOrAllFalse(stock) &&
       isEmptyOrAllFalse(colorSize_stock) &&
-      isEmptyOrAllFalse(colorSize_sales);
+      isEmptyOrAllFalse(colorSize_sales) &&
+      isEmptyOrAllFalse(user_controller);
 
     console.log("nothingToUpdate check", nothingToUpdate);
 

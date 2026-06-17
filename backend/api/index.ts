@@ -1,6 +1,7 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
 import serverless from "serverless-http";
+import { get } from "https";
 const { authenticateToken } = require('../middleware/authMiddleware'); 
 
 const app = express();
@@ -76,6 +77,8 @@ app.get('/invoice-temp-data', authenticateToken, authController.getInvoiceTempDa
 app.get('/get-invoice-preview', authenticateToken, authController.getInvoicePreview);
 app.get('/saved-invoice-numbers', authenticateToken, authController.savedInvoiceNumbers);
 
+app.get('/cashiers', authenticateToken, authController.getCashiers);
+
 app.post("/login", authController.login);
 app.post('/close-connection', authController.closeConnection);
 app.post('/register', authController.register);
@@ -87,10 +90,12 @@ app.post('/update-temp-grn-table', authenticateToken, authController.updateTempG
 app.post('/update-temp-tog-table', authenticateToken, authController.updateTempTogTable);
 app.post('/insert-invoice-temp', authenticateToken, authController.insertInvoiceTemp);
 app.post('/save-invoice', authenticateToken, authController.saveInvoice);
+app.post('/cashier-update', authenticateToken, authController.updateCashier);
 
 app.delete('/stock-update-delete', authenticateToken, authController.stockUpdateDelete);
 app.delete('/grnprn-delete', authenticateToken, authController.grnprnDelete);
 app.delete('/delete-invoice-temp-item', authenticateToken, authController.deleteInvoiceTempItem);
+app.delete('/cashier-delete', authenticateToken, authController.deleteCashier);
 
 app.put('/reset-database-connection', authenticateToken, authController.resetDatabaseConnection);
 
