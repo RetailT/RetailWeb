@@ -60,6 +60,7 @@ const Reset = () => {
   const [sCategory, setSCategory] = useState(false);
   const [sSCategory, setSSCategory] = useState(false);
   const [sVendor, setSVendor] = useState(false);
+  const [cashierController, setCashierController] = useState(false);
 
   const token = localStorage.getItem("authToken");
   const navigate = useNavigate();
@@ -233,6 +234,11 @@ useEffect(() => {
             c_sa_vendor: cSaVendor,
           },
         ],
+        user_controller: [
+          { 
+            u_cashier_controller: cashierController,
+          },
+        ],
       };
 
       console.log("Submitting data:", data); // DEBUG: Check what's being sent
@@ -372,6 +378,7 @@ setNewCustomerID("");
             setSCategory(user.s_category === "T");
             setSSCategory(user.s_scategory === "T");
             setSVendor(user.s_vendor === "T");
+            setCashierController(user.u_cashier_controller === "T");
             setCompanyName(user.COMPANY_NAME || "");
             setStartDate(user.START_DATE || "");
             setEndDate(user.END_DATE || "");           
@@ -417,6 +424,7 @@ setNewCustomerID("");
             setSCategory(false);
             setSSCategory(false);
             setSVendor(false);
+            setCashierController(false);
             setCompanyName("");
             setStartDate("");
             setEndDate("");
@@ -1100,6 +1108,24 @@ const autoFill = (customerID) => {
                         <span className="text-sm text-gray-700">
                           Database Sync
                         </span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Card 8 */}
+                  <div className="bg-white p-2 sm:p-4 rounded-md shadow-md w-full md:w-[calc(25%-0.5rem)] min-w-[250px] mb-2 sm:mb-4">
+                    <h2 className="mb-2 text-sm font-semibold text-gray-800 sm:text-lg sm:mb-4">
+                      User Controller
+                    </h2>
+                    <div className="flex flex-col gap-2 sm:gap-4">
+                      <label className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          checked={cashierController}
+                          onChange={(e) => setCashierController(e.target.checked)}
+                          className="w-4 h-4 sm:w-5 sm:h-5"
+                        />
+                        <span className="text-sm text-gray-700">Cashier Controller</span>
                       </label>
                     </div>
                   </div>

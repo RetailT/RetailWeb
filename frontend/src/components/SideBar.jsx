@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 // import axios from "axios";
-import {FaChevronDown } from "react-icons/fa";
+import { FaChevronDown, FaUserCog } from "react-icons/fa";
 import { MdManageAccounts, MdSpaceDashboard } from "react-icons/md";
 import { MdCalculate } from "react-icons/md";
 import { FaCartFlatbed } from "react-icons/fa6";
@@ -16,6 +16,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
   const [transactionOpen, setTransactionOpen] = useState(false);
   const [colorWiseSalesOpen, setColorWiseSalesOpen] = useState(false);
   const [colorWiseStockOpen, setColorWiseStockOpen] = useState(false);
+  const [userControllerOpen, setUserControllerOpen] = useState(false);
   const sidebarRef = useRef(null);
 
   useEffect(() => {
@@ -63,6 +64,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
   let s_category = "";
   let s_scategory = "";
   let s_vendor = "";
+  let u_cashier_controller = "";
 
   if (token) {
     const decodedToken = jwtDecode(token);
@@ -96,6 +98,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
     s_category = decodedToken.s_category;
     s_scategory = decodedToken.s_scategory;
     s_vendor = decodedToken.s_vendor;
+    u_cashier_controller = decodedToken.u_cashier_controller;
   } else {
     console.error("No token found in localStorage");
   }
@@ -130,6 +133,10 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
 
   const toggleReport = () => {
     setTransactionOpen(!transactionOpen);
+  };
+
+  const toggleUserController = () => {
+    setUserControllerOpen(!userControllerOpen);
   };
 
   const handleNavLinkClick = () => {
@@ -244,14 +251,6 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
                 </NavLink>
               </li>
             )}
-            
-            {/* {d_sales_report?.toLowerCase() === "t" && dashboardOpen && isOpen && ( */}
-              {/* <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
-  <NavLink to="/sales-report" onClick={handleNavLinkClick} className="w-full"> 
-    Sales Report (forced)
-  </NavLink>
-</li> */}
-            
 
             {d_invoice?.toLowerCase() === "t" && dashboardOpen && isOpen && (
               <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
@@ -549,6 +548,42 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
                 <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
                   <NavLink to="/invoice" onClick={handleNavLinkClick} className="w-full">
                     Invoice
+                  </NavLink>
+                </li>
+              )}
+            </ul>
+          )}
+
+          {/* User Controller */}
+          {(u_cashier_controller?.toLowerCase() === "t") && (
+            <li
+              className="flex items-center p-2 hover:bg-[#000000] cursor-pointer"
+              onClick={toggleUserController}
+              aria-haspopup="true"
+              aria-expanded={userControllerOpen}
+            >
+              <FaUserCog size={20} className="mt-3 mb-4 ml-2 mr-2" />
+              <span className={`${isOpen ? "block" : "hidden"} ml-4`}>
+                User Controller
+              </span>
+              {isOpen && (
+                <FaChevronDown
+                  size={14}
+                  className={`ml-auto transition-transform mr-5 ${
+                    userControllerOpen ? "rotate-180" : ""
+                  }`}
+                  aria-hidden="true"
+                />
+              )}
+            </li>
+          )}
+
+          {userControllerOpen && isOpen && (
+            <ul className="pl-8 ml-8">
+              {u_cashier_controller?.toLowerCase() === "t" && (
+                <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
+                  <NavLink to="/cashier-controller" onClick={handleNavLinkClick} className="w-full">
+                    Cashier Controller
                   </NavLink>
                 </li>
               )}
