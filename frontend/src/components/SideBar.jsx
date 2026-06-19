@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 // import axios from "axios";
-import { FaChevronDown, FaUserCog } from "react-icons/fa";
+import { FaChevronDown, FaUserCog, FaUserShield } from "react-icons/fa";
 import { MdManageAccounts, MdSpaceDashboard } from "react-icons/md";
 import { MdCalculate } from "react-icons/md";
 import { FaCartFlatbed } from "react-icons/fa6";
@@ -562,7 +562,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
               aria-haspopup="true"
               aria-expanded={userControllerOpen}
             >
-              <FaUserCog size={20} className="mt-3 mb-4 ml-2 mr-2" />
+              <FaUserShield size={20} className="mt-3 mb-4 ml-2 mr-2" />
               <span className={`${isOpen ? "block" : "hidden"} ml-4`}>
                 User Controller
               </span>
@@ -599,7 +599,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
               aria-haspopup="true"
               aria-expanded={adminOpen}
             >
-              <MdManageAccounts size={20} className="mt-3 mb-4 ml-2 mr-2" />
+              <MdManageAccounts size={22} className="mt-3 mb-4 ml-2 mr-2" />
               <span className={`${isOpen ? "block" : "hidden"} ml-4`}>
                 Administration
               </span>

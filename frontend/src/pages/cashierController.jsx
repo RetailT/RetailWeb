@@ -14,18 +14,14 @@ const lockFields = [
   "DISC_REMOVELOCK", "PCARDSLOCK", "DOPENLOCK", "AUTOLOGOFF", "CASHREFUNDLOCK", "BILLCOPYLOCK", "LOYALTYREGLOCK",
 ];
 
-// Plain counts - shown as whole numbers, no decimals
 const integerFields = ["SDISCTIME", "BILLCOPYCOUNT"];
-// Percentages / amounts - always shown with 2 decimals
 const decimalFields = ["ITDISCPRECNT", "ITDISCAMT", "SDISCPRECNT", "SDISCAMT", "DAILY_DISCLIMIT"];
 
-// Format any incoming value to a fixed 2-decimal string, e.g. "10.00"
 const toFixed2 = (value) => {
   const num = parseFloat(value);
   return isNaN(num) ? "0.00" : num.toFixed(2);
 };
 
-// Format any incoming value to a clean whole-number string, e.g. "10"
 const toInt = (value) => {
   const num = parseInt(value, 10);
   return isNaN(num) ? "0" : String(num);
@@ -143,13 +139,13 @@ const CashierController = () => {
   }
 
   const handleCashierSearch = (e) => {
-    const value = e.target.value;
+    const value = e.target.value.toUpperCase();
     setCashierSearch(value);
     if (value.length > 0) {
       const filtered = cashiers.filter(
         (c) =>
-          c.CASHIER_NAME.toLowerCase().includes(value.toLowerCase()) ||
-          c.CASHIER_CODE.toLowerCase().includes(value.toLowerCase())
+          c.CASHIER_NAME.toUpperCase().includes(value) ||
+          c.CASHIER_CODE.toUpperCase().includes(value)
       );
       setFilteredCashiers(filtered);
       setShowSuggestions(true);
@@ -194,14 +190,12 @@ const CashierController = () => {
 
     let val = e.target.value.replace(/[^0-9.]/g, "");
 
-    // allow only a single decimal point
     const dotCount = val.split(".").length - 1;
     if (dotCount > 1) {
       const firstDot = val.indexOf(".");
       val = val.slice(0, firstDot + 1) + val.slice(firstDot + 1).replace(/\./g, "");
     }
 
-    // limit to 2 digits after the decimal point while typing
     const dotIndex = val.indexOf(".");
     if (dotIndex !== -1 && val.length - dotIndex - 1 > 2) {
       val = val.slice(0, dotIndex + 3);
@@ -210,7 +204,6 @@ const CashierController = () => {
     setFormData((prev) => ({ ...prev, [key]: val }));
   };
 
-  // Reformat once the user leaves the field: whole number for integer fields, 2 decimals otherwise
   const handleNumericBlur = (key) => () => {
     setFormData((prev) => ({
       ...prev,
@@ -232,7 +225,6 @@ const CashierController = () => {
     }
     try {
       setDisable(true);
-      // ensure all numeric fields go out fully normalized
       const payload = { ...formData };
       integerFields.forEach((key) => {
         payload[key] = toInt(payload[key]);
@@ -316,7 +308,7 @@ const CashierController = () => {
                     onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                     placeholder="Search cashier code or name..."
                     autoComplete="off"
-                    className="w-full p-2.5 text-sm bg-white border border-gray-200 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
+                    className="w-full p-2.5 text-sm bg-white border border-gray-200 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-400 uppercase"
                   />
                   {showSuggestions && filteredCashiers.length > 0 && (
                     <ul className="absolute z-50 w-full mt-1 top-full overflow-y-auto bg-white border border-gray-200 rounded-md shadow-lg max-h-60">
@@ -342,9 +334,11 @@ const CashierController = () => {
                   <input
                     type="text"
                     value={formData.CASHIER_NAME}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, CASHIER_NAME: e.target.value }))}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, CASHIER_NAME: e.target.value.toUpperCase() }))
+                    }
                     disabled={!formData.CASHIER_CODE}
-                    className="w-full p-2.5 text-sm bg-white border border-gray-200 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:opacity-60"
+                    className="w-full p-2.5 text-sm bg-white border border-gray-200 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:opacity-60 uppercase"
                   />
                 </div>
 
