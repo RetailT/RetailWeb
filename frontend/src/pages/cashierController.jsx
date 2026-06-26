@@ -311,7 +311,7 @@ const CashierController = () => {
                     onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                     placeholder="Search cashier code or name..."
                     autoComplete="off"
-                    className="w-full p-2.5 text-sm bg-white border border-gray-200 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-400 uppercase"
+                    className="w-full p-2.5 text-base bg-white border border-gray-200 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-400 uppercase"
                   />
                   {showSuggestions && filteredCashiers.length > 0 && (
                     <ul className="absolute z-50 w-full mt-1 top-full overflow-y-auto bg-white border border-gray-200 rounded-md shadow-lg max-h-60">
