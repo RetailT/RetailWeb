@@ -98,7 +98,7 @@ const discountFields = [
   { key: "ITDISCAMT", label: "Product Disc.Amt." },
   { key: "SDISCPRECNT", label: "Sub Disc.%" },
   { key: "SDISCAMT", label: "Sub Disc.Amt." },
-  { key: "DAILY_DISCLIMIT", label: "Dialy Disc. Limit" },
+  { key: "DAILY_DISCLIMIT", label: "Daily Disc. Limit" },
   { key: "BILLCOPYCOUNT", label: "ReCopy Count" },
 ];
 
@@ -291,10 +291,13 @@ const CashierController = () => {
           </div>
 
           <div className="max-w-7xl mx-auto mt-6">
-            {/* Cashier select + name + password */}
-            <div className="bg-[#d8d8d8] p-4 sm:p-6 rounded-lg shadow-sm mb-4">
+
+            {/* ── Cashier select + name + password ── */}
+            <div className="bg-[#d8d8d8] p-3 sm:p-6 rounded-lg shadow-sm mb-4">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
-                <div className="flex flex-col flex-1 min-w-[260px] relative">
+
+                {/* Cashier Code combobox */}
+                <div className="flex flex-col flex-1 min-w-0 relative">
                   <label className="text-sm font-semibold text-gray-800 mb-2">Cashier Code</label>
                   <input
                     ref={cashierCodeInputRef}
@@ -329,7 +332,8 @@ const CashierController = () => {
                   )}
                 </div>
 
-                <div className="flex flex-col flex-1 min-w-[260px]">
+                {/* Cashier Name */}
+                <div className="flex flex-col flex-1 min-w-0">
                   <label className="text-sm font-semibold text-gray-800 mb-2">Cashier Name</label>
                   <input
                     type="text"
@@ -342,7 +346,8 @@ const CashierController = () => {
                   />
                 </div>
 
-                <div className="flex flex-col flex-1 min-w-[260px]">
+                {/* Password */}
+                <div className="flex flex-col flex-1 min-w-0">
                   <label className="text-sm font-semibold text-gray-800 mb-2">Password</label>
                   <input
                     type="password"
@@ -351,26 +356,27 @@ const CashierController = () => {
                     className="w-full p-2.5 text-sm bg-gray-100 border border-gray-200 rounded-md cursor-not-allowed text-gray-500"
                   />
                 </div>
+
               </div>
             </div>
 
             {formData.CASHIER_CODE && (
               <>
-                {/* Cashier Functions */}
-                <div className="bg-[#d8d8d8] p-4 sm:p-6 rounded-lg shadow-sm mb-4">
+                {/* ── Cashier Functions ── */}
+                <div className="bg-[#d8d8d8] p-3 sm:p-6 rounded-lg shadow-sm mb-4">
                   <h2 className="mb-4 text-base font-semibold text-gray-800">Cashier Functions</h2>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-6">
                     {columnGroups.map((group, idx) => (
                       <div key={idx} className="flex flex-col gap-2">
                         {group.map(({ key, label }) => (
-                          <label key={key} className="flex items-center space-x-2">
+                          <label key={key} className="flex items-center space-x-2 cursor-pointer">
                             <input
                               type="checkbox"
                               checked={formData[key]}
                               onChange={handleLockChange(key)}
-                              className="w-4 h-4"
+                              className="w-4 h-4 shrink-0"
                             />
-                            <span className="text-sm text-gray-700">{label}</span>
+                            <span className="text-sm text-gray-700 leading-snug">{label}</span>
                           </label>
                         ))}
                       </div>
@@ -378,13 +384,13 @@ const CashierController = () => {
                   </div>
                 </div>
 
-                {/* Discounts */}
-                <div className="bg-[#d8d8d8] p-4 sm:p-6 rounded-lg shadow-sm mb-4">
+                {/* ── Discount Settings ── */}
+                <div className="bg-[#d8d8d8] p-3 sm:p-6 rounded-lg shadow-sm mb-4">
                   <h2 className="mb-4 text-base font-semibold text-gray-800">Discount Settings</h2>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
                     {discountFields.map(({ key, label }) => (
                       <div key={key} className="flex flex-col">
-                        <label className="text-xs font-semibold text-gray-700 mb-1">{label}</label>
+                        <label className="text-xs font-semibold text-gray-700 mb-1 leading-snug">{label}</label>
                         <input
                           type="text"
                           inputMode={integerFields.includes(key) ? "numeric" : "decimal"}
@@ -398,26 +404,26 @@ const CashierController = () => {
                   </div>
                 </div>
 
-                {/* Buttons */}
-                <div className="flex justify-center gap-4 mb-10">
+                {/* ── Action Buttons ── */}
+                <div className="flex flex-wrap justify-center gap-3 mb-10 px-2">
                   <button
                     onClick={handleSave}
                     disabled={disable}
-                    className={`px-8 py-2.5 bg-black text-white font-semibold rounded-md shadow-sm hover:bg-gray-800 ${disable ? "opacity-50 cursor-not-allowed" : ""}`}
+                    className={`flex-1 min-w-[120px] max-w-[180px] py-2.5 bg-black text-white text-sm font-semibold rounded-md shadow-sm hover:bg-gray-800 ${disable ? "opacity-50 cursor-not-allowed" : ""}`}
                   >
                     Save
                   </button>
                   <button
                     onClick={handleDelete}
                     disabled={disable}
-                    className={`px-8 py-2.5 bg-red-600 text-white font-semibold rounded-md shadow-sm hover:bg-red-700 ${disable ? "opacity-50 cursor-not-allowed" : ""}`}
+                    className={`flex-1 min-w-[120px] max-w-[180px] py-2.5 bg-red-600 text-white text-sm font-semibold rounded-md shadow-sm hover:bg-red-700 ${disable ? "opacity-50 cursor-not-allowed" : ""}`}
                   >
                     Delete
                   </button>
                   <button
                     onClick={handleClose}
                     disabled={disable}
-                    className="px-8 py-2.5 bg-gray-500 text-white font-semibold rounded-md shadow-sm hover:bg-gray-600"
+                    className="flex-1 min-w-[120px] max-w-[180px] py-2.5 bg-gray-500 text-white text-sm font-semibold rounded-md shadow-sm hover:bg-gray-600"
                   >
                     Close
                   </button>
