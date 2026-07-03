@@ -294,7 +294,7 @@ const CashierController = () => {
 
             {/* ── Cashier select + name + password ── */}
             <div className="bg-[#d8d8d8] p-3 sm:p-6 rounded-lg shadow-sm mb-4">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-end">
 
                 {/* Cashier Code combobox */}
                 <div className="flex flex-col flex-1 min-w-0 relative">
@@ -311,7 +311,7 @@ const CashierController = () => {
                     onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                     placeholder="Search cashier code"
                     autoComplete="off"
-                    className="w-full p-2.5 text-base bg-white border border-gray-200 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-400 uppercase"
+                    className="w-full p-2.5 text-sm bg-white border border-gray-200 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-400 uppercase"
                   />
                   {showSuggestions && filteredCashiers.length > 0 && (
                     <ul className="absolute z-50 w-full mt-1 top-full overflow-y-auto bg-white border border-gray-200 rounded-md shadow-lg max-h-60">
