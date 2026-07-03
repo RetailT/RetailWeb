@@ -173,7 +173,7 @@ const CashierController = () => {
       next[key] = raw !== null && raw !== undefined && raw !== "" ? toFixed2(raw) : "0.00";
     });
     setFormData(next);
-    setCashierSearch(`${cashier.CASHIER_CODE} ${cashier.CASHIER_NAME}`);
+    setCashierSearch(cashier.CASHIER_CODE || "");
     setShowSuggestions(false);
   };
 
@@ -309,7 +309,7 @@ const CashierController = () => {
                       setShowSuggestions(true);
                     }}
                     onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                    placeholder="Search cashier code or name..."
+                    placeholder="Search cashier code"
                     autoComplete="off"
                     className="w-full p-2.5 text-base bg-white border border-gray-200 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-400 uppercase"
                   />
@@ -324,8 +324,8 @@ const CashierController = () => {
                           }}
                           className="p-2.5 text-sm cursor-pointer hover:bg-gray-100 border-b border-gray-100 last:border-b-0 flex justify-between"
                         >
-                          <span>{c.CASHIER_NAME}</span>
-                          <span className="text-xs text-gray-400 ml-2">{c.CASHIER_CODE}</span>
+                          {/* <span>{c.CASHIER_NAME}</span> */}
+                          <span className="text-xs ml-2">{c.CASHIER_CODE}</span>
                         </li>
                       ))}
                     </ul>
