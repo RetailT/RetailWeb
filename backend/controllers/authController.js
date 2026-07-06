@@ -8113,7 +8113,7 @@ exports.deleteCashier = async (req, res) => {
 exports.runDayend = async (req, res) => {
   let pool;
   try {
-    if (mssql.connected) await mssql.close();
+    const companyCode = (req.body.company || "ALL").toString().trim();
 
     const user_ip = String(req.user.ip).trim();
     pool = await connectToUserDatabase(user_ip, req.user.port.trim());
@@ -8122,9 +8122,23 @@ exports.runDayend = async (req, res) => {
       return res.status(500).json({ message: "Database connection failed" });
     }
 
-    await pool.request().execute(`[${posback}].dbo.Sp_Dayend`);
+    if (companyCode === "ALL") {
+      // No specific company -> run the standard Dayend procedure
+      await pool.request().execute(`[${posback}].dbo.Sp_Dayend`);
+    } else {
+      // Specific company selected -> run the location-wise procedure with the company code
+      const request = pool.request();
+      request.input("COMPANY_CODE", mssql.Char(10), companyCode);
+      await request.execute(`[${posback}].dbo.Sp_Dayend_LocationWise`);
+    }
 
-    return res.status(200).json({ success: true, message: "Dayend completed successfully" });
+    return res.status(200).json({
+      success: true,
+      message:
+        companyCode === "ALL"
+          ? "Dayend completed successfully for all companies"
+          : `Dayend completed successfully for company ${companyCode}`,
+    });
   } catch (error) {
     console.error("Dayend error:", error);
     return res.status(500).json({ message: "Dayend failed", error: error.message });
