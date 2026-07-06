@@ -65,6 +65,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
   let s_scategory = "";
   let s_vendor = "";
   let u_cashier_controller = "";
+  let u_dayend = "";
 
   if (token) {
     const decodedToken = jwtDecode(token);
@@ -99,6 +100,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
     s_scategory = decodedToken.s_scategory;
     s_vendor = decodedToken.s_vendor;
     u_cashier_controller = decodedToken.u_cashier_controller;
+    u_dayend = decodedToken.u_dayend;
   } else {
     console.error("No token found in localStorage");
   }
@@ -555,7 +557,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
           )}
 
           {/* User Controller */}
-          {(u_cashier_controller?.toLowerCase() === "t") && (
+          {(u_cashier_controller?.toLowerCase() === "t" || u_dayend?.toLowerCase() === "t") && (
             <li
               className="flex items-center p-2 hover:bg-[#000000] cursor-pointer"
               onClick={toggleUserController}
@@ -564,7 +566,7 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
             >
               <FaUserShield size={20} className="mt-3 mb-4 ml-2 mr-2" />
               <span className={`${isOpen ? "block" : "hidden"} ml-4`}>
-                User Controller
+                Maintenance
               </span>
               {isOpen && (
                 <FaChevronDown
@@ -584,6 +586,14 @@ const Sidebar = ({ onToggle, isOpen, toggleSidebar }) => {
                 <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
                   <NavLink to="/cashier-controller" onClick={handleNavLinkClick} className="w-full">
                     Cashier Controller
+                  </NavLink>
+                </li>
+              )}
+
+              {u_dayend?.toLowerCase() === "t" && (
+                <li className="flex items-center p-2 mt-4 hover:bg-[#000000]">
+                  <NavLink to="/dayend" onClick={handleNavLinkClick} className="w-full">
+                    Dayend
                   </NavLink>
                 </li>
               )}

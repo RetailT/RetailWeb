@@ -61,6 +61,7 @@ const Reset = () => {
   const [sSCategory, setSSCategory] = useState(false);
   const [sVendor, setSVendor] = useState(false);
   const [cashierController, setCashierController] = useState(false);
+  const [dayend, setDayend] = useState(false);
 
   const token = localStorage.getItem("authToken");
   const navigate = useNavigate();
@@ -237,6 +238,7 @@ useEffect(() => {
         user_controller: [
           { 
             u_cashier_controller: cashierController,
+            u_dayend: dayend,
           },
         ],
       };
@@ -379,6 +381,7 @@ setNewCustomerID("");
             setSSCategory(user.s_scategory === "T");
             setSVendor(user.s_vendor === "T");
             setCashierController(user.u_cashier_controller === "T");
+            setDayend(user.u_dayend === "T");
             setCompanyName(user.COMPANY_NAME || "");
             setStartDate(user.START_DATE || "");
             setEndDate(user.END_DATE || "");           
@@ -425,6 +428,7 @@ setNewCustomerID("");
             setSSCategory(false);
             setSVendor(false);
             setCashierController(false);
+            setDayend(false);
             setCompanyName("");
             setStartDate("");
             setEndDate("");
@@ -1115,7 +1119,7 @@ const autoFill = (customerID) => {
                   {/* Card 8 */}
                   <div className="bg-white p-2 sm:p-4 rounded-md shadow-md w-full md:w-[calc(25%-0.5rem)] min-w-[250px] mb-2 sm:mb-4">
                     <h2 className="mb-2 text-sm font-semibold text-gray-800 sm:text-lg sm:mb-4">
-                      User Controller
+                      Maintenance
                     </h2>
                     <div className="flex flex-col gap-2 sm:gap-4">
                       <label className="flex items-center space-x-2">
@@ -1126,6 +1130,15 @@ const autoFill = (customerID) => {
                           className="w-4 h-4 sm:w-5 sm:h-5"
                         />
                         <span className="text-sm text-gray-700">Cashier Controller</span>
+                      </label>
+                      <label className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          checked={dayend}
+                          onChange={(e) => setDayend(e.target.checked)}
+                          className="w-4 h-4 sm:w-5 sm:h-5"
+                        />
+                        <span className="text-sm text-gray-700">Dayend</span>
                       </label>
                     </div>
                   </div>
