@@ -83,11 +83,11 @@ const Dayend = () => {
       setAlert({ message: "Dayend running, please wait...", type: "info" });
       const res = await axios.post(
         `${process.env.REACT_APP_BACKEND_URL}run-dayend`,
-        {},
+        { company: selectedCompany },
         { headers: { Authorization: `Bearer ${token}` }, timeout: 120000 }
       );
       if (res.data.success) {
-        setAlert({ message: "Dayend completed successfully!", type: "success" });
+        setAlert({ message: res.data.message || "Dayend completed successfully!", type: "success" });
         setConfirmed(false);
         fetchSalesData(selectedCompany);
         setTimeout(() => setAlert(null), 5000);
@@ -99,6 +99,11 @@ const Dayend = () => {
       setDisable(false);
     }
   };
+
+  const selectedCompanyName = selectedCompany === "ALL"
+    ? "All Companies"
+    : (companies.find((c) => c.code === selectedCompany)?.name || selectedCompany);
+
 
   const today = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 
@@ -136,10 +141,14 @@ const Dayend = () => {
                         </svg>
                         Before you continue
                       </p>
-                      <p className="text-xs text-gray-300 leading-relaxed relative">
+                      <p className="text-xs text-gray-300 leading-relaxed relative mb-2">
                         Dayend processes all pending sales, updates stock and clears daily records.
                         Make sure every POS terminal is closed first.
                       </p>
+                      <div className="flex items-center gap-1.5 text-xs relative pt-2 border-t border-white/10">
+                        <span className="text-gray-400">Scope:</span>
+                        <span className="font-semibold text-white truncate">{selectedCompanyName}</span>
+                      </div>
                     </div>
 
                     <label className="flex items-start gap-2.5 mb-4 cursor-pointer select-none group">
@@ -226,7 +235,6 @@ const Dayend = () => {
                       <div className="text-4xl sm:text-5xl font-bold text-[#FF6B00] leading-tight mt-1 font-['Barlow_Condensed']">
                         {parseFloat(totalNetSales).toLocaleString("en-US", { minimumFractionDigits: 2 })}
                       </div>
-                      {/* <span className="text-xs text-gray-400 mt-1">as of {today}</span> */}
                     </div>
                     <div className="hidden sm:block w-px bg-gray-200 my-4" />
                     <div className="flex sm:flex-col items-center sm:items-stretch justify-center p-4 sm:p-5 sm:w-40 border-t sm:border-t-0 border-gray-100 bg-gray-50 sm:bg-transparent">
