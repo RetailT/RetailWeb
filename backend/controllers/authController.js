@@ -724,6 +724,7 @@ exports.login = async (req, res) => {
         s_scategory: user.s_scategory,
         s_vendor: user.s_vendor,
         u_cashier_controller: user.u_cashier_controller,
+        u_dayend: user.u_dayend,
       },
       process.env.JWT_SECRET,
       { expiresIn: "1h" }
@@ -8108,6 +8109,125 @@ exports.deleteCashier = async (req, res) => {
   }
 };
 
+// Dayend
+exports.runDayend = async (req, res) => {
+  let pool;
+  try {
+    if (mssql.connected) await mssql.close();
+
+    const user_ip = String(req.user.ip).trim();
+    pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+
+    if (!pool || !pool.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
+
+    await pool.request().execute(`[${posback}].dbo.Sp_Dayend`);
+
+    return res.status(200).json({ success: true, message: "Dayend completed successfully" });
+  } catch (error) {
+    console.error("Dayend error:", error);
+    return res.status(500).json({ message: "Dayend failed", error: error.message });
+  } finally {
+    if (pool && pool.connected) {
+      try { await pool.close(); } catch (e) {}
+    }
+  }
+};
+
+// GET - Dayend sales summary table
+exports.getDayendSales = async (req, res) => {
+  let pool;
+  try {
+    if (mssql.connected) await mssql.close();
+    const user_ip = String(req.user.ip).trim();
+    pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+    if (!pool || !pool.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
+
+    const companyCode = req.query.company || "ALL";
+    const request = pool.request();
+
+    let query = `
+      USE [${posback}];
+      SELECT 
+        CONVERT(VARCHAR(10), CONVERT(DATETIME, DS.DATE, 103), 103) AS DATE,
+        DS.COMPANY_CODE AS COMPANY_CODE,
+        C.COMPANY_NAME,
+        DS.UNITNO AS UNITNO,
+        SUM(CASE WHEN DS.ID IN ('SL','SLF') THEN DS.AMOUNT
+                 WHEN DS.ID IN ('RF','RFF') THEN -DS.AMOUNT
+                 ELSE 0 END) AS NET_SALES
+      FROM tb_DAYENDSALES DS
+      LEFT JOIN tb_COMPANY C ON C.COMPANY_CODE = DS.COMPANY_CODE
+      WHERE (DS.DOWNLOAD = 'F' OR DS.DOWNLOAD IS NULL)
+        AND DS.ID IN ('SL','SLF','RF','RFF')
+    `;
+
+    if (companyCode !== "ALL") {
+      query += ` AND DS.COMPANY_CODE = @companyCode`;
+      request.input("companyCode", mssql.VarChar, companyCode.trim());
+    }
+
+    query += `
+      GROUP BY DS.DATE, DS.COMPANY_CODE, C.COMPANY_NAME, DS.UNITNO
+      ORDER BY DS.DATE DESC, DS.COMPANY_CODE, DS.UNITNO;
+    `;
+
+    const result = await request.query(query);
+
+    const records = (result.recordset || []).map((row) => ({
+      DATE: row.DATE || "",
+      COMPANY_CODE: (row.COMPANY_CODE || "").trim(),
+      COMPANY_NAME: (row.COMPANY_NAME || "").trim(),
+      UNIT_NO: row.UNITNO || "",
+      NET_SALES: parseFloat(row.NET_SALES || 0).toFixed(2),
+    }));
+
+    const totalNetSales = records
+      .reduce((sum, r) => sum + parseFloat(r.NET_SALES), 0)
+      .toFixed(2);
+
+    return res.status(200).json({
+      success: true,
+      records,
+      totalNetSales,
+    });
+  } catch (error) {
+    console.error("getDayendSales error:", error);
+    return res.status(500).json({ message: "Failed to fetch dayend sales", error: error.message });
+  } finally {
+    if (pool && pool.connected) { try { await pool.close(); } catch (e) {} }
+  }
+};
+
+// POST - Manual Download (marks records as downloaded)
+exports.manualDownload = async (req, res) => {
+  let pool;
+  try {
+    if (mssql.connected) await mssql.close();
+    const user_ip = String(req.user.ip).trim();
+    pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+    if (!pool || !pool.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
+
+    await pool.request().query(`
+      USE [${posback}];
+      UPDATE tb_DAYENDSALES SET DOWNLOAD = 'T' WHERE (DOWNLOAD = 'F' OR DOWNLOAD IS NULL);
+    `);
+
+    return res.status(200).json({ success: true, message: "Manual download completed successfully" });
+  } catch (error) {
+    console.error("manualDownload error:", error);
+    return res.status(500).json({ message: "Manual download failed", error: error.message });
+  } finally {
+    if (pool && pool.connected) { try { await pool.close(); } catch (e) {} }
+  }
+};
+
+
 // Get user connection details
 exports.findUserConnection = async (req, res) => {
   const name = req.query.name;
@@ -8191,6 +8311,7 @@ exports.findUserConnection = async (req, res) => {
         u.[s_scategory],
         u.[s_vendor],
         u.[u_cashier_controller],
+        u.[u_dayend],
         s.[COMPANY_NAME],
         s.[PORTNO] AS port,
         s.[START_DATE],
@@ -8544,6 +8665,7 @@ exports.resetDatabaseConnection = async (req, res) => {
         "s_scategory",
         "s_vendor",
         "u_cashier_controller",
+        "u_dayend",
       ];
 
       for (const permissionObject of permissionArray) {

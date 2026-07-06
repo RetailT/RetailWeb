@@ -78,6 +78,7 @@ app.get('/get-invoice-preview', authenticateToken, authController.getInvoicePrev
 app.get('/saved-invoice-numbers', authenticateToken, authController.savedInvoiceNumbers);
 
 app.get('/cashiers', authenticateToken, authController.getCashiers);
+app.get('/dayend-sales', authenticateToken, authController.getDayendSales);
 
 app.post("/login", authController.login);
 app.post('/close-connection', authController.closeConnection);
@@ -91,6 +92,8 @@ app.post('/update-temp-tog-table', authenticateToken, authController.updateTempT
 app.post('/insert-invoice-temp', authenticateToken, authController.insertInvoiceTemp);
 app.post('/save-invoice', authenticateToken, authController.saveInvoice);
 app.post('/cashier-update', authenticateToken, authController.updateCashier);
+app.post('/run-dayend', authenticateToken, authController.runDayend);
+app.post('/manual-download', authenticateToken, authController.manualDownload);
 
 app.delete('/stock-update-delete', authenticateToken, authController.stockUpdateDelete);
 app.delete('/grnprn-delete', authenticateToken, authController.grnprnDelete);
@@ -101,17 +104,17 @@ app.put('/reset-database-connection', authenticateToken, authController.resetDat
 
 
 // for local development -- comment out in production
-// if (process.env.NODE_ENV !== "production") {
-//   app.listen(5000, () => {
-//     console.log(`Server is running on http://localhost:5000/`);
-//   });
-// }
-// const handler = serverless(app);
-// export default handler;
+if (process.env.NODE_ENV !== "production") {
+  app.listen(5000, () => {
+    console.log(`Server is running on http://localhost:5000/`);
+  });
+}
+const handler = serverless(app);
+export default handler;
 
 
 // Uncomment the following lines if you want to export the app for serverless deployment
-module.exports = app;
-module.exports.handler = serverless(app);
+// module.exports = app;
+// module.exports.handler = serverless(app);
 
 
