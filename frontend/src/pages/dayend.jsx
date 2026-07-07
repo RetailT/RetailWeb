@@ -128,24 +128,24 @@ const Dayend = () => {
               {/* ── LEFT: PROCESS CARD ── */}
               <div className="flex flex-col gap-4 w-full lg:w-80 flex-shrink-0">
                 <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200">
-                  <div className="bg-gray-100 border-b border-gray-300 py-2 px-4 text-center font-semibold text-gray-800">
+                  <div className="bg-gray-100 border-b border-gray-300 py-2.5 px-4 text-center font-semibold text-base text-gray-800">
                     Day End
                   </div>
 
                   <div className="p-4 pt-3">
                     <div className="relative bg-[#1A1A1A] rounded-md p-3.5 mb-4 overflow-hidden">
                       <div className="absolute -right-4 -top-4 w-16 h-16 rounded-full bg-[#FF6B00]/10" />
-                      <p className="text-[11px] font-semibold text-[#FF6B00] mb-1 uppercase tracking-wider flex items-center gap-1.5">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <p className="text-xs font-semibold text-[#FF6B00] mb-1 uppercase tracking-wider flex items-center gap-1.5">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                           <path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
                         </svg>
                         Before you continue
                       </p>
-                      <p className="text-xs text-gray-300 leading-relaxed relative mb-2">
+                      <p className="text-sm text-gray-300 leading-relaxed relative mb-2">
                         Dayend processes all pending sales, updates stock and clears daily records.
                         Make sure every POS terminal is closed first.
                       </p>
-                      <div className="flex items-center gap-1.5 text-xs relative pt-2 border-t border-white/10">
+                      <div className="flex items-center gap-1.5 text-sm relative pt-2 border-t border-white/10">
                         <span className="text-gray-400">Scope:</span>
                         <span className="font-semibold text-white truncate">{selectedCompanyName}</span>
                       </div>
@@ -160,15 +160,15 @@ const Dayend = () => {
                           disabled={disable}
                           className="peer sr-only"
                         />
-                        <div className="w-[18px] h-[18px] rounded border-2 border-gray-300 peer-checked:bg-[#FF6B00] peer-checked:border-[#FF6B00] transition-colors flex items-center justify-center">
+                        <div className="w-[19px] h-[19px] rounded border-2 border-gray-300 peer-checked:bg-[#FF6B00] peer-checked:border-[#FF6B00] transition-colors flex items-center justify-center">
                           {confirmed && (
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3">
                               <path d="M20 6L9 17l-5-5" />
                             </svg>
                           )}
                         </div>
                       </div>
-                      <span className="text-xs text-gray-700 leading-relaxed">
+                      <span className="text-sm text-gray-700 leading-relaxed">
                         I confirm all POS terminals are closed and want to run Dayend.
                       </span>
                     </label>
@@ -176,13 +176,13 @@ const Dayend = () => {
                     <button
                       onClick={handleDayend}
                       disabled={disable || !confirmed}
-                      className={`w-full py-3 bg-black text-white text-sm font-semibold rounded-md shadow hover:bg-gray-800 active:scale-[0.98] transition-all flex items-center justify-center gap-2 ${
+                      className={`w-full py-3 bg-black text-white text-base font-semibold rounded-md shadow hover:bg-gray-800 active:scale-[0.98] transition-all flex items-center justify-center gap-2 ${
                         disable || !confirmed ? "opacity-40 cursor-not-allowed hover:bg-black" : ""
                       }`}
                     >
                       {disable ? (
                         <>
-                          <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                          <svg className="animate-spin" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                             <circle cx="12" cy="12" r="10" opacity="0.25" />
                             <path d="M12 2a10 10 0 0110 10" />
                           </svg>
@@ -202,12 +202,12 @@ const Dayend = () => {
                 {/* receipt-style total card */}
                 <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 p-3 sm:p-4 border-b border-dashed border-gray-300 bg-gray-50">
-                    <span className="text-sm font-medium text-gray-700 flex-shrink-0">Company</span>
+                    <span className="text-base font-medium text-gray-700 flex-shrink-0">Company</span>
                     <div className="flex flex-col sm:flex-row gap-2 w-full">
                       <select
                         value={selectedCompany}
                         onChange={handleCompanyChange}
-                        className="p-2 text-sm bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/40 focus:border-[#FF6B00] w-full sm:w-24"
+                        className="p-2 text-base bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/40 focus:border-[#FF6B00] w-full sm:w-24"
                       >
                         <option value="ALL">ALL</option>
                         {companies.map((c) => (
@@ -217,7 +217,7 @@ const Dayend = () => {
                       <select
                         value={selectedCompany}
                         onChange={handleCompanyChange}
-                        className="p-2 text-sm bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/40 focus:border-[#FF6B00] w-full sm:flex-1"
+                        className="p-2 text-base bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#FF6B00]/40 focus:border-[#FF6B00] w-full sm:flex-1"
                       >
                         <option value="ALL">ALL COMPANY</option>
                         {companies.map((c) => (
@@ -229,10 +229,10 @@ const Dayend = () => {
 
                   <div className="flex flex-col sm:flex-row items-stretch">
                     <div className="flex-1 p-4 sm:p-5 flex flex-col justify-center">
-                      <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest">
+                      <span className="text-xs font-semibold text-gray-400 uppercase tracking-widest">
                         Total Net Sales
                       </span>
-                      <div className="text-4xl sm:text-5xl font-bold text-[#FF6B00] leading-tight mt-1 font-['Barlow_Condensed']">
+                      <div className="text-5xl sm:text-6xl font-bold text-[#FF6B00] leading-tight mt-1 font-['Barlow_Condensed']">
                         {parseFloat(totalNetSales).toLocaleString("en-US", { minimumFractionDigits: 2 })}
                       </div>
                     </div>
@@ -245,13 +245,13 @@ const Dayend = () => {
                         className="w-full px-3.5 py-2.5 bg-gray-200 text-gray-700 rounded-md shadow hover:bg-gray-300 active:scale-[0.95] transition-all disabled:opacity-40 flex items-center justify-center gap-1.5"
                       >
                         <svg
-                          width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+                          width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
                           className={loadingTable ? "animate-spin" : ""}
                         >
                           <path d="M23 4v6h-6M1 20v-6h6" />
                           <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
                         </svg>
-                        <span className="text-xs font-medium">Refresh</span>
+                        <span className="text-sm font-medium">Refresh</span>
                       </button>
                     </div>
                   </div>
@@ -260,28 +260,28 @@ const Dayend = () => {
                 {/* ledger table */}
                 <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
                   <div className="px-4 py-2.5 border-b border-gray-200 bg-gray-100">
-                    <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Pending Sales Ledger</span>
+                    <span className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Pending Sales Ledger</span>
                   </div>
                   <div className="overflow-x-auto" style={{ minHeight: "220px" }}>
                     {loadingTable ? (
-                      <div className="flex items-center justify-center h-32 text-gray-400 text-sm">
+                      <div className="flex items-center justify-center h-32 text-gray-400 text-base">
                         <span className="animate-pulse">Loading...</span>
                       </div>
                     ) : (
-                      <table className="w-full text-sm min-w-[560px]">
+                      <table className="w-full text-base min-w-[560px]">
                         <thead>
                           <tr className="bg-gray-50 border-b border-gray-200">
-                            <th className="text-left px-4 py-2.5 font-semibold text-gray-500 text-xs uppercase tracking-wide">Date</th>
-                            <th className="text-left px-4 py-2.5 font-semibold text-gray-500 text-xs uppercase tracking-wide">Company Code</th>
-                            <th className="text-left px-4 py-2.5 font-semibold text-gray-500 text-xs uppercase tracking-wide">Company Name</th>
-                            <th className="text-left px-4 py-2.5 font-semibold text-gray-500 text-xs uppercase tracking-wide">Unit No</th>
-                            <th className="text-right px-4 py-2.5 font-semibold text-gray-500 text-xs uppercase tracking-wide">Net Sales</th>
+                            <th className="text-left px-4 py-2.5 font-semibold text-gray-500 text-sm uppercase tracking-wide">Date</th>
+                            <th className="text-left px-4 py-2.5 font-semibold text-gray-500 text-sm uppercase tracking-wide">Company Code</th>
+                            <th className="text-left px-4 py-2.5 font-semibold text-gray-500 text-sm uppercase tracking-wide">Company Name</th>
+                            <th className="text-left px-4 py-2.5 font-semibold text-gray-500 text-sm uppercase tracking-wide">Unit No</th>
+                            <th className="text-right px-4 py-2.5 font-semibold text-gray-500 text-sm uppercase tracking-wide">Net Sales</th>
                           </tr>
                         </thead>
                         <tbody>
                           {salesRecords.length === 0 ? (
                             <tr>
-                              <td colSpan={5} className="text-center py-10 text-gray-400 text-sm">
+                              <td colSpan={5} className="text-center py-10 text-gray-400 text-base">
                                 No pending sales data
                               </td>
                             </tr>
