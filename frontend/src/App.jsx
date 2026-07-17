@@ -29,7 +29,7 @@ import HourlyReportDashboard from './pages/hourlyReport';
 import StockWiseVendor from "./pages/stockWiseReportVendor"
 import SalseComparison from "./pages/salesComparison"
 import SalesReportDashboard from "./pages/salesReport";
-import Report from "./pages/report";
+import Report from "./pages/reportInvoice";
 import Scan from "./pages/scan";
 import Reset from "./pages/reset";
 import Profile from "./pages/profile";
