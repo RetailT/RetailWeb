@@ -2066,7 +2066,7 @@ if (mssql.connected) {
   }
 };
 
-//report data
+// report data
 exports.reportData = async (req, res) => {
   try {
     // --- Auth ---
@@ -2083,120 +2083,164 @@ exports.reportData = async (req, res) => {
     let selectedOptions = req.query.companyCodes || req.query["companyCodes[]"];
     if (typeof selectedOptions === "string") selectedOptions = [selectedOptions];
 
-    const { state, rowClicked, fromDate, toDate, currentDate, invoiceNo } = req.query;
+    const {
+      state,
+      rowClicked,
+      fromDate,
+      toDate,
+      currentDate,
+      invoiceNo,
+      invoiceCompanyCode,
+      invoiceUnitNo,
+      invoiceRepNo,
+      invoiceSalesDate,
+    } = req.query;
 
     // --- Connect to user DB ---
     const user_ip = String(req.user.ip).trim();
     if (mssql.connected) {
-    await mssql.close();
-    console.log("✅ Database connection closed successfully");
-  }
+      await mssql.close();
+      console.log("✅ Database connection closed successfully");
+    }
     const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
 
     if (!pool.connected) {
       return res.status(500).json({ message: "Database connection failed" });
     }
+
     let reportQuery;
 
     // --- Main report ---
     if (rowClicked === false || String(rowClicked).toLowerCase() === "false") {
-      if ((state === false || String(state).toLowerCase() === "false") && fromDate && toDate && selectedOptions?.length > 0) {
-
+      if (
+        (state === false || String(state).toLowerCase() === "false") &&
+        fromDate &&
+        toDate &&
+        selectedOptions?.length > 0
+      ) {
         const formattedFromDate = formatDate(fromDate);
         const formattedToDate = formatDate(toDate);
         const reportType = "INVOICEWISE";
 
         // Clean previous data
-        await pool.request().query(`
-          USE ${rtweb};
-          DELETE FROM tb_SALESVIEW WHERE REPUSER = '${username}';
-        `);
+        await pool
+          .request()
+          .input("username1", mssql.VarChar, username)
+          .query(`
+            USE ${rtweb};
+            DELETE FROM tb_SALESVIEW WHERE REPUSER = @username1;
+          `);
 
         // Run SP for each company
         for (const companyCode of selectedOptions) {
-          await pool.request().query(`
-            EXEC ${rtweb}.dbo.Sp_SalesView 
-              @COMPANY_CODE='${companyCode}', 
-              @DATE1='${formattedFromDate}', 
-              @DATE2='${formattedToDate}', 
-              @REPUSER='${username}', 
-              @REPORT_TYPE='${reportType}';
-          `);
+          await pool
+            .request()
+            .input("companyCode", mssql.VarChar, companyCode)
+            .input("date1", mssql.VarChar, formattedFromDate)
+            .input("date2", mssql.VarChar, formattedToDate)
+            .input("repUser", mssql.VarChar, username)
+            .input("reportType", mssql.VarChar, reportType)
+            .query(`
+              EXEC ${rtweb}.dbo.Sp_SalesView
+                @COMPANY_CODE=@companyCode,
+                @DATE1=@date1,
+                @DATE2=@date2,
+                @REPUSER=@repUser,
+                @REPORT_TYPE=@reportType;
+            `);
         }
 
         // Main report query
-        reportQuery = await pool.request().query(`
-          USE ${rtweb};
-          SELECT *
-      FROM (
-          SELECT INVOICENO, COMPANY_CODE, UNITNO, REPNO, 'CASH' AS PRODUCT_NAME, 
-                ISNULL(SUM(CASE PRODUCT_NAME 
-                          WHEN 'CASH' THEN AMOUNT 
-                          WHEN 'BALANCE' THEN -AMOUNT 
-                          ELSE 0 END), 0) AS AMOUNT, 
-                SALESDATE
-          FROM tb_SALESVIEW 
-          WHERE (ID='PT' OR ID='BL') 
-            AND PRODUCT_NAME IN ('CASH', 'BALANCE') 
-            AND REPUSER='${username}'
-          GROUP BY COMPANY_CODE, SALESDATE, UNITNO, REPNO, INVOICENO
+        reportQuery = await pool
+          .request()
+          .input("username2", mssql.VarChar, username)
+          .query(`
+            USE ${rtweb};
+            SELECT *
+            FROM (
+                SELECT INVOICENO, COMPANY_CODE, UNITNO, REPNO, 'CASH' AS PRODUCT_NAME,
+                      ISNULL(SUM(CASE PRODUCT_NAME
+                                WHEN 'CASH' THEN AMOUNT
+                                WHEN 'BALANCE' THEN -AMOUNT
+                                ELSE 0 END), 0) AS AMOUNT,
+                      SALESDATE
+                FROM tb_SALESVIEW
+                WHERE (ID='PT' OR ID='BL')
+                  AND PRODUCT_NAME IN ('CASH', 'BALANCE')
+                  AND REPUSER=@username2
+                GROUP BY COMPANY_CODE, SALESDATE, UNITNO, REPNO, INVOICENO
 
-          UNION ALL
+                UNION ALL
 
-          SELECT INVOICENO, COMPANY_CODE, UNITNO, REPNO, PRODUCT_NAME, 
-                ISNULL(SUM(AMOUNT),0) AS AMOUNT, 
-                SALESDATE
-          FROM tb_SALESVIEW 
-          WHERE ID='PT' 
-            AND PRODUCT_NAME NOT IN ('CASH','BALANCE') 
-            AND REPUSER='${username}'
-          GROUP BY COMPANY_CODE, SALESDATE, UNITNO, REPNO, INVOICENO, PRODUCT_NAME
-      ) AS CombinedResults
-      ORDER BY COMPANY_CODE ASC, SALESDATE ASC, UNITNO ASC;
-        `);
-
-      } else if ((state === true || String(state).toLowerCase() === "true") && currentDate && selectedOptions?.length > 0) {
+                SELECT INVOICENO, COMPANY_CODE, UNITNO, REPNO, PRODUCT_NAME,
+                      ISNULL(SUM(AMOUNT),0) AS AMOUNT,
+                      SALESDATE
+                FROM tb_SALESVIEW
+                WHERE ID='PT'
+                  AND PRODUCT_NAME NOT IN ('CASH','BALANCE')
+                  AND REPUSER=@username2
+                GROUP BY COMPANY_CODE, SALESDATE, UNITNO, REPNO, INVOICENO, PRODUCT_NAME
+            ) AS CombinedResults
+            ORDER BY COMPANY_CODE ASC, SALESDATE ASC, UNITNO ASC;
+          `);
+      } else if (
+        (state === true || String(state).toLowerCase() === "true") &&
+        currentDate &&
+        selectedOptions?.length > 0
+      ) {
         const date = formatDate(currentDate);
         const reportType = "INVOICEWISE";
 
-        await pool.request().query(`
-          USE ${rtweb};
-          DELETE FROM tb_SALESVIEW WHERE REPUSER='${username}';
-        `);
+        await pool
+          .request()
+          .input("username1", mssql.VarChar, username)
+          .query(`
+            USE ${rtweb};
+            DELETE FROM tb_SALESVIEW WHERE REPUSER=@username1;
+          `);
 
         for (const companyCode of selectedOptions) {
-          await pool.request().query(`
-            EXEC ${rtweb}.dbo.Sp_SalesCurView 
-              @COMPANY_CODE='${companyCode}', 
-              @DATE='${date}', 
-              @REPUSER='${username}', 
-              @REPORT_TYPE='${reportType}';
-          `);
+          await pool
+            .request()
+            .input("companyCode", mssql.VarChar, companyCode)
+            .input("date", mssql.VarChar, date)
+            .input("repUser", mssql.VarChar, username)
+            .input("reportType", mssql.VarChar, reportType)
+            .query(`
+              EXEC ${rtweb}.dbo.Sp_SalesCurView
+                @COMPANY_CODE=@companyCode,
+                @DATE=@date,
+                @REPUSER=@repUser,
+                @REPORT_TYPE=@reportType;
+            `);
         }
 
-        reportQuery = await pool.request().query(`
-          USE ${rtweb};
-          SELECT *
-          FROM (
-          SELECT INVOICENO, COMPANY_CODE, UNITNO, REPNO, 'CASH' AS PRODUCT_NAME, 
-                 ISNULL(SUM(CASE PRODUCT_NAME 
-                   WHEN 'CASH' THEN AMOUNT 
-                   WHEN 'BALANCE' THEN -AMOUNT 
-                   ELSE 0 END), 0) AS AMOUNT, SALESDATE
-          FROM tb_SALESVIEW 
-          WHERE (ID='PT' OR ID='BL') AND PRODUCT_NAME IN ('CASH', 'BALANCE') AND REPUSER='${username}'
-          GROUP BY COMPANY_CODE, SALESDATE, UNITNO, REPNO, INVOICENO
-          
-          UNION ALL
-          
-          SELECT INVOICENO, COMPANY_CODE, UNITNO, REPNO, PRODUCT_NAME, 
-                 ISNULL(SUM(AMOUNT),0) AS AMOUNT, SALESDATE
-          FROM tb_SALESVIEW 
-          WHERE ID='PT' AND PRODUCT_NAME NOT IN ('CASH','BALANCE') AND REPUSER='${username}'
-          GROUP BY COMPANY_CODE, SALESDATE, UNITNO, REPNO, INVOICENO, PRODUCT_NAME
-          ) AS CombinedResults
-          ORDER BY COMPANY_CODE ASC, SALESDATE ASC, UNITNO ASC;;
-        `);
+        reportQuery = await pool
+          .request()
+          .input("username2", mssql.VarChar, username)
+          .query(`
+            USE ${rtweb};
+            SELECT *
+            FROM (
+            SELECT INVOICENO, COMPANY_CODE, UNITNO, REPNO, 'CASH' AS PRODUCT_NAME,
+                   ISNULL(SUM(CASE PRODUCT_NAME
+                     WHEN 'CASH' THEN AMOUNT
+                     WHEN 'BALANCE' THEN -AMOUNT
+                     ELSE 0 END), 0) AS AMOUNT, SALESDATE
+            FROM tb_SALESVIEW
+            WHERE (ID='PT' OR ID='BL') AND PRODUCT_NAME IN ('CASH', 'BALANCE') AND REPUSER=@username2
+            GROUP BY COMPANY_CODE, SALESDATE, UNITNO, REPNO, INVOICENO
+
+            UNION ALL
+
+            SELECT INVOICENO, COMPANY_CODE, UNITNO, REPNO, PRODUCT_NAME,
+                   ISNULL(SUM(AMOUNT),0) AS AMOUNT, SALESDATE
+            FROM tb_SALESVIEW
+            WHERE ID='PT' AND PRODUCT_NAME NOT IN ('CASH','BALANCE') AND REPUSER=@username2
+            GROUP BY COMPANY_CODE, SALESDATE, UNITNO, REPNO, INVOICENO, PRODUCT_NAME
+            ) AS CombinedResults
+            ORDER BY COMPANY_CODE ASC, SALESDATE ASC, UNITNO ASC;
+          `);
       }
     }
 
@@ -2205,12 +2249,59 @@ exports.reportData = async (req, res) => {
     let invoiceDataState = false;
 
     if (rowClicked === true || String(rowClicked).toLowerCase() === "true") {
-      const result = await pool.request().query(`
-        USE ${rtweb};
-        SELECT INVOICENO, PRODUCT_CODE, PRODUCT_NAME, QTY, AMOUNT, COSTPRICE, UNITPRICE, DISCOUNT
-        FROM tb_SALESVIEW 
-        WHERE INVOICENO='${invoiceNo}' AND ID IN ('SL','SLF','RF','RFF') AND REPUSER='${username}';
-      `);
+      // Guard: without these, invoice number alone can collide across
+      // company/unit/rep/date and pull in the wrong products.
+      if (!invoiceCompanyCode || !invoiceUnitNo || !invoiceRepNo || !invoiceSalesDate) {
+        return res.status(400).json({
+          message:
+            "Missing invoiceCompanyCode, invoiceUnitNo, invoiceRepNo or invoiceSalesDate for invoice lookup",
+        });
+      }
+
+      // invoiceSalesDate arrives already normalized as "YYYY-MM-DD" from the
+      // frontend table (SALESDATE.split("T")[0]) — do NOT run it through
+      // formatDate() again, that double-formatting is what breaks the parse.
+      // Build a real JS Date and let the mssql driver send it as a proper
+      // SQL date parameter instead of relying on server-side string CONVERT.
+      const parsedInvoiceDate = new Date(invoiceSalesDate);
+      if (isNaN(parsedInvoiceDate.getTime())) {
+        return res.status(400).json({ message: "Invalid invoiceSalesDate format" });
+      }
+
+      const result = await pool
+        .request()
+        .input("invoiceNo", mssql.VarChar, invoiceNo)
+        .input("companyCode", mssql.VarChar, invoiceCompanyCode)
+        .input("unitNo", mssql.VarChar, invoiceUnitNo)
+        .input("repNo", mssql.VarChar, invoiceRepNo)
+        .input("salesDate", mssql.Date, parsedInvoiceDate)
+        .input("username3", mssql.VarChar, username)
+        .query(`
+          USE ${rtweb};
+          SELECT
+            sv.INVOICENO,
+            sv.PRODUCT_CODE,
+            sv.PRODUCT_NAME,
+            sv.QTY,
+            sv.AMOUNT,
+            sv.COSTPRICE,
+            sv.UNITPRICE,
+            sv.DISCOUNT,
+            master.[TIME] AS [TIME]
+          FROM tb_SALESVIEW sv
+          LEFT JOIN POSBACK_SYSTEM.dbo.tb_SALESVIEW master
+            ON master.INVOICENO = sv.INVOICENO
+            AND master.COMPANY_CODE = sv.COMPANY_CODE
+            AND master.PRODUCT_CODE = sv.PRODUCT_CODE
+            AND master.ID = sv.ID
+          WHERE sv.INVOICENO = @invoiceNo
+            AND sv.COMPANY_CODE = @companyCode
+            AND sv.UNITNO = @unitNo
+            AND sv.REPNO = @repNo
+            AND CAST(sv.SALESDATE AS date) = @salesDate
+            AND sv.ID IN ('SL','SLF','RF','RFF')
+            AND sv.REPUSER = @username3;
+        `);
 
       invoiceData = result.recordset;
       invoiceDataState = true;
@@ -2224,7 +2315,6 @@ exports.reportData = async (req, res) => {
       reportData: reportQuery ? reportQuery.recordset : [],
       invoiceData,
     });
-
   } catch (error) {
     console.error("Error generating report:", error);
     res.status(500).json({ message: "Failed to find report data" });
