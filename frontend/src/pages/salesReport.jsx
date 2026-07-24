@@ -259,17 +259,16 @@ const SalesReportDashboard = () => {
 
           <div className="p-4 mt-4 rounded-lg shadow-md" style={{ backgroundColor: "#d8d8d8" }}>
             <div className="mt-10">
-              {/* KEY FIX */}
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:flex-nowrap sm:justify-between">
+              <div className="flex flex-col flex-wrap items-stretch gap-4 lg:flex-row lg:items-end lg:justify-between">
                 {/* Left: filters */}
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:flex-nowrap">
+                <div className="flex flex-col flex-wrap w-full gap-4 min-w-0 sm:flex-row sm:items-end lg:w-auto">
                   {/* Date Picker */}
-                  <div className="shrink-0">
+                  <div className="w-full min-w-0 sm:w-auto">
                     <DatePicker label="Select Date Range:" onDateChange={setSelectedDates} />
                   </div>
 
                   {/* Company */}
-                  <div className="shrink-0">
+                  <div className="w-full min-w-0 sm:w-auto">
                     <label className="block text-sm font-medium text-gray-700">
                       Select Company:
                     </label>
@@ -288,7 +287,7 @@ const SalesReportDashboard = () => {
                   </div>
 
                   {/* Months */}
-                  <div className="shrink-0">
+                  <div className="w-full min-w-0 sm:w-auto">
                     <label className="block text-sm font-medium text-gray-700">
                       Select Months (Optional):
                     </label>
@@ -301,11 +300,11 @@ const SalesReportDashboard = () => {
                 </div>
 
                 {/* Right: buttons */}
-                <div className="flex gap-4 shrink-0">
+                <div className="flex w-full gap-4 shrink-0 sm:w-auto">
                   <button
                     onClick={handleSubmit}
                     disabled={isSubmitDisabled}
-                    className={`px-6 py-2 bg-black text-white rounded-md shadow-md hover:bg-gray-800 transition ${
+                    className={`flex-1 sm:flex-none px-6 py-2 bg-black text-white rounded-md shadow-md hover:bg-gray-800 transition ${
                       isSubmitDisabled ? "opacity-50 cursor-not-allowed" : ""
                     }`}
                   >
@@ -314,14 +313,13 @@ const SalesReportDashboard = () => {
                   <button
                     onClick={handleRefresh}
                     disabled={disable}
-                    className={`px-6 py-2 bg-black text-white rounded-md shadow-md hover:bg-gray-800 transition ${
+                    className={`flex-1 sm:flex-none px-6 py-2 bg-black text-white rounded-md shadow-md hover:bg-gray-800 transition ${
                       disable ? "opacity-50 cursor-not-allowed" : ""
                     }`}
                   >
                     Refresh
                   </button>
                 </div>
-
               </div>
             </div>
           </div>
@@ -337,23 +335,23 @@ const SalesReportDashboard = () => {
 
           {showReport && tableRecords.length > 0 && (
             <>
-              <style jsx>{`
-                .sales-report-table-container th {
-                  font-weight: 700 !important;
-                  color: #111827;
-                  background-color: #f3f4f6;
-                }
-                .sales-report-table-container tbody td:first-child {
-                  font-weight: 700 !important;
-                  color: #111827;
-                }
-                .sales-report-table-container tbody tr {
-                  cursor: default !important;
-                }
-                .sales-report-table-container tbody tr:hover {
-                  background-color: transparent !important;
-                }
-              `}</style>
+              <style>{`
+              .sales-report-table-container th {
+                font-weight: 700 !important;
+                color: #111827;
+                background-color: #f3f4f6;
+              }
+              .sales-report-table-container tbody td:first-child {
+                font-weight: 700 !important;
+                color: #111827;
+              }
+              .sales-report-table-container tbody tr {
+                cursor: default !important;
+              }
+              .sales-report-table-container tbody tr:hover {
+                background-color: transparent !important;
+              }
+            `}</style>
 
               <div className="mt-10 sales-report-table-container">
                 <div className="bg-white p-4 border border-gray-300 rounded-md shadow-md overflow-x-auto">
