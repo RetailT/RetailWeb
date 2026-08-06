@@ -1026,323 +1026,321 @@ exports.forgotPassword = async (req, res) => {
 };
 
 // GET - Today's, Yesterday's & Day-Before-Yesterday Sales Summary (with % change for both)
-// exports.getTodayYesterdaySales = async (req, res) => {
-//   let pool;
-//   try {
-//     const user_ip = String(req.user.ip).trim();
-//     pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+exports.getTodayYesterdaySales = async (req, res) => {
+  let pool;
+  try {
+    const user_ip = String(req.user.ip).trim();
+    pool = await connectToUserDatabase(user_ip, req.user.port.trim());
 
-//     if (!pool || !pool.connected) {
-//       return res.status(500).json({ message: "Database connection failed" });
-//     }
+    if (!pool || !pool.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
 
-//     // Optional: filter to a specific company. If not passed, returns all companies.
-//     const companyCode = req.query.company ? req.query.company.trim() : null;
+    // Optional: filter to a specific company. If not passed, returns all companies.
+    const companyCode = req.query.company ? req.query.company.trim() : null;
 
-//     const request = pool.request();
+    const request = pool.request();
 
-//     let query = `
-//       USE [${posback}];
-//       SELECT
-//         T.Company_Code,
-//         T.TodaySales,
-//         ISNULL(Y.YesterdaySales, 0) AS YesterdaySales,
-//         ISNULL(DBY.DayBeforeYesterdaySales, 0) AS DayBeforeYesterdaySales,
+    let query = `
+      USE [${posback}];
+      SELECT
+        T.Company_Code,
+        T.TodaySales,
+        ISNULL(Y.YesterdaySales, 0) AS YesterdaySales,
+        ISNULL(DBY.DayBeforeYesterdaySales, 0) AS DayBeforeYesterdaySales,
 
-//         T.TodaySales - ISNULL(Y.YesterdaySales, 0) AS Difference,
-//         CASE
-//           WHEN ISNULL(Y.YesterdaySales, 0) = 0 THEN 0
-//           ELSE ROUND(
-//             ((T.TodaySales - Y.YesterdaySales) * 100.0) / Y.YesterdaySales,
-//             2
-//           )
-//         END AS SalesPercentage,
+        T.TodaySales - ISNULL(Y.YesterdaySales, 0) AS Difference,
+        CASE
+          WHEN ISNULL(Y.YesterdaySales, 0) = 0 THEN 0
+          ELSE ROUND(
+            ((T.TodaySales - Y.YesterdaySales) * 100.0) / Y.YesterdaySales,
+            2
+          )
+        END AS SalesPercentage,
 
-//         ISNULL(Y.YesterdaySales, 0) - ISNULL(DBY.DayBeforeYesterdaySales, 0) AS YesterdayDifference,
-//         CASE
-//           WHEN ISNULL(DBY.DayBeforeYesterdaySales, 0) = 0 THEN 0
-//           ELSE ROUND(
-//             ((ISNULL(Y.YesterdaySales, 0) - DBY.DayBeforeYesterdaySales) * 100.0) / DBY.DayBeforeYesterdaySales,
-//             2
-//           )
-//         END AS YesterdaySalesPercentage
+        ISNULL(Y.YesterdaySales, 0) - ISNULL(DBY.DayBeforeYesterdaySales, 0) AS YesterdayDifference,
+        CASE
+          WHEN ISNULL(DBY.DayBeforeYesterdaySales, 0) = 0 THEN 0
+          ELSE ROUND(
+            ((ISNULL(Y.YesterdaySales, 0) - DBY.DayBeforeYesterdaySales) * 100.0) / DBY.DayBeforeYesterdaySales,
+            2
+          )
+        END AS YesterdaySalesPercentage
 
-//       FROM
-//       (
-//         SELECT
-//           Company_Code,
-//           SUM(AMOUNT) AS TodaySales
-//         FROM tb_ONLINESALESMAIN
-//         WHERE [Date] >= CAST(GETDATE() AS DATE)
-//           AND [Date] < DATEADD(DAY, 1, CAST(GETDATE() AS DATE))
-//         ${companyCode ? "AND Company_Code = @companyCode" : ""}
-//         GROUP BY Company_Code
-//       ) T
+      FROM
+      (
+        SELECT
+          Company_Code,
+          SUM(AMOUNT) AS TodaySales
+        FROM tb_ONLINESALESMAIN
+        WHERE [Date] >= CAST(GETDATE() AS DATE)
+          AND [Date] < DATEADD(DAY, 1, CAST(GETDATE() AS DATE))
+        ${companyCode ? "AND Company_Code = @companyCode" : ""}
+        GROUP BY Company_Code
+      ) T
 
-//       LEFT JOIN
-//       (
-//         SELECT
-//           Company_Code,
-//           SUM(AMOUNT) AS YesterdaySales
-//         FROM tb_SALES
-//         WHERE ID = 'SL'
-//           AND SALESDATE >= DATEADD(DAY, -1, CAST(GETDATE() AS DATE))
-//           AND SALESDATE < CAST(GETDATE() AS DATE)
-//         ${companyCode ? "AND Company_Code = @companyCode" : ""}
-//         GROUP BY Company_Code
-//       ) Y
-//       ON T.Company_Code = Y.Company_Code
+      LEFT JOIN
+      (
+        SELECT
+          Company_Code,
+          SUM(AMOUNT) AS YesterdaySales
+        FROM tb_SALES
+        WHERE ID = 'SL'
+          AND SALESDATE >= DATEADD(DAY, -1, CAST(GETDATE() AS DATE))
+          AND SALESDATE < CAST(GETDATE() AS DATE)
+        ${companyCode ? "AND Company_Code = @companyCode" : ""}
+        GROUP BY Company_Code
+      ) Y
+      ON T.Company_Code = Y.Company_Code
 
-//       LEFT JOIN
-//       (
-//         SELECT
-//           Company_Code,
-//           SUM(AMOUNT) AS DayBeforeYesterdaySales
-//         FROM tb_SALES
-//         WHERE ID = 'SL'
-//           AND SALESDATE >= DATEADD(DAY, -2, CAST(GETDATE() AS DATE))
-//           AND SALESDATE < DATEADD(DAY, -1, CAST(GETDATE() AS DATE))
-//         ${companyCode ? "AND Company_Code = @companyCode" : ""}
-//         GROUP BY Company_Code
-//       ) DBY
-//       ON T.Company_Code = DBY.Company_Code;
-//     `;
+      LEFT JOIN
+      (
+        SELECT
+          Company_Code,
+          SUM(AMOUNT) AS DayBeforeYesterdaySales
+        FROM tb_SALES
+        WHERE ID = 'SL'
+          AND SALESDATE >= DATEADD(DAY, -2, CAST(GETDATE() AS DATE))
+          AND SALESDATE < DATEADD(DAY, -1, CAST(GETDATE() AS DATE))
+        ${companyCode ? "AND Company_Code = @companyCode" : ""}
+        GROUP BY Company_Code
+      ) DBY
+      ON T.Company_Code = DBY.Company_Code;
+    `;
 
-//     if (companyCode) {
-//       request.input("companyCode", mssql.VarChar, companyCode);
-//     }
+    if (companyCode) {
+      request.input("companyCode", mssql.VarChar, companyCode);
+    }
 
-//     const result = await request.query(query);
+    const result = await request.query(query);
 
-//     const records = (result.recordset || []).map((row) => ({
-//       companyCode: (row.Company_Code || "").trim(),
-//       todaySales: parseFloat(row.TodaySales || 0).toFixed(2),
-//       yesterdaySales: parseFloat(row.YesterdaySales || 0).toFixed(2),
-//       dayBeforeYesterdaySales: parseFloat(row.DayBeforeYesterdaySales || 0).toFixed(2),
-//       difference: parseFloat(row.Difference || 0).toFixed(2),
-//       salesPercentage: parseFloat(row.SalesPercentage || 0),
-//       yesterdayDifference: parseFloat(row.YesterdayDifference || 0).toFixed(2),
-//       yesterdaySalesPercentage: parseFloat(row.YesterdaySalesPercentage || 0),
-//     }));
+    const records = (result.recordset || []).map((row) => ({
+      companyCode: (row.Company_Code || "").trim(),
+      todaySales: parseFloat(row.TodaySales || 0).toFixed(2),
+      yesterdaySales: parseFloat(row.YesterdaySales || 0).toFixed(2),
+      dayBeforeYesterdaySales: parseFloat(row.DayBeforeYesterdaySales || 0).toFixed(2),
+      difference: parseFloat(row.Difference || 0).toFixed(2),
+      salesPercentage: parseFloat(row.SalesPercentage || 0),
+      yesterdayDifference: parseFloat(row.YesterdayDifference || 0).toFixed(2),
+      yesterdaySalesPercentage: parseFloat(row.YesterdaySalesPercentage || 0),
+    }));
 
-//     // If a specific company was requested, return single object (not array)
-//     if (companyCode) {
-//       return res.status(200).json({
-//         success: true,
-//         data: records[0] || {
-//           companyCode,
-//           todaySales: "0.00",
-//           yesterdaySales: "0.00",
-//           dayBeforeYesterdaySales: "0.00",
-//           difference: "0.00",
-//           salesPercentage: 0,
-//           yesterdayDifference: "0.00",
-//           yesterdaySalesPercentage: 0,
-//         },
-//       });
-//     }
+    // If a specific company was requested, return single object (not array)
+    if (companyCode) {
+      return res.status(200).json({
+        success: true,
+        data: records[0] || {
+          companyCode,
+          todaySales: "0.00",
+          yesterdaySales: "0.00",
+          dayBeforeYesterdaySales: "0.00",
+          difference: "0.00",
+          salesPercentage: 0,
+          yesterdayDifference: "0.00",
+          yesterdaySalesPercentage: 0,
+        },
+      });
+    }
 
-//     // Otherwise return all companies + a combined total
-//     const totalToday = records.reduce((sum, r) => sum + parseFloat(r.todaySales), 0);
-//     const totalYesterday = records.reduce((sum, r) => sum + parseFloat(r.yesterdaySales), 0);
-//     const totalDayBeforeYesterday = records.reduce((sum, r) => sum + parseFloat(r.dayBeforeYesterdaySales), 0);
+    // Otherwise return all companies + a combined total
+    const totalToday = records.reduce((sum, r) => sum + parseFloat(r.todaySales), 0);
+    const totalYesterday = records.reduce((sum, r) => sum + parseFloat(r.yesterdaySales), 0);
+    const totalDayBeforeYesterday = records.reduce((sum, r) => sum + parseFloat(r.dayBeforeYesterdaySales), 0);
 
-//     const totalPercentage =
-//       totalYesterday === 0 ? 0 : Number((((totalToday - totalYesterday) * 100) / totalYesterday).toFixed(2));
+    const totalPercentage =
+      totalYesterday === 0 ? 0 : Number((((totalToday - totalYesterday) * 100) / totalYesterday).toFixed(2));
 
-//     const totalYesterdayPercentage =
-//       totalDayBeforeYesterday === 0
-//         ? 0
-//         : Number((((totalYesterday - totalDayBeforeYesterday) * 100) / totalDayBeforeYesterday).toFixed(2));
+    const totalYesterdayPercentage =
+      totalDayBeforeYesterday === 0
+        ? 0
+        : Number((((totalYesterday - totalDayBeforeYesterday) * 100) / totalDayBeforeYesterday).toFixed(2));
 
-//     return res.status(200).json({
-//       success: true,
-//       data: records,
-//       summary: {
-//         todaySales: totalToday.toFixed(2),
-//         yesterdaySales: totalYesterday.toFixed(2),
-//         dayBeforeYesterdaySales: totalDayBeforeYesterday.toFixed(2),
-//         difference: (totalToday - totalYesterday).toFixed(2),
-//         salesPercentage: totalPercentage,
-//         yesterdayDifference: (totalYesterday - totalDayBeforeYesterday).toFixed(2),
-//         yesterdaySalesPercentage: totalYesterdayPercentage,
-//       },
-//     });
-//   } catch (error) {
-//     console.error("getTodayYesterdaySales error:", error);
-//     return res.status(500).json({ message: "Failed to fetch sales summary", error: error.message });
-//   }
-// };
+    return res.status(200).json({
+      success: true,
+      data: records,
+      summary: {
+        todaySales: totalToday.toFixed(2),
+        yesterdaySales: totalYesterday.toFixed(2),
+        dayBeforeYesterdaySales: totalDayBeforeYesterday.toFixed(2),
+        difference: (totalToday - totalYesterday).toFixed(2),
+        salesPercentage: totalPercentage,
+        yesterdayDifference: (totalYesterday - totalDayBeforeYesterday).toFixed(2),
+        yesterdaySalesPercentage: totalYesterdayPercentage,
+      },
+    });
+  } catch (error) {
+    console.error("getTodayYesterdaySales error:", error);
+    return res.status(500).json({ message: "Failed to fetch sales summary", error: error.message });
+  }
+};
 
-// // GET - Hourly sales trend for Today and Yesterday (for sparkline charts)
-// // Returns hour-by-hour cumulative or per-hour sales so Today's card and
-// // Yesterday's card show genuinely different, meaningful shapes.
-// exports.getSalesTrend = async (req, res) => {
-//   let pool;
-//   try {
-//     const user_ip = String(req.user.ip).trim();
-//     pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+// GET - Hourly sales trend for Today and Yesterday (for sparkline charts)
+// Returns hour-by-hour cumulative or per-hour sales so Today's card and
+// Yesterday's card show genuinely different, meaningful shapes.
+exports.getSalesTrend = async (req, res) => {
+  let pool;
+  try {
+    const user_ip = String(req.user.ip).trim();
+    pool = await connectToUserDatabase(user_ip, req.user.port.trim());
 
-//     if (!pool || !pool.connected) {
-//       return res.status(500).json({ message: "Database connection failed" });
-//     }
+    if (!pool || !pool.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
 
-//     const companyCode = req.query.company ? req.query.company.trim() : null;
-//     const request = pool.request();
+    const companyCode = req.query.company ? req.query.company.trim() : null;
+    const request = pool.request();
 
-//     // Today's hourly sales (from tb_ONLINESALESMAIN - same source as today's total)
-//     let todayQuery = `
-//       USE [${posback}];
-//       SELECT
-//         DATEPART(HOUR, [Date]) AS SaleHour,
-//         SUM(AMOUNT) AS HourSales
-//       FROM tb_ONLINESALESMAIN
-//       WHERE [Date] >= CAST(GETDATE() AS DATE)
-//         AND [Date] < DATEADD(DAY, 1, CAST(GETDATE() AS DATE))
-//       ${companyCode ? "AND Company_Code = @companyCode" : ""}
-//       GROUP BY DATEPART(HOUR, [Date])
-//       ORDER BY SaleHour ASC;
-//     `;
+    // Today's hourly sales (from tb_ONLINESALESMAIN - same source as today's total)
+    let todayQuery = `
+      USE [${posback}];
+      SELECT
+        DATEPART(HOUR, [Date]) AS SaleHour,
+        SUM(AMOUNT) AS HourSales
+      FROM tb_ONLINESALESMAIN
+      WHERE [Date] >= CAST(GETDATE() AS DATE)
+        AND [Date] < DATEADD(DAY, 1, CAST(GETDATE() AS DATE))
+      ${companyCode ? "AND Company_Code = @companyCode" : ""}
+      GROUP BY DATEPART(HOUR, [Date])
+      ORDER BY SaleHour ASC;
+    `;
 
-//     // Yesterday's hourly sales (from tb_SALES - same source as yesterday's total)
-//     let yesterdayQuery = `
-//       USE [${posback}];
-//       SELECT
-//         DATEPART(HOUR, SALESDATE) AS SaleHour,
-//         SUM(AMOUNT) AS HourSales
-//       FROM tb_SALES
-//       WHERE ID = 'SL'
-//         AND SALESDATE >= DATEADD(DAY, -1, CAST(GETDATE() AS DATE))
-//         AND SALESDATE < CAST(GETDATE() AS DATE)
-//       ${companyCode ? "AND Company_Code = @companyCode" : ""}
-//       GROUP BY DATEPART(HOUR, SALESDATE)
-//       ORDER BY SaleHour ASC;
-//     `;
+    // Yesterday's hourly sales (from tb_SALES - same source as yesterday's total)
+    let yesterdayQuery = `
+      USE [${posback}];
+      SELECT
+        DATEPART(HOUR, SALESDATE) AS SaleHour,
+        SUM(AMOUNT) AS HourSales
+      FROM tb_SALES
+      WHERE ID = 'SL'
+        AND SALESDATE >= DATEADD(DAY, -1, CAST(GETDATE() AS DATE))
+        AND SALESDATE < CAST(GETDATE() AS DATE)
+      ${companyCode ? "AND Company_Code = @companyCode" : ""}
+      GROUP BY DATEPART(HOUR, SALESDATE)
+      ORDER BY SaleHour ASC;
+    `;
 
-//     if (companyCode) {
-//       request.input("companyCode", mssql.VarChar, companyCode);
-//     }
+    if (companyCode) {
+      request.input("companyCode", mssql.VarChar, companyCode);
+    }
 
-//     const todayResult = await request.query(todayQuery);
+    const todayResult = await request.query(todayQuery);
 
-//     // Need a fresh request object for the second query (mssql requirement)
-//     const request2 = pool.request();
-//     if (companyCode) {
-//       request2.input("companyCode", mssql.VarChar, companyCode);
-//     }
-//     const yesterdayResult = await request2.query(yesterdayQuery);
+    // Need a fresh request object for the second query (mssql requirement)
+    const request2 = pool.request();
+    if (companyCode) {
+      request2.input("companyCode", mssql.VarChar, companyCode);
+    }
+    const yesterdayResult = await request2.query(yesterdayQuery);
 
-//     // Build 0-23 hour maps, filling missing hours with 0
-//     const buildHourlySeries = (rows) => {
-//       const map = {};
-//       (rows || []).forEach((row) => {
-//         map[row.SaleHour] = parseFloat(row.HourSales || 0);
-//       });
-//       const series = [];
-//       for (let h = 0; h <= 23; h++) {
-//         series.push({ hour: h, v: map[h] || 0 });
-//       }
-//       return series;
-//     };
+    // Build 0-23 hour maps, filling missing hours with 0
+    const buildHourlySeries = (rows) => {
+      const map = {};
+      (rows || []).forEach((row) => {
+        map[row.SaleHour] = parseFloat(row.HourSales || 0);
+      });
+      const series = [];
+      for (let h = 0; h <= 23; h++) {
+        series.push({ hour: h, v: map[h] || 0 });
+      }
+      return series;
+    };
 
-//     const todayTrend = buildHourlySeries(todayResult.recordset);
-//     const yesterdayTrend = buildHourlySeries(yesterdayResult.recordset);
+    const todayTrend = buildHourlySeries(todayResult.recordset);
+    const yesterdayTrend = buildHourlySeries(yesterdayResult.recordset);
 
-//     // Today's trend should stop at the current hour (no sales exist for future hours yet)
-//     const currentHour = new Date().getHours();
-//     const todayTrendTrimmed = todayTrend.filter((p) => p.hour <= currentHour);
+    // Today's trend should stop at the current hour (no sales exist for future hours yet)
+    const currentHour = new Date().getHours();
+    const todayTrendTrimmed = todayTrend.filter((p) => p.hour <= currentHour);
 
-//     return res.status(200).json({
-//       success: true,
-//       data: {
-//         today: todayTrendTrimmed,
-//         yesterday: yesterdayTrend,
-//       },
-//     });
-//   } catch (error) {
-//     console.error("getSalesTrend error:", error);
-//     return res.status(500).json({ message: "Failed to fetch sales trend", error: error.message });
-//   }
-// };
+    return res.status(200).json({
+      success: true,
+      data: {
+        today: todayTrendTrimmed,
+        yesterday: yesterdayTrend,
+      },
+    });
+  } catch (error) {
+    console.error("getSalesTrend error:", error);
+    return res.status(500).json({ message: "Failed to fetch sales trend", error: error.message });
+  }
+};
 
-// // GET - Company Performance: This Month vs Last Month sales, ranked
-// exports.getCompanyPerformance = async (req, res) => {
-//   let pool;
-//   try {
-//     const user_ip = String(req.user.ip).trim();
-//     pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+// GET - Branch Performance: This Month vs Last Month sales, ranked
+exports.getBranchPerformance = async (req, res) => {
+  let pool;
+  try {
+    const user_ip = String(req.user.ip).trim();
+    pool = await connectToUserDatabase(user_ip, req.user.port.trim());
 
-//     if (!pool || !pool.connected) {
-//       return res.status(500).json({ message: "Database connection failed" });
-//     }
+    if (!pool || !pool.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
 
-//     // NOTE: req.user.companyName (e.g. "RT") is the tenant/system identifier
-//     // used to pick which user database to connect to - it is NOT a row in
-//     // tb_COMPANY. tb_COMPANY holds the actual companies that live inside this
-//     // tenant's database (e.g. STORES, RETAIL TARGET DEMO, PRODUCTION), so we
-//     // return performance for all of them rather than filtering by name.
+    // NOTE: tb_COMPANY holds the branch records for this tenant's database
+    // (e.g. Wadduwa, Galle) - confirmed these are physical branches, not
+    // internal divisions.
 
-//     const request = pool.request();
+    const request = pool.request();
 
-//     let query = `
-//       USE [${posback}];
-//       SELECT
-//         C.COMPANY_CODE,
-//         C.COMPANY_NAME,
-//         ISNULL(TM.ThisMonthSales, 0) AS ThisMonthSales,
-//         ISNULL(LM.LastMonthSales, 0) AS LastMonthSales,
-//         CASE
-//           WHEN ISNULL(LM.LastMonthSales, 0) = 0 THEN 0
-//           ELSE ROUND(
-//             ((ISNULL(TM.ThisMonthSales, 0) - LM.LastMonthSales) * 100.0) / LM.LastMonthSales,
-//             2
-//           )
-//         END AS GrowthPercentage
-//       FROM tb_COMPANY C
+    let query = `
+      USE [${posback}];
+      SELECT
+        C.COMPANY_CODE,
+        C.COMPANY_NAME,
+        ISNULL(TM.ThisMonthSales, 0) AS ThisMonthSales,
+        ISNULL(LM.LastMonthSales, 0) AS LastMonthSales,
+        CASE
+          WHEN ISNULL(LM.LastMonthSales, 0) = 0 THEN 0
+          ELSE ROUND(
+            ((ISNULL(TM.ThisMonthSales, 0) - LM.LastMonthSales) * 100.0) / LM.LastMonthSales,
+            2
+          )
+        END AS GrowthPercentage
+      FROM tb_COMPANY C
 
-//       LEFT JOIN
-//       (
-//         SELECT Company_Code, SUM(AMOUNT) AS ThisMonthSales
-//         FROM tb_SALES
-//         WHERE ID = 'SL'
-//           AND SALESDATE >= CAST(CONVERT(VARCHAR(6), GETDATE(), 112) + '01' AS DATETIME)
-//           AND SALESDATE < DATEADD(MONTH, 1, CAST(CONVERT(VARCHAR(6), GETDATE(), 112) + '01' AS DATETIME))
-//         GROUP BY Company_Code
-//       ) TM ON C.COMPANY_CODE = TM.Company_Code
+      LEFT JOIN
+      (
+        SELECT Company_Code, SUM(AMOUNT) AS ThisMonthSales
+        FROM tb_SALES
+        WHERE ID = 'SL'
+          AND SALESDATE >= CAST(CONVERT(VARCHAR(6), GETDATE(), 112) + '01' AS DATETIME)
+          AND SALESDATE < DATEADD(MONTH, 1, CAST(CONVERT(VARCHAR(6), GETDATE(), 112) + '01' AS DATETIME))
+        GROUP BY Company_Code
+      ) TM ON C.COMPANY_CODE = TM.Company_Code
 
-//       LEFT JOIN
-//       (
-//         SELECT Company_Code, SUM(AMOUNT) AS LastMonthSales
-//         FROM tb_SALES
-//         WHERE ID = 'SL'
-//           AND SALESDATE >= DATEADD(MONTH, -1, CAST(CONVERT(VARCHAR(6), GETDATE(), 112) + '01' AS DATETIME))
-//           AND SALESDATE < CAST(CONVERT(VARCHAR(6), GETDATE(), 112) + '01' AS DATETIME)
-//         GROUP BY Company_Code
-//       ) LM ON C.COMPANY_CODE = LM.Company_Code
+      LEFT JOIN
+      (
+        SELECT Company_Code, SUM(AMOUNT) AS LastMonthSales
+        FROM tb_SALES
+        WHERE ID = 'SL'
+          AND SALESDATE >= DATEADD(MONTH, -1, CAST(CONVERT(VARCHAR(6), GETDATE(), 112) + '01' AS DATETIME))
+          AND SALESDATE < CAST(CONVERT(VARCHAR(6), GETDATE(), 112) + '01' AS DATETIME)
+        GROUP BY Company_Code
+      ) LM ON C.COMPANY_CODE = LM.Company_Code
 
-//       ORDER BY ISNULL(TM.ThisMonthSales, 0) DESC;
-//     `;
+      ORDER BY ISNULL(TM.ThisMonthSales, 0) DESC;
+    `;
 
-//     const result = await request.query(query);
+    const result = await request.query(query);
 
-//     const records = (result.recordset || []).map((row, index) => ({
-//       companyName: (row.COMPANY_NAME || "").trim(),
-//       companyCode: (row.COMPANY_CODE || "").trim(),
-//       sales: parseFloat(row.ThisMonthSales || 0),
-//       growth: parseFloat(row.GrowthPercentage || 0),
-//       rank: index + 1,
-//     }));
+    const records = (result.recordset || []).map((row, index) => ({
+      branchName: (row.COMPANY_NAME || "").trim(),
+      branchCode: (row.COMPANY_CODE || "").trim(),
+      sales: parseFloat(row.ThisMonthSales || 0),
+      growth: parseFloat(row.GrowthPercentage || 0),
+      rank: index + 1,
+    }));
 
-//     return res.status(200).json({ success: true, data: records });
-//   } catch (error) {
-//     console.error("getCompanyPerformance error:", error);
-//     return res.status(500).json({ message: "Failed to fetch company performance", error: error.message });
-//   } finally {
-//     if (pool && pool.connected) {
-//       try { await pool.close(); } catch (e) {}
-//     }
-//   }
-// };
+    return res.status(200).json({ success: true, data: records });
+  } catch (error) {
+    console.error("getBranchPerformance error:", error);
+    return res.status(500).json({ message: "Failed to fetch branch performance", error: error.message });
+  } finally {
+    if (pool && pool.connected) {
+      try { await pool.close(); } catch (e) {}
+    }
+  }
+};
 
 //temp sales table
 exports.updateTempSalesTable = async (req, res) => {
