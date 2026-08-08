@@ -90,6 +90,7 @@ app.get("/dashboard-sales-summary", authenticateToken, authController.getTodayYe
 app.get("/sales-trend", authenticateToken, authController.getSalesTrend);
 app.get("/branch-performance", authenticateToken, authController.getBranchPerformance);
 app.get("/top-sales-products", authenticateToken, authController.getTopSalesProducts);
+app.get("/branch-today-yesterday-sales", authenticateToken, authController.getBranchTodayYesterdaySales);
 
 app.post('/update-temp-sales-table', authenticateToken, authController.updateTempSalesTable);
 app.post('/update-temp-grn-table', authenticateToken, authController.updateTempGrnTable);
