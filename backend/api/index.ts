@@ -89,6 +89,7 @@ app.post('/forgot-password', authController.forgotPassword);
 app.get("/dashboard-sales-summary", authenticateToken, authController.getTodayYesterdaySales);
 app.get("/sales-trend", authenticateToken, authController.getSalesTrend);
 app.get("/branch-performance", authenticateToken, authController.getBranchPerformance);
+app.get("/top-sales-products", authenticateToken, authController.getTopSalesProducts);
 
 app.post('/update-temp-sales-table', authenticateToken, authController.updateTempSalesTable);
 app.post('/update-temp-grn-table', authenticateToken, authController.updateTempGrnTable);
