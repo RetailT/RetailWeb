@@ -59,69 +59,114 @@ const Dashboard = () => {
   const [salesTrend, setSalesTrend] = useState({ today: [], yesterday: [] });
   const [loadingTrend, setLoadingTrend] = useState(true);
 
+  // ---- Real Top 10 Products data (fetched from backend) ----
+  const [topProducts, setTopProducts] = useState([]);
+  const [loadingTopProducts, setLoadingTopProducts] = useState(true);
+  const [topProductsError, setTopProductsError] = useState(null);
+  const [topProductsMonths, setTopProductsMonths] = useState(3); // dropdown: 1/3/6/12
+
+  // ---- Page-level loading: true until ALL dashboard data has finished loading ----
+  const [pageLoading, setPageLoading] = useState(true);
+
   const fetchSalesSummary = async () => {
-  try {
-    setLoadingSales(true);
-    setSalesError(null);
-    const res = await axios.get(
-      `${process.env.REACT_APP_BACKEND_URL}dashboard-sales-summary`,
-      { headers: { Authorization: `Bearer ${authToken}` } }
-    );
-    if (res.data.success) {
-      setSalesSummary(res.data.summary || res.data.data);
+    try {
+      setLoadingSales(true);
+      setSalesError(null);
+      const res = await axios.get(
+        `${process.env.REACT_APP_BACKEND_URL}dashboard-sales-summary`,
+        { headers: { Authorization: `Bearer ${authToken}` } }
+      );
+      if (res.data.success) {
+        setSalesSummary(res.data.summary || res.data.data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch sales summary:", err);
+      setSalesError("Couldn't load sales data. Please refresh.");
+    } finally {
+      setLoadingSales(false);
     }
-  } catch (err) {
-    console.error("Failed to fetch sales summary:", err);
-    setSalesError("Couldn't load sales data. Please refresh.");
-  } finally {
-    setLoadingSales(false);
-  }
-};
-
-const fetchSalesTrend = async () => {
-  try {
-    setLoadingTrend(true);
-    const res = await axios.get(
-      `${process.env.REACT_APP_BACKEND_URL}sales-trend`,
-      { headers: { Authorization: `Bearer ${authToken}` } }
-    );
-    if (res.data.success) {
-      setSalesTrend(res.data.data || { today: [], yesterday: [] });
-    }
-  } catch (err) {
-    console.error("Failed to fetch sales trend:", err);
-  } finally {
-    setLoadingTrend(false);
-  }
-};
-
-const fetchBranchPerformance = async () => {
-  try {
-    setLoadingBranches(true);
-    const res = await axios.get(
-      `${process.env.REACT_APP_BACKEND_URL}branch-performance`,
-      { headers: { Authorization: `Bearer ${authToken}` } }
-    );
-    if (res.data.success) {
-      setBranchPerformance(res.data.data || []);
-    }
-  } catch (err) {
-    console.error("Failed to fetch branch performance:", err);
-  } finally {
-    setLoadingBranches(false);
-  }
-};
-
-useEffect(() => {
-  if (!authToken) return;
-    const loadDashboardData = async () => {
-    await fetchSalesSummary();
-    await fetchSalesTrend();
-    await fetchBranchPerformance();
   };
 
-  loadDashboardData();
-}, [authToken]);
+  const fetchSalesTrend = async () => {
+    try {
+      setLoadingTrend(true);
+      const res = await axios.get(
+        `${process.env.REACT_APP_BACKEND_URL}sales-trend`,
+        { headers: { Authorization: `Bearer ${authToken}` } }
+      );
+      if (res.data.success) {
+        setSalesTrend(res.data.data || { today: [], yesterday: [] });
+      }
+    } catch (err) {
+      console.error("Failed to fetch sales trend:", err);
+    } finally {
+      setLoadingTrend(false);
+    }
+  };
+
+  const fetchBranchPerformance = async () => {
+    try {
+      setLoadingBranches(true);
+      const res = await axios.get(
+        `${process.env.REACT_APP_BACKEND_URL}branch-performance`,
+        { headers: { Authorization: `Bearer ${authToken}` } }
+      );
+      if (res.data.success) {
+        setBranchPerformance(res.data.data || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch branch performance:", err);
+    } finally {
+      setLoadingBranches(false);
+    }
+  };
+
+  // months param eken backend eke ?months= query eka override karanawa
+  const fetchTopProducts = async (months = topProductsMonths) => {
+    try {
+      setLoadingTopProducts(true);
+      setTopProductsError(null);
+      const res = await axios.get(
+        `${process.env.REACT_APP_BACKEND_URL}top-sales-products?months=${months}`,
+        { headers: { Authorization: `Bearer ${authToken}` } }
+      );
+      if (res.data.success) {
+        setTopProducts(res.data.data || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch top products:", err);
+      setTopProductsError("Couldn't load top products. Please refresh.");
+    } finally {
+      setLoadingTopProducts(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!authToken) return;
+
+    // IMPORTANT: run sequentially, not with Promise.all. Firing 4 requests at
+    // once against the remote SQL Server (each opening/closing its own pool
+    // connection) was overloading the connection and causing unrelated
+    // endpoints (e.g. branch-performance) to fail with 500 errors. Awaiting
+    // each one before starting the next keeps only one connection open at a
+    // time - slightly slower overall, but reliable.
+    const loadDashboardData = async () => {
+      await fetchSalesSummary();
+      await fetchSalesTrend();
+      await fetchBranchPerformance();
+      await fetchTopProducts();
+      setPageLoading(false);
+    };
+
+    loadDashboardData();
+  }, [authToken]);
+
+  // User dropdown eken months eka wenas kalama re-fetch wenawa
+  useEffect(() => {
+    if (!authToken) return;
+    fetchTopProducts(topProductsMonths);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topProductsMonths]);
 
   // ---- Remaining dummy data - replace with real API calls later ----
   const [stats] = useState({
@@ -150,12 +195,6 @@ useEffect(() => {
   const [lowStockCount] = useState(15);
   const [lowStockTrend] = useState([
     { v: 8 }, { v: 10 }, { v: 9 }, { v: 12 }, { v: 11 }, { v: 14 }, { v: 15 },
-  ]);
-
-  const [topProducts] = useState([
-    { code: "P001", description: "Coca Cola 1L", qtySold: 450, salesValue: "112,500" },
-    { code: "P002", description: "Anchor Milk Powder 400g", qtySold: 320, salesValue: "96,000" },
-    { code: "P003", description: "ABC Soap", qtySold: 210, salesValue: "42,000" },
   ]);
 
   const [aiRecommendations] = useState([
@@ -200,6 +239,20 @@ useEffect(() => {
     const num = parseFloat(value || 0);
     return num.toLocaleString("en-US", { maximumFractionDigits: 0 });
   };
+
+  // Page eke okkoma data load wena kalata full-screen loader ekak penwanawa,
+  // ekenma stat cards, panels tika ekapaharatama "pop" wenne okkoma ready una passe
+  if (pageLoading) {
+    return (
+      <div className="min-h-screen bg-gray-100">
+        <Navbar />
+        <div className="flex flex-col items-center justify-center min-h-screen gap-4 pt-16 sm:pt-20">
+          <div className="w-12 h-12 border-4 border-orange-500 rounded-full border-t-transparent animate-spin" />
+          <p className="text-sm font-medium text-gray-400">Loading your dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -296,7 +349,7 @@ useEffect(() => {
               sparkId="yesterdaysSales"
               sparkData={loadingTrend ? null : salesTrend.yesterday}
             />
-            {/* <StatCard
+             {/* <StatCard
               label="Customers"
               value={stats.customers}
               icon={<Users className="w-5 h-5" />}
@@ -453,26 +506,69 @@ useEffect(() => {
           </div> */}
 
           {/* Top 10 Products */}
-          {/* <Panel title="Top 10 Products" icon={<BarChart3 className="w-5 h-5 text-orange-500" />}>
-            <div className="w-full mb-6 h-32">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={topProducts} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
-                  <XAxis
-                    dataKey="description"
-                    tick={{ fontSize: 10, fill: "#94a3b8" }}
-                    axisLine={false}
-                    tickLine={false}
-                    interval={0}
-                  />
-                  <Bar dataKey="qtySold" name="Qty Sold" fill="#8b5cf6" radius={[6, 6, 0, 0]} barSize={38} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-            <TableWrapper
-              headers={["Product Code", "Description", "Qty Sold", "Sales Value"]}
-              rows={topProducts.map((p) => [p.code, p.description, p.qtySold, p.salesValue])}
-            />
-          </Panel> */}
+          <Panel
+            title="Top 10 Products"
+            icon={<BarChart3 className="w-5 h-5 text-orange-500" />}
+            headerRight={
+              <select
+                value={topProductsMonths}
+                onChange={(e) => setTopProductsMonths(Number(e.target.value))}
+                className="px-3 py-1.5 text-xs font-semibold text-gray-600 bg-white border border-gray-200 rounded-lg outline-none cursor-pointer hover:border-orange-300"
+              >
+                <option value={1}>Last 1 Month</option>
+                <option value={2}>Last 2 Months</option>
+                <option value={3}>Last 3 Months</option>
+                <option value={4}>Last 4 Months</option>
+                <option value={5}>Last 5 Months</option>
+                <option value={6}>Last 6 Months</option>
+                <option value={7}>Last 7 Months</option>
+                <option value={8}>Last 8 Months</option>
+                <option value={9}>Last 9 Months</option>
+                <option value={10}>Last 10 Months</option>
+                <option value={11}>Last 11 Months</option>
+                <option value={12}>Last 12 Months</option>
+              </select>
+            }
+          >
+            {topProductsError && (
+              <div className="flex items-center gap-3 px-4 py-3 mb-4 text-sm font-medium text-red-700 border border-red-200 rounded-xl bg-red-50">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                {topProductsError}
+              </div>
+            )}
+
+            {loadingTopProducts ? (
+              <p className="py-8 text-sm text-center text-gray-400">Loading...</p>
+            ) : topProducts.length === 0 ? (
+              <p className="py-8 text-sm text-center text-gray-400">No sales data for this period.</p>
+            ) : (
+              <>
+                <div className="w-full mb-6 h-32">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={topProducts} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+                      <XAxis
+                        dataKey="productName"
+                        tick={{ fontSize: 10, fill: "#94a3b8" }}
+                        axisLine={false}
+                        tickLine={false}
+                        interval={0}
+                      />
+                      <Bar dataKey="salesQty" name="Qty Sold" fill="#8b5cf6" radius={[6, 6, 0, 0]} barSize={38} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <TableWrapper
+                  headers={["Product Code", "Product Name", "Qty Sold", "Sales Value"]}
+                  rows={topProducts.map((p) => [
+                    p.productCode,
+                    p.productName,
+                    p.salesQty,
+                    formatCurrency(p.netSalesValue),
+                  ])}
+                />
+              </>
+            )}
+          </Panel>
 
           {/* AI Recommendations */}
           {/* <Panel title="AI Recommendations" icon={<Lightbulb className="w-5 h-5 text-yellow-500" />}>
@@ -520,7 +616,7 @@ const StatCard = ({ label, value, icon, accent, sparkColor, sparkId, sparkData, 
             }`}
           >
             {isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-            {Math.abs(percentage)}%
+            {Math.abs(percentage).toFixed(2)}%
           </span>
         )}
       </div>
@@ -550,14 +646,17 @@ const StatCard = ({ label, value, icon, accent, sparkColor, sparkId, sparkData, 
   );
 };
 
-const Panel = ({ title, subtitle, icon, children }) => (
+const Panel = ({ title, subtitle, icon, headerRight, children }) => (
   <div className="p-5 transition-all duration-200 bg-white border border-gray-100 shadow-lg rounded-2xl sm:p-7 hover:shadow-xl">
-    <div className="pb-4 mb-5 border-b border-gray-100">
-      <div className="flex items-center gap-2">
-        {icon}
-        <h2 className="text-base font-bold text-gray-900 sm:text-lg">{title}</h2>
+    <div className="flex items-center justify-between pb-4 mb-5 border-b border-gray-100">
+      <div>
+        <div className="flex items-center gap-2">
+          {icon}
+          <h2 className="text-base font-bold text-gray-900 sm:text-lg">{title}</h2>
+        </div>
+        {subtitle && <p className="mt-1 ml-7 text-sm text-gray-400">{subtitle}</p>}
       </div>
-      {subtitle && <p className="mt-1 ml-7 text-sm text-gray-400">{subtitle}</p>}
+      {headerRight}
     </div>
     {children}
   </div>
