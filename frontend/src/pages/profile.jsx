@@ -30,6 +30,7 @@ import {
   Pie,
   Cell,
   XAxis,
+  Tooltip,
   ResponsiveContainer,
 } from "recharts";
 
@@ -67,6 +68,11 @@ const Dashboard = () => {
 
   // ---- Page-level loading: true until ALL dashboard data has finished loading ----
   const [pageLoading, setPageLoading] = useState(true);
+
+  // ---- Branch-wise Today's vs Yesterday's Sales (real data, fetched from backend) ----
+  const [branchTodayYesterdaySales, setBranchTodayYesterdaySales] = useState([]);
+  const [loadingBranchTodayYesterday, setLoadingBranchTodayYesterday] = useState(true);
+  const [branchTodayYesterdayError, setBranchTodayYesterdayError] = useState(null);
 
   const fetchSalesSummary = async () => {
     try {
@@ -121,7 +127,27 @@ const Dashboard = () => {
     }
   };
 
-  // months param eken backend eke ?months= query eka override karanawa
+  // Branch-wise Today's vs Yesterday's Sales (with branch names) - real backend call
+  const fetchBranchTodayYesterdaySales = async () => {
+    try {
+      setLoadingBranchTodayYesterday(true);
+      setBranchTodayYesterdayError(null);
+      const res = await axios.get(
+        `${process.env.REACT_APP_BACKEND_URL}branch-today-yesterday-sales`,
+        { headers: { Authorization: `Bearer ${authToken}` } }
+      );
+      if (res.data.success) {
+        setBranchTodayYesterdaySales(res.data.data || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch branch-wise today/yesterday sales:", err);
+      setBranchTodayYesterdayError("Couldn't load branch-wise sales. Please refresh.");
+    } finally {
+      setLoadingBranchTodayYesterday(false);
+    }
+  };
+
+  // months parameter overrides the ?months= query parameter in the backend
   const fetchTopProducts = async (months = topProductsMonths) => {
     try {
       setLoadingTopProducts(true);
@@ -144,16 +170,17 @@ const Dashboard = () => {
   useEffect(() => {
     if (!authToken) return;
 
-    // IMPORTANT: run sequentially, not with Promise.all. Firing 4 requests at
-    // once against the remote SQL Server (each opening/closing its own pool
-    // connection) was overloading the connection and causing unrelated
-    // endpoints (e.g. branch-performance) to fail with 500 errors. Awaiting
-    // each one before starting the next keeps only one connection open at a
-    // time - slightly slower overall, but reliable.
+    // IMPORTANT: run sequentially, not with Promise.all. Firing several
+    // requests at once against the remote SQL Server (each opening/closing
+    // its own pool connection) was overloading the connection and causing
+    // unrelated endpoints (e.g. branch-performance) to fail with 500 errors.
+    // Awaiting each one before starting the next keeps only one connection
+    // open at a time - slightly slower overall, but reliable.
     const loadDashboardData = async () => {
       await fetchSalesSummary();
       await fetchSalesTrend();
       await fetchBranchPerformance();
+      await fetchBranchTodayYesterdaySales();
       await fetchTopProducts();
       setPageLoading(false);
     };
@@ -161,7 +188,7 @@ const Dashboard = () => {
     loadDashboardData();
   }, [authToken]);
 
-  // User dropdown eken months eka wenas kalama re-fetch wenawa
+  // changing the months value from the user dropdown triggers a re-fetch of the data
   useEffect(() => {
     if (!authToken) return;
     fetchTopProducts(topProductsMonths);
@@ -240,8 +267,7 @@ const Dashboard = () => {
     return num.toLocaleString("en-US", { maximumFractionDigits: 0 });
   };
 
-  // Page eke okkoma data load wena kalata full-screen loader ekak penwanawa,
-  // ekenma stat cards, panels tika ekapaharatama "pop" wenne okkoma ready una passe
+  // A full-screen loader is displayed while all the data on the page is loading
   if (pageLoading) {
     return (
       <div className="min-h-screen bg-gray-100">
@@ -368,6 +394,39 @@ const Dashboard = () => {
               sparkData={avgBillTrend}
             /> */}
           </div>
+
+          {/* Branch-wise Today's vs Yesterday's Sales - colorful grid cards */}
+          <Panel
+            title="Branch-wise Sales"
+            subtitle="Today's & Yesterday's Sales by Branch"
+            icon={<BarChart3 className="w-5 h-5 text-orange-500" />}
+          >
+            {branchTodayYesterdayError && (
+              <div className="flex items-center gap-3 px-4 py-3 mb-4 text-sm font-medium text-red-700 border border-red-200 rounded-xl bg-red-50">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                {branchTodayYesterdayError}
+              </div>
+            )}
+
+            {loadingBranchTodayYesterday ? (
+              <p className="py-8 text-sm text-center text-gray-400">Loading...</p>
+            ) : branchTodayYesterdaySales.length === 0 ? (
+              <p className="py-8 text-sm text-center text-gray-400">No sales data for today or yesterday.</p>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {branchTodayYesterdaySales.map((b, i) => (
+                  <BranchSalesCard
+                    key={b.branchCode}
+                    branchName={b.branchName}
+                    todaySales={b.todaySales}
+                    yesterdaySales={b.yesterdaySales}
+                    colorIndex={i}
+                    formatCurrency={formatCurrency}
+                  />
+                ))}
+              </div>
+            )}
+          </Panel>
 
           {/* Branch Performance: This Month vs Last Month sales */}
           <Panel
@@ -545,13 +604,28 @@ const Dashboard = () => {
               <>
                 <div className="w-full mb-6 h-32">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={topProducts} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+                    <BarChart data={topProducts} margin={{ top: 5, right: 10, left: -10, bottom: 30 }}>
                       <XAxis
-                        dataKey="productName"
-                        tick={{ fontSize: 10, fill: "#94a3b8" }}
+                        dataKey="productCode"
+                        tick={<AngledProductCodeTick />}
                         axisLine={false}
                         tickLine={false}
                         interval={0}
+                        height={50}
+                      />
+                      <Tooltip
+                        cursor={{ fill: "#f3f4f6" }}
+                        content={({ active, payload }) => {
+                          if (!active || !payload || !payload.length) return null;
+                          const p = payload[0].payload;
+                          return (
+                            <div className="px-3 py-2 text-xs bg-white border border-gray-100 shadow-lg rounded-xl">
+                              <p className="font-semibold text-gray-800">{p.productName}</p>
+                              <p className="text-gray-400">{p.productCode}</p>
+                              <p className="mt-1 font-bold text-violet-600">{p.salesQty} sold</p>
+                            </div>
+                          );
+                        }}
                       />
                       <Bar dataKey="salesQty" name="Qty Sold" fill="#8b5cf6" radius={[6, 6, 0, 0]} barSize={38} />
                     </BarChart>
@@ -645,6 +719,111 @@ const StatCard = ({ label, value, icon, accent, sparkColor, sparkId, sparkData, 
     </div>
   );
 };
+
+// BranchSalesCard: colorful card showing one branch's Today vs Yesterday sales,
+// with a small % change badge and a mini progress bar comparing the two.
+// colorIndex cycles through a fixed gradient palette so each branch gets a
+// distinct, consistent color.
+const BRANCH_CARD_COLORS = [
+  { grad: "from-orange-400 to-orange-600", bg: "bg-orange-50", text: "text-orange-600", bar: "bg-orange-500", yesterdayBar: "bg-orange-300" },
+  { grad: "from-emerald-400 to-emerald-600", bg: "bg-emerald-50", text: "text-emerald-600", bar: "bg-emerald-500", yesterdayBar: "bg-emerald-300" },
+  { grad: "from-blue-400 to-blue-600", bg: "bg-blue-50", text: "text-blue-600", bar: "bg-blue-500", yesterdayBar: "bg-blue-300" },
+  { grad: "from-violet-400 to-violet-600", bg: "bg-violet-50", text: "text-violet-600", bar: "bg-violet-500", yesterdayBar: "bg-violet-300" },
+  { grad: "from-pink-400 to-pink-600", bg: "bg-pink-50", text: "text-pink-600", bar: "bg-pink-500", yesterdayBar: "bg-pink-300" },
+  { grad: "from-teal-400 to-teal-600", bg: "bg-teal-50", text: "text-teal-600", bar: "bg-teal-500", yesterdayBar: "bg-teal-300" },
+  { grad: "from-amber-400 to-amber-600", bg: "bg-amber-50", text: "text-amber-600", bar: "bg-amber-500", yesterdayBar: "bg-amber-300" },
+  { grad: "from-rose-400 to-rose-600", bg: "bg-rose-50", text: "text-rose-600", bar: "bg-rose-500", yesterdayBar: "bg-rose-300" },
+];
+
+const BranchSalesCard = ({ branchName, todaySales, yesterdaySales, colorIndex, formatCurrency }) => {
+  const palette = BRANCH_CARD_COLORS[colorIndex % BRANCH_CARD_COLORS.length];
+
+  const diff = todaySales - yesterdaySales;
+  const pct = yesterdaySales === 0 ? 0 : Number(((diff / yesterdaySales) * 100).toFixed(1));
+  const isUp = diff > 0;
+  const isFlat = diff === 0;
+
+  // Width of today's bar relative to the larger of the two values, for a quick visual comparison
+  const maxVal = Math.max(todaySales, yesterdaySales, 1);
+  const todayBarWidth = Math.max((todaySales / maxVal) * 100, 4);
+  const yesterdayBarWidth = Math.max((yesterdaySales / maxVal) * 100, 4);
+
+  return (
+    <div className={`p-5 rounded-2xl border border-gray-100 shadow-md transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 bg-gradient-to-br ${palette.bg} to-white`}>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <div className={`flex items-center justify-center w-8 h-8 rounded-lg text-white bg-gradient-to-br ${palette.grad} shadow-sm`}>
+            <Building2 className="w-4 h-4" />
+          </div>
+          <h3 className="text-base font-bold text-gray-800 sm:text-lg">{branchName}</h3>
+        </div>
+
+        {!isFlat && (
+          <span
+            className={`flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-full ${
+              isUp ? "text-emerald-700 bg-emerald-100" : "text-red-700 bg-red-100"
+            }`}
+          >
+            {isUp ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+            {Math.abs(pct)}%
+          </span>
+        )}
+        {isFlat && (
+          <span className="flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-gray-500 bg-gray-100 rounded-full">
+            <Minus className="w-3.5 h-3.5" />
+            0%
+          </span>
+        )}
+      </div>
+
+      <div className="space-y-3">
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-sm font-medium text-gray-400">Today</span>
+            <span className={`text-base font-extrabold ${palette.text}`}>{formatCurrency(todaySales)}</span>
+          </div>
+          <div className="w-full h-2 overflow-hidden bg-gray-100 rounded-full">
+            <div
+              className={`h-full rounded-full ${palette.bar} transition-all duration-500`}
+              style={{ width: `${todayBarWidth}%` }}
+            />
+          </div>
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-sm font-medium text-gray-400">Yesterday</span>
+            <span className="text-base font-bold text-gray-500">{formatCurrency(yesterdaySales)}</span>
+          </div>
+          <div className="w-full h-2 overflow-hidden bg-gray-100 rounded-full">
+            <div
+              className={`h-full rounded-full ${palette.yesterdayBar} transition-all duration-500`}
+              style={{ width: `${yesterdayBarWidth}%` }}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// AngledProductCodeTick: renders each X-axis label (product code) rotated -45deg
+// so long codes don't overlap on narrow/mobile screens.
+const AngledProductCodeTick = ({ x, y, payload }) => (
+  <g transform={`translate(${x},${y})`}>
+    <text
+      x={0}
+      y={0}
+      dy={8}
+      textAnchor="end"
+      transform="rotate(-45)"
+      fontSize={9}
+      fill="#94a3b8"
+    >
+      {payload.value}
+    </text>
+  </g>
+);
 
 const Panel = ({ title, subtitle, icon, headerRight, children }) => (
   <div className="p-5 transition-all duration-200 bg-white border border-gray-100 shadow-lg rounded-2xl sm:p-7 hover:shadow-xl">
