@@ -1335,12 +1335,93 @@ exports.getBranchPerformance = async (req, res) => {
   } catch (error) {
     console.error("getBranchPerformance error:", error);
     return res.status(500).json({ message: "Failed to fetch branch performance", error: error.message });
+  }
+};
+
+// GET - Top 10 Sales Products (dynamic month range, 1-12 months, no SP)
+exports.getTopSalesProducts = async (req, res) => {
+  let pool;
+  try {
+    const user_ip = String(req.user.ip).trim();
+    pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+
+    if (!pool || !pool.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
+
+    let months = parseInt(req.query.months, 10);
+    if (!months || months <= 0) months = 3;
+    if (months > 12) months = 12;
+
+    const today = new Date();
+    const endDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+    const startDate = new Date(today.getFullYear(), today.getMonth() - months, today.getDate());
+
+    const request = pool.request();
+    request.input("StartDate", mssql.Date, startDate);
+    request.input("EndDate", mssql.Date, endDate);
+
+    // NOTE: request.timeout only works if the underlying pool config doesn't
+    // already lock requestTimeout. If this still times out after the join
+    // fix below, increase requestTimeout in connectToUserDatabase()'s pool
+    // config directly (that value takes priority over this one).
+    request.timeout = 60000;
+
+    const query = `
+      USE [${posback}];
+      SELECT TOP (10)
+        RTRIM(S.Product_Code) AS Product_Code,
+        ISNULL(P.PRODUCT_NAMELONG, 'Unknown Product') AS PRODUCT_NAMELONG,
+        SUM(CASE
+              WHEN S.ID = 'SL' THEN S.Unit_Price * S.Qty
+              WHEN S.ID = 'RF' THEN -(S.Unit_Price * S.Qty)
+              ELSE 0
+            END) AS NetSalesValue,
+        SUM(CASE WHEN S.ID = 'SL' THEN S.Qty ELSE 0 END) AS SalesQty,
+        SUM(CASE WHEN S.ID = 'RF' THEN S.Qty ELSE 0 END) AS RefundQty
+      FROM tb_SALES S
+      LEFT JOIN tb_PRODUCT P
+        -- FIX: removed RTRIM() from both sides of the join. Product_Code is a
+        -- fixed-length CHAR column on both tables, so a plain equality here
+        -- is sargable (SQL Server can use an index seek). Wrapping both sides
+        -- in RTRIM() forced a full scan on tb_SALES/tb_PRODUCT, which is what
+        -- was causing the 15s timeout on real production data volumes.
+        ON P.Product_Code = S.Product_Code
+      WHERE S.ID IN ('SL', 'RF')
+        AND S.SalesDate >= @StartDate
+        AND S.SalesDate < @EndDate
+      GROUP BY
+        RTRIM(S.Product_Code),
+        ISNULL(P.PRODUCT_NAMELONG, 'Unknown Product')
+      ORDER BY
+        SalesQty DESC;
+    `;
+
+    const result = await request.query(query);
+
+    const records = (result.recordset || []).map((row) => ({
+      productCode: (row.Product_Code || "").trim(),
+      productName: (row.PRODUCT_NAMELONG || "Unknown Product").trim(),
+      netSalesValue: parseFloat(row.NetSalesValue || 0),
+      salesQty: parseInt(row.SalesQty || 0, 10),
+      refundQty: parseInt(row.RefundQty || 0, 10),
+    }));
+
+    return res.status(200).json({
+      success: true,
+      monthsUsed: months,
+      data: records,
+    });
+  } catch (error) {
+    console.error("getTopSalesProducts error:", error);
+    return res.status(500).json({ message: "Failed to fetch top sales products", error: error.message });
   } finally {
     if (pool && pool.connected) {
       try { await pool.close(); } catch (e) {}
     }
   }
 };
+
 
 //temp sales table
 exports.updateTempSalesTable = async (req, res) => {
