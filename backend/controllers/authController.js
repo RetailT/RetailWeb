@@ -1174,6 +1174,85 @@ exports.getTodayYesterdaySales = async (req, res) => {
   }
 };
 
+// GET - Branch-wise Today's vs Yesterday's Sales (with branch names)
+exports.getBranchTodayYesterdaySales = async (req, res) => {
+  let pool;
+  try {
+    const user_ip = String(req.user.ip).trim();
+    pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+
+    if (!pool || !pool.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
+
+    const request = pool.request();
+
+    let query = `
+      USE [${posback}];
+      SELECT
+        C.COMPANY_CODE,
+        C.COMPANY_NAME,
+        ISNULL(T.TodaySales, 0) AS TodaySales,
+        ISNULL(Y.YesterdaySales, 0) AS YesterdaySales,
+        ISNULL(T.TodaySales, 0) - ISNULL(Y.YesterdaySales, 0) AS Difference,
+        CASE
+          WHEN ISNULL(Y.YesterdaySales, 0) = 0 THEN 0
+          ELSE ROUND(
+            ((ISNULL(T.TodaySales, 0) - Y.YesterdaySales) * 100.0) / Y.YesterdaySales,
+            2
+          )
+        END AS SalesPercentage
+      FROM tb_COMPANY C
+
+      LEFT JOIN
+      (
+        SELECT
+          Company_Code,
+          SUM(AMOUNT) AS TodaySales
+        FROM tb_ONLINESALESMAIN
+        WHERE [Date] >= CAST(GETDATE() AS DATE)
+          AND [Date] < DATEADD(DAY, 1, CAST(GETDATE() AS DATE))
+        GROUP BY Company_Code
+      ) T ON C.COMPANY_CODE = T.Company_Code
+
+      LEFT JOIN
+      (
+        SELECT
+          Company_Code,
+          SUM(AMOUNT) AS YesterdaySales
+        FROM tb_SALES
+        WHERE ID = 'SL'
+          AND SALESDATE >= DATEADD(DAY, -1, CAST(GETDATE() AS DATE))
+          AND SALESDATE < CAST(GETDATE() AS DATE)
+        GROUP BY Company_Code
+      ) Y ON C.COMPANY_CODE = Y.Company_Code
+
+      -- No filter here: every branch in tb_COMPANY is returned, even if it
+      -- has zero sales today and yesterday.
+      ORDER BY ISNULL(T.TodaySales, 0) DESC;
+    `;
+
+    const result = await request.query(query);
+
+    const records = (result.recordset || []).map((row) => ({
+      branchCode: (row.COMPANY_CODE || "").trim(),
+      branchName: (row.COMPANY_NAME || "").trim(),
+      todaySales: parseFloat(row.TodaySales || 0),
+      yesterdaySales: parseFloat(row.YesterdaySales || 0),
+      difference: parseFloat(row.Difference || 0),
+      salesPercentage: parseFloat(row.SalesPercentage || 0),
+    }));
+
+    return res.status(200).json({ success: true, data: records });
+  } catch (error) {
+    console.error("getBranchTodayYesterdaySales error:", error);
+    return res.status(500).json({
+      message: "Failed to fetch branch-wise today/yesterday sales",
+      error: error.message,
+    });
+  }
+};
+
 // GET - Hourly sales trend for Today and Yesterday (for sparkline charts)
 // Returns hour-by-hour cumulative or per-hour sales so Today's card and
 // Yesterday's card show genuinely different, meaningful shapes.
