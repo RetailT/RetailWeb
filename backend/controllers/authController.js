@@ -481,14 +481,12 @@ async function syncDB() {
 // ============================================================
 async function getTodaySalesByBranch(pool, req) {
   const formatDateForSP = (date) => {
-    // Sp_SalesCurView expects DD/MM/YYYY (Char(10))
     const d = String(date.getDate()).padStart(2, "0");
     const m = String(date.getMonth() + 1).padStart(2, "0");
     const y = date.getFullYear();
     return `${d}/${m}/${y}`;
   };
   const formatDateISO = (date) => {
-    // tb_SALES_DASHBOARD_VIEW.SALESDATE is stored/compared as YYYY-MM-DD
     const d = String(date.getDate()).padStart(2, "0");
     const m = String(date.getMonth() + 1).padStart(2, "0");
     const y = date.getFullYear();
@@ -499,9 +497,15 @@ async function getTodaySalesByBranch(pool, req) {
   const todayDateSP = formatDateForSP(now);
   const todayDateISO = formatDateISO(now);
 
-  const repUser = `dash_today_${req.user.username || "user"}`.slice(0, 100);
+  // FIX: repUser must be unique PER REQUEST, not just per username. Two
+  // concurrent requests from the same user (e.g. React StrictMode firing
+  // the dashboard load twice, or two browser tabs) were using the exact
+  // same REPUSER value, causing them to DELETE/INSERT/SELECT the same
+  // rows in tb_SALES_DASHBOARD_VIEW at the same time - this is what
+  // caused the SQL Server deadlock on company 02.
+  const uniqueSuffix = `${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+  const repUser = `dash_${req.user.username || "user"}_${uniqueSuffix}`.slice(0, 100);
 
-  // Get all company codes
   const companiesResult = await pool
     .request()
     .query(`USE [${posback}]; SELECT COMPANY_CODE, COMPANY_NAME FROM tb_COMPANY;`);
@@ -513,13 +517,13 @@ async function getTodaySalesByBranch(pool, req) {
     }))
     .filter((c) => c.code);
 
-  // Clear any stale rows for this REPUSER before running
+  // Clear any stale rows for this exact REPUSER (safe now - no other
+  // request will ever share this value)
   await pool.request().input("repUser", mssql.NVarChar, repUser).query(`
     USE [${rtweb}];
     DELETE FROM tb_SALES_DASHBOARD_VIEW WHERE REPUSER = @repUser;
   `);
 
-  // Run Sp_SalesCurView for each company for TODAY
   for (const company of companies) {
     try {
       const spRequest = pool.request();
@@ -541,8 +545,6 @@ async function getTodaySalesByBranch(pool, req) {
     }
   }
 
-  // Read back Today's Net Sales, per branch - WITH the SALESDATE filter
-  // (this is the piece that was missing before)
   const readRequest = pool.request();
   readRequest
     .input("repUser", mssql.NVarChar, repUser)
@@ -564,7 +566,6 @@ async function getTodaySalesByBranch(pool, req) {
     todayMap[(row.COMPANY_CODE || "").trim()] = parseFloat(row.TodaySales || 0);
   });
 
-  // Clean up after reading
   await pool.request().input("repUser", mssql.NVarChar, repUser).query(`
     USE [${rtweb}];
     DELETE FROM tb_SALES_DASHBOARD_VIEW WHERE REPUSER = @repUser;
@@ -1199,12 +1200,6 @@ exports.getTodayYesterdaySales = async (req, res) => {
       message: "Failed to fetch sales summary",
       error: error.message,
     });
-  } finally {
-    if (pool && pool.connected) {
-      try {
-        await pool.close();
-      } catch (e) {}
-    }
   }
 };
 
@@ -1275,12 +1270,6 @@ exports.getBranchTodayYesterdaySales = async (req, res) => {
       message: "Failed to fetch branch-wise today/yesterday sales",
       error: error.message,
     });
-  } finally {
-    if (pool && pool.connected) {
-      try {
-        await pool.close();
-      } catch (e) {}
-    }
   }
 };
 
@@ -1471,10 +1460,6 @@ exports.getTopSalesProducts = async (req, res) => {
     request.input("StartDate", mssql.Date, startDate);
     request.input("EndDate", mssql.Date, endDate);
 
-    // NOTE: request.timeout only works if the underlying pool config doesn't
-    // already lock requestTimeout. If this still times out after the join
-    // fix below, increase requestTimeout in connectToUserDatabase()'s pool
-    // config directly (that value takes priority over this one).
     request.timeout = 60000;
 
     const query = `
@@ -1491,11 +1476,6 @@ exports.getTopSalesProducts = async (req, res) => {
         SUM(CASE WHEN S.ID = 'RF' THEN S.Qty ELSE 0 END) AS RefundQty
       FROM tb_SALES S
       LEFT JOIN tb_PRODUCT P
-        -- FIX: removed RTRIM() from both sides of the join. Product_Code is a
-        -- fixed-length CHAR column on both tables, so a plain equality here
-        -- is sargable (SQL Server can use an index seek). Wrapping both sides
-        -- in RTRIM() forced a full scan on tb_SALES/tb_PRODUCT, which is what
-        -- was causing the 15s timeout on real production data volumes.
         ON P.Product_Code = S.Product_Code
       WHERE S.ID IN ('SL', 'RF')
         AND S.SalesDate >= @StartDate
@@ -1525,11 +1505,11 @@ exports.getTopSalesProducts = async (req, res) => {
   } catch (error) {
     console.error("getTopSalesProducts error:", error);
     return res.status(500).json({ message: "Failed to fetch top sales products", error: error.message });
-  } finally {
-    if (pool && pool.connected) {
-      try { await pool.close(); } catch (e) {}
-    }
   }
+  // NOTE: Do NOT close the pool here — connectToUserDatabase() returns a
+  // shared cached pool (keyed by ip:port). Closing it here kills the
+  // connection for other concurrent requests (dashboard-sales-summary,
+  // branch-today-yesterday-sales, etc.) using the same pool.
 };
 
 

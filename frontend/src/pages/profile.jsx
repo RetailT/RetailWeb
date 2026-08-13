@@ -74,95 +74,130 @@ const Dashboard = () => {
   const [loadingBranchTodayYesterday, setLoadingBranchTodayYesterday] = useState(true);
   const [branchTodayYesterdayError, setBranchTodayYesterdayError] = useState(null);
 
+  // ---- Request-id refs: guard against React 18 StrictMode double-invoking
+  // useEffect in dev (fires each fetch twice), and against normal network
+  // race conditions where a slow earlier response resolves after a newer
+  // one already updated state. Each fetch bumps its own counter; any
+  // response/error that isn't from the latest call is ignored. ----
+  const salesSummaryRequestIdRef = useRef(0);
+  const salesTrendRequestIdRef = useRef(0);
+  const branchPerformanceRequestIdRef = useRef(0);
+  const branchTodayRequestIdRef = useRef(0);
+  const topProductsRequestIdRef = useRef(0);
+
   // ---- Fetch Sales Summary ----
   const fetchSalesSummary = async () => {
+    const requestId = ++salesSummaryRequestIdRef.current;
     try {
       setLoadingSales(true);
       setSalesError(null);
-      
+
       const res = await axios.get(
         `${process.env.REACT_APP_BACKEND_URL}dashboard-sales-summary`,
         { headers: { Authorization: `Bearer ${authToken}` } }
       );
-      
+
+      if (requestId !== salesSummaryRequestIdRef.current) return;
+
       if (res.data.success) {
         setSalesSummary(res.data.summary);
       } else {
         setSalesError("Failed to load sales data");
       }
     } catch (err) {
+      if (requestId !== salesSummaryRequestIdRef.current) return;
       console.error("Failed to fetch sales summary:", err);
       setSalesError("Couldn't load sales data. Please refresh.");
     } finally {
-      setLoadingSales(false);
+      if (requestId === salesSummaryRequestIdRef.current) {
+        setLoadingSales(false);
+      }
     }
   };
 
   // ---- Fetch Sales Trend ----
   const fetchSalesTrend = async () => {
+    const requestId = ++salesTrendRequestIdRef.current;
     try {
       setLoadingTrend(true);
       const res = await axios.get(
         `${process.env.REACT_APP_BACKEND_URL}sales-trend`,
         { headers: { Authorization: `Bearer ${authToken}` } }
       );
+
+      if (requestId !== salesTrendRequestIdRef.current) return;
+
       if (res.data.success) {
         setSalesTrend(res.data.data || { today: [], yesterday: [] });
       }
     } catch (err) {
+      if (requestId !== salesTrendRequestIdRef.current) return;
       console.error("Failed to fetch sales trend:", err);
     } finally {
-      setLoadingTrend(false);
+      if (requestId === salesTrendRequestIdRef.current) {
+        setLoadingTrend(false);
+      }
     }
   };
 
   // ---- Fetch Branch Performance ----
   const fetchBranchPerformance = async () => {
+    const requestId = ++branchPerformanceRequestIdRef.current;
     try {
       setLoadingBranches(true);
       const res = await axios.get(
         `${process.env.REACT_APP_BACKEND_URL}branch-performance`,
         { headers: { Authorization: `Bearer ${authToken}` } }
       );
+
+      if (requestId !== branchPerformanceRequestIdRef.current) return;
+
       if (res.data.success) {
         setBranchPerformance(res.data.data || []);
       }
     } catch (err) {
+      if (requestId !== branchPerformanceRequestIdRef.current) return;
       console.error("Failed to fetch branch performance:", err);
     } finally {
-      setLoadingBranches(false);
+      if (requestId === branchPerformanceRequestIdRef.current) {
+        setLoadingBranches(false);
+      }
     }
   };
 
   // ---- Fetch Branch-wise Today's vs Yesterday's Sales ----
   const fetchBranchTodayYesterdaySales = async () => {
+    const requestId = ++branchTodayRequestIdRef.current;
     try {
       setLoadingBranchTodayYesterday(true);
       setBranchTodayYesterdayError(null);
-      
+
       const res = await axios.get(
         `${process.env.REACT_APP_BACKEND_URL}branch-today-yesterday-sales`,
         { headers: { Authorization: `Bearer ${authToken}` } }
       );
-      
-      // console.log("Branch-wise sales response:", res.data);
-      
+
+      if (requestId !== branchTodayRequestIdRef.current) return;
+
       if (res.data.success) {
         setBranchTodayYesterdaySales(res.data.data || []);
-        // console.log("Branch sales set:", res.data.data);
       } else {
         setBranchTodayYesterdayError("Failed to load branch-wise sales");
       }
     } catch (err) {
+      if (requestId !== branchTodayRequestIdRef.current) return;
       console.error("Failed to fetch branch-wise today/yesterday sales:", err);
       setBranchTodayYesterdayError("Couldn't load branch-wise sales. Please refresh.");
     } finally {
-      setLoadingBranchTodayYesterday(false);
+      if (requestId === branchTodayRequestIdRef.current) {
+        setLoadingBranchTodayYesterday(false);
+      }
     }
   };
 
   // ---- Fetch Top Products ----
   const fetchTopProducts = async (months = topProductsMonths) => {
+    const requestId = ++topProductsRequestIdRef.current;
     try {
       setLoadingTopProducts(true);
       setTopProductsError(null);
@@ -170,14 +205,20 @@ const Dashboard = () => {
         `${process.env.REACT_APP_BACKEND_URL}top-sales-products?months=${months}`,
         { headers: { Authorization: `Bearer ${authToken}` } }
       );
+
+      if (requestId !== topProductsRequestIdRef.current) return;
+
       if (res.data.success) {
         setTopProducts(res.data.data || []);
       }
     } catch (err) {
+      if (requestId !== topProductsRequestIdRef.current) return;
       console.error("Failed to fetch top products:", err);
       setTopProductsError("Couldn't load top products. Please refresh.");
     } finally {
-      setLoadingTopProducts(false);
+      if (requestId === topProductsRequestIdRef.current) {
+        setLoadingTopProducts(false);
+      }
     }
   };
 
