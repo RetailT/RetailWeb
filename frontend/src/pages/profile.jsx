@@ -46,9 +46,9 @@ const Dashboard = () => {
     yesterdaySales: "0.00",
     dayBeforeYesterdaySales: "0.00",
     difference: "0.00",
-    salesPercentage: 0,          // Today vs Yesterday (not shown in UI, kept for reference)
+    salesPercentage: 0,
     yesterdayDifference: "0.00",
-    yesterdaySalesPercentage: 0, // Yesterday vs Day-before-yesterday (shown in UI)
+    yesterdaySalesPercentage: 0,
   });
   const [loadingSales, setLoadingSales] = useState(true);
   const [salesError, setSalesError] = useState(null);
@@ -64,26 +64,35 @@ const Dashboard = () => {
   const [topProducts, setTopProducts] = useState([]);
   const [loadingTopProducts, setLoadingTopProducts] = useState(true);
   const [topProductsError, setTopProductsError] = useState(null);
-  const [topProductsMonths, setTopProductsMonths] = useState(3); // dropdown: 1/3/6/12
+  const [topProductsMonths, setTopProductsMonths] = useState(3);
 
   // ---- Page-level loading: true until ALL dashboard data has finished loading ----
   const [pageLoading, setPageLoading] = useState(true);
 
-  // ---- Branch-wise Today's vs Yesterday's Sales (real data, fetched from backend) ----
+  // ---- Branch-wise Today's vs Yesterday's Sales ----
   const [branchTodayYesterdaySales, setBranchTodayYesterdaySales] = useState([]);
   const [loadingBranchTodayYesterday, setLoadingBranchTodayYesterday] = useState(true);
   const [branchTodayYesterdayError, setBranchTodayYesterdayError] = useState(null);
 
+  // ---- Fetch Sales Summary ----
   const fetchSalesSummary = async () => {
     try {
       setLoadingSales(true);
       setSalesError(null);
+      console.log("Fetching sales summary...");
+      
       const res = await axios.get(
         `${process.env.REACT_APP_BACKEND_URL}dashboard-sales-summary`,
         { headers: { Authorization: `Bearer ${authToken}` } }
       );
+      
+      console.log("Sales summary response:", res.data);
+      
       if (res.data.success) {
-        setSalesSummary(res.data.summary || res.data.data);
+        setSalesSummary(res.data.summary);
+        console.log("Sales summary set:", res.data.summary);
+      } else {
+        setSalesError("Failed to load sales data");
       }
     } catch (err) {
       console.error("Failed to fetch sales summary:", err);
@@ -93,6 +102,7 @@ const Dashboard = () => {
     }
   };
 
+  // ---- Fetch Sales Trend ----
   const fetchSalesTrend = async () => {
     try {
       setLoadingTrend(true);
@@ -110,6 +120,7 @@ const Dashboard = () => {
     }
   };
 
+  // ---- Fetch Branch Performance ----
   const fetchBranchPerformance = async () => {
     try {
       setLoadingBranches(true);
@@ -127,17 +138,25 @@ const Dashboard = () => {
     }
   };
 
-  // Branch-wise Today's vs Yesterday's Sales (with branch names) - real backend call
+  // ---- Fetch Branch-wise Today's vs Yesterday's Sales ----
   const fetchBranchTodayYesterdaySales = async () => {
     try {
       setLoadingBranchTodayYesterday(true);
       setBranchTodayYesterdayError(null);
+      console.log("Fetching branch-wise sales...");
+      
       const res = await axios.get(
         `${process.env.REACT_APP_BACKEND_URL}branch-today-yesterday-sales`,
         { headers: { Authorization: `Bearer ${authToken}` } }
       );
+      
+      console.log("Branch-wise sales response:", res.data);
+      
       if (res.data.success) {
         setBranchTodayYesterdaySales(res.data.data || []);
+        console.log("Branch sales set:", res.data.data);
+      } else {
+        setBranchTodayYesterdayError("Failed to load branch-wise sales");
       }
     } catch (err) {
       console.error("Failed to fetch branch-wise today/yesterday sales:", err);
@@ -147,7 +166,7 @@ const Dashboard = () => {
     }
   };
 
-  // months parameter overrides the ?months= query parameter in the backend
+  // ---- Fetch Top Products ----
   const fetchTopProducts = async (months = topProductsMonths) => {
     try {
       setLoadingTopProducts(true);
@@ -167,35 +186,36 @@ const Dashboard = () => {
     }
   };
 
+  // ---- Load all dashboard data ----
   useEffect(() => {
     if (!authToken) return;
 
-    // IMPORTANT: run sequentially, not with Promise.all. Firing several
-    // requests at once against the remote SQL Server (each opening/closing
-    // its own pool connection) was overloading the connection and causing
-    // unrelated endpoints (e.g. branch-performance) to fail with 500 errors.
-    // Awaiting each one before starting the next keeps only one connection
-    // open at a time - slightly slower overall, but reliable.
     const loadDashboardData = async () => {
-      await fetchSalesSummary();
-      await fetchSalesTrend();
-      await fetchBranchPerformance();
-      await fetchBranchTodayYesterdaySales();
-      await fetchTopProducts();
-      setPageLoading(false);
+      try {
+        // Load data sequentially to avoid connection issues
+        await fetchSalesSummary();
+        await fetchSalesTrend();
+        await fetchBranchPerformance();
+        await fetchBranchTodayYesterdaySales();
+        await fetchTopProducts();
+      } catch (error) {
+        console.error("Error loading dashboard data:", error);
+      } finally {
+        setPageLoading(false);
+      }
     };
 
     loadDashboardData();
   }, [authToken]);
 
-  // changing the months value from the user dropdown triggers a re-fetch of the data
+  // ---- Re-fetch top products when months change ----
   useEffect(() => {
     if (!authToken) return;
     fetchTopProducts(topProductsMonths);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topProductsMonths]);
 
-  // ---- Remaining dummy data - replace with real API calls later ----
+  // ---- Dummy data ----
   const [stats] = useState({
     customers: "1,250",
     avgBillValue: "2,450",
@@ -229,8 +249,8 @@ const Dashboard = () => {
     "Clear ABC Soap (No sales 45 days)",
     "Increase stock of Anchor 400g",
   ]);
-  // ---- End dummy data ----
 
+  // ---- Decode user details from token ----
   useEffect(() => {
     const token = localStorage.getItem("authToken");
     if (token) {
@@ -247,6 +267,7 @@ const Dashboard = () => {
     }
   }, []);
 
+  // ---- Click outside handler for profile menu ----
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (profileRef.current && !profileRef.current.contains(e.target)) {
@@ -257,17 +278,19 @@ const Dashboard = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // ---- Auth check ----
   if (!authToken) {
     return <Navigate to="/login" replace />;
   }
 
-  // Format a raw number string like "325000.00" into "325,000"
+  // ---- Format currency ----
   const formatCurrency = (value) => {
     const num = parseFloat(value || 0);
+    if (num === 0) return "0";
     return num.toLocaleString("en-US", { maximumFractionDigits: 0 });
   };
 
-  // A full-screen loader is displayed while all the data on the page is loading
+  // ---- Loading screen ----
   if (pageLoading) {
     return (
       <div className="min-h-screen bg-gray-100">
@@ -285,7 +308,7 @@ const Dashboard = () => {
       <Navbar />
 
       <div className="pt-16 sm:pt-20">
-        {/* Page header with title + profile */}
+        {/* Page header */}
         <div className="sticky top-16 z-30 flex items-center justify-between px-5 py-5 bg-white border-b shadow-sm sm:top-20 sm:px-10 sm:py-6">
           <div>
             <h1 className="text-xl font-bold text-gray-900 sm:text-2xl">RTPOS Dashboard</h1>
@@ -344,7 +367,7 @@ const Dashboard = () => {
         </div>
 
         <div className="p-5 space-y-8 sm:p-10 sm:space-y-10">
-          {/* Error banner - shows only if the sales summary fetch fails */}
+          {/* Error banner */}
           {salesError && (
             <div className="flex items-center gap-3 px-4 py-3 text-sm font-medium text-red-700 border border-red-200 rounded-xl bg-red-50">
               <AlertCircle className="w-4 h-4 shrink-0" />
@@ -375,27 +398,9 @@ const Dashboard = () => {
               sparkId="yesterdaysSales"
               sparkData={loadingTrend ? null : salesTrend.yesterday}
             />
-             {/* <StatCard
-              label="Customers"
-              value={stats.customers}
-              icon={<Users className="w-5 h-5" />}
-              accent="from-blue-400 to-blue-600"
-              sparkColor="#3b82f6"
-              sparkId="customers"
-              sparkData={customersTrend}
-            />
-            <StatCard
-              label="Avg Bill Value"
-              value={stats.avgBillValue}
-              icon={<Receipt className="w-5 h-5" />}
-              accent="from-violet-400 to-violet-600"
-              sparkColor="#8b5cf6"
-              sparkId="avgBillValue"
-              sparkData={avgBillTrend}
-            /> */}
           </div>
 
-          {/* Branch-wise Today's vs Yesterday's Sales - colorful grid cards */}
+          {/* Branch-wise Sales */}
           <Panel
             title="Branch-wise Sales"
             subtitle="Today's & Yesterday's Sales by Branch"
@@ -416,7 +421,7 @@ const Dashboard = () => {
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {branchTodayYesterdaySales.map((b, i) => (
                   <BranchSalesCard
-                    key={b.branchCode}
+                    key={b.branchCode || i}
                     branchName={b.branchName}
                     todaySales={b.todaySales}
                     yesterdaySales={b.yesterdaySales}
@@ -428,7 +433,7 @@ const Dashboard = () => {
             )}
           </Panel>
 
-          {/* Branch Performance: This Month vs Last Month sales */}
+          {/* Branch Performance */}
           <Panel
             title="Branch Performance"
             subtitle="This Month's Sales by Branch (vs Last Month)"
@@ -478,91 +483,6 @@ const Dashboard = () => {
               </>
             )}
           </Panel>
-
-          {/* AI Alerts / Sales Forecast / Low Stock */}
-          {/* <div className="grid grid-cols-1 gap-5 sm:gap-6 lg:grid-cols-3">
-            <Panel title="AI Alerts" icon={<AlertTriangle className="w-5 h-5 text-orange-500" />}>
-              <div className="flex items-center gap-6">
-                <div className="relative w-28 h-28 shrink-0">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={aiAlerts}
-                        dataKey="value"
-                        nameKey="name"
-                        innerRadius="62%"
-                        outerRadius="92%"
-                        paddingAngle={3}
-                        stroke="none"
-                      >
-                        {aiAlerts.map((entry, i) => (
-                          <Cell key={i} fill={entry.color} />
-                        ))}
-                      </Pie>
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <span className="text-xl font-extrabold text-gray-800">
-                      {aiAlerts.reduce((sum, a) => sum + a.value, 0)}
-                    </span>
-                    <span className="text-[10px] text-gray-400">Total</span>
-                  </div>
-                </div>
-                <div className="flex-1 space-y-3">
-                  {aiAlerts.map((a, i) => (
-                    <div key={i} className="flex items-center justify-between text-sm">
-                      <span className="flex items-center gap-2 text-gray-500">
-                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: a.color }} />
-                        {a.name}
-                      </span>
-                      <span className="font-bold text-gray-800">{a.value}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </Panel>
-
-            <Panel title="Sales Forecast" icon={<BarChart3 className="w-5 h-5 text-blue-500" />}>
-              <div className="w-full h-36">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={salesForecast} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-                    <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={44}>
-                      {salesForecast.map((entry, i) => (
-                        <Cell key={i} fill={entry.color} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="flex justify-between pt-3 mt-2 text-xs text-gray-500 border-t border-gray-50">
-                <span>Tomorrow: <strong className="text-gray-800">420K</strong></span>
-                <span>This Week: <strong className="text-gray-800">2.9M</strong></span>
-              </div>
-            </Panel>
-
-            <Panel title="Low Stock Alerts" icon={<PackageX className="w-5 h-5 text-red-500" />}>
-              <div className="flex items-end justify-between h-36">
-                <div>
-                  <p className="text-4xl font-extrabold text-red-500">{lowStockCount}</p>
-                  <p className="mt-1 text-sm text-gray-400">Items</p>
-                </div>
-                <div className="w-28 h-20">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={lowStockTrend} margin={{ top: 5, right: 0, left: 0, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="lowStockGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#ef4444" stopOpacity={0.35} />
-                          <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <Area type="monotone" dataKey="v" stroke="#ef4444" strokeWidth={2} fill="url(#lowStockGrad)" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            </Panel>
-          </div> */}
 
           {/* Top 10 Products */}
           <Panel
@@ -643,30 +563,13 @@ const Dashboard = () => {
               </>
             )}
           </Panel>
-
-          {/* AI Recommendations */}
-          {/* <Panel title="AI Recommendations" icon={<Lightbulb className="w-5 h-5 text-yellow-500" />}>
-            <ul className="space-y-3">
-              {aiRecommendations.map((rec, idx) => (
-                <li
-                  key={idx}
-                  className="flex items-start gap-3 p-4 text-sm text-gray-700 rounded-lg bg-orange-50"
-                >
-                  <span className="flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-orange-500 rounded-full shrink-0">
-                    {idx + 1}
-                  </span>
-                  {rec}
-                </li>
-              ))}
-            </ul>
-          </Panel> */}
         </div>
       </div>
     </div>
   );
 };
 
-// StatCard: sparkData renders the mini area chart, percentage (if provided) renders a % change badge.
+// ---- StatCard Component ----
 const StatCard = ({ label, value, icon, accent, sparkColor, sparkId, sparkData, percentage, loading }) => {
   const hasPercentage = percentage !== undefined;
   const isPositive = hasPercentage && percentage >= 0;
@@ -720,10 +623,7 @@ const StatCard = ({ label, value, icon, accent, sparkColor, sparkId, sparkData, 
   );
 };
 
-// BranchSalesCard: colorful card showing one branch's Today vs Yesterday sales,
-// with a small % change badge and a mini progress bar comparing the two.
-// colorIndex cycles through a fixed gradient palette so each branch gets a
-// distinct, consistent color.
+// ---- BranchSalesCard Component ----
 const BRANCH_CARD_COLORS = [
   { grad: "from-orange-400 to-orange-600", bg: "bg-orange-50", text: "text-orange-600", bar: "bg-orange-500", yesterdayBar: "bg-orange-300" },
   { grad: "from-emerald-400 to-emerald-600", bg: "bg-emerald-50", text: "text-emerald-600", bar: "bg-emerald-500", yesterdayBar: "bg-emerald-300" },
@@ -743,7 +643,6 @@ const BranchSalesCard = ({ branchName, todaySales, yesterdaySales, colorIndex, f
   const isUp = diff > 0;
   const isFlat = diff === 0;
 
-  // Width of today's bar relative to the larger of the two values, for a quick visual comparison
   const maxVal = Math.max(todaySales, yesterdaySales, 1);
   const todayBarWidth = Math.max((todaySales / maxVal) * 100, 4);
   const yesterdayBarWidth = Math.max((yesterdaySales / maxVal) * 100, 4);
@@ -807,8 +706,7 @@ const BranchSalesCard = ({ branchName, todaySales, yesterdaySales, colorIndex, f
   );
 };
 
-// AngledProductCodeTick: renders each X-axis label (product code) rotated -45deg
-// so long codes don't overlap on narrow/mobile screens.
+// ---- AngledProductCodeTick Component ----
 const AngledProductCodeTick = ({ x, y, payload }) => (
   <g transform={`translate(${x},${y})`}>
     <text
@@ -825,6 +723,7 @@ const AngledProductCodeTick = ({ x, y, payload }) => (
   </g>
 );
 
+// ---- Panel Component ----
 const Panel = ({ title, subtitle, icon, headerRight, children }) => (
   <div className="p-5 transition-all duration-200 bg-white border border-gray-100 shadow-lg rounded-2xl sm:p-7 hover:shadow-xl">
     <div className="flex items-center justify-between pb-4 mb-5 border-b border-gray-100">
@@ -841,6 +740,7 @@ const Panel = ({ title, subtitle, icon, headerRight, children }) => (
   </div>
 );
 
+// ---- TableWrapper Component ----
 const TableWrapper = ({ headers, rows }) => (
   <div className="overflow-x-auto -mx-5 sm:mx-0">
     <table className="w-full text-sm text-left min-w-[500px]">
