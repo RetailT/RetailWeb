@@ -79,18 +79,14 @@ const Dashboard = () => {
     try {
       setLoadingSales(true);
       setSalesError(null);
-      console.log("Fetching sales summary...");
       
       const res = await axios.get(
         `${process.env.REACT_APP_BACKEND_URL}dashboard-sales-summary`,
         { headers: { Authorization: `Bearer ${authToken}` } }
       );
       
-      console.log("Sales summary response:", res.data);
-      
       if (res.data.success) {
         setSalesSummary(res.data.summary);
-        console.log("Sales summary set:", res.data.summary);
       } else {
         setSalesError("Failed to load sales data");
       }
@@ -143,18 +139,17 @@ const Dashboard = () => {
     try {
       setLoadingBranchTodayYesterday(true);
       setBranchTodayYesterdayError(null);
-      console.log("Fetching branch-wise sales...");
       
       const res = await axios.get(
         `${process.env.REACT_APP_BACKEND_URL}branch-today-yesterday-sales`,
         { headers: { Authorization: `Bearer ${authToken}` } }
       );
       
-      console.log("Branch-wise sales response:", res.data);
+      // console.log("Branch-wise sales response:", res.data);
       
       if (res.data.success) {
         setBranchTodayYesterdaySales(res.data.data || []);
-        console.log("Branch sales set:", res.data.data);
+        // console.log("Branch sales set:", res.data.data);
       } else {
         setBranchTodayYesterdayError("Failed to load branch-wise sales");
       }
