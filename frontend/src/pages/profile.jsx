@@ -428,7 +428,11 @@ const Dashboard = () => {
               value={loadingSales ? "..." : formatCurrency(salesSummary.yesterdaySales)}
               icon={<TrendingUp className="w-5 h-5" />}
               accent="from-emerald-400 to-emerald-600"
-              percentage={salesSummary.yesterdaySalesPercentage}
+              percentage={
+                parseFloat(salesSummary.yesterdaySales) === 0
+                  ? undefined // hide the badge when there's no actual sales figure to compare
+                  : salesSummary.yesterdaySalesPercentage
+              }
               loading={loadingSales}
               sparkColor="#10b981"
               sparkId="yesterdaysSales"
