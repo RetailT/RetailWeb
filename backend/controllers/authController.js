@@ -9964,12 +9964,12 @@ exports.serverConnection = async (req, res) => {
 };
 
 // ---- Dashboard sales (today / yesterday / branch / trend / performance / top products) ----
-Object.assign(
-  exports,
-  require("./dashboardController")({
-    connectToUserDatabase,
-    getPosback: () => posback,
-    getRtweb: () => rtweb,
-    mssql,
-  })
-);
+// Object.assign(
+//   exports,
+//   require("./dashboardController")({
+//     connectToUserDatabase,
+//     getPosback: () => posback,
+//     getRtweb: () => rtweb,
+//     mssql,
+//   })
+// );
