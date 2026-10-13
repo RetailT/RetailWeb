@@ -494,27 +494,32 @@ module.exports = ({ connectToUserDatabase, getPosback, getRtweb, mssql }) => {
 
       const query = `
         USE [${posback}];
-        SELECT TOP (10)
-          RTRIM(S.Product_Code) AS Product_Code,
+        SELECT
+          T.Product_Code,
           ISNULL(P.PRODUCT_NAMELONG, 'Unknown Product') AS PRODUCT_NAMELONG,
-          SUM(CASE
-                WHEN S.ID = 'SL' THEN S.Unit_Price * S.Qty
-                WHEN S.ID = 'RF' THEN -(S.Unit_Price * S.Qty)
-                ELSE 0
-              END) AS NetSalesValue,
-          SUM(CASE WHEN S.ID = 'SL' THEN S.Qty ELSE 0 END) AS SalesQty,
-          SUM(CASE WHEN S.ID = 'RF' THEN S.Qty ELSE 0 END) AS RefundQty
-        FROM tb_SALES S
-        LEFT JOIN tb_PRODUCT P
-          ON P.Product_Code = S.Product_Code
-        WHERE S.ID IN ('SL', 'RF')
-          AND S.SalesDate >= @StartDate
-          AND S.SalesDate < @EndDate
-        GROUP BY
-          RTRIM(S.Product_Code),
-          ISNULL(P.PRODUCT_NAMELONG, 'Unknown Product')
-        ORDER BY
-          SalesQty DESC;
+          T.NetSalesValue,
+          T.SalesQty,
+          T.RefundQty
+        FROM (
+          SELECT TOP (10)
+            S.PRODUCT_CODE AS Product_Code,
+            SUM(CASE
+                  WHEN S.ID = 'SL' THEN S.UNIT_PRICE * S.QTY
+                  WHEN S.ID = 'RF' THEN -(S.UNIT_PRICE * S.QTY)
+                  ELSE 0
+                END) AS NetSalesValue,
+            SUM(CASE WHEN S.ID = 'SL' THEN S.QTY ELSE 0 END) AS SalesQty,
+            SUM(CASE WHEN S.ID = 'RF' THEN S.QTY ELSE 0 END) AS RefundQty
+          FROM tb_SALES S
+          WHERE (S.ID = 'SL' OR S.ID = 'RF' OR S.ID = 'SLF' OR S.ID = 'RFF')
+            AND (S.TYPE <> 'G' AND S.TYPE <> 'U')
+            AND S.SALESDATE >= @StartDate
+            AND S.SALESDATE < @EndDate
+          GROUP BY S.PRODUCT_CODE
+          ORDER BY SUM(CASE WHEN S.ID = 'SL' THEN S.QTY ELSE 0 END) DESC
+        ) T
+        LEFT JOIN tb_PRODUCT P ON P.PRODUCT_CODE = T.Product_Code
+        ORDER BY T.SalesQty DESC;
       `;
 
       const result = await request.query(query);
