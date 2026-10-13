@@ -1,5 +1,6 @@
 import { useEffect, useState, useContext, useRef } from "react";
 import Navbar from "../components/NavBar";
+import AiReportChat from "../components/AiReportChat";
 import { Navigate } from "react-router-dom";
 import { AuthContext } from "../AuthContext";
 import { jwtDecode } from "jwt-decode";
@@ -603,6 +604,9 @@ const Dashboard = () => {
               </>
             )}
           </Panel>
+
+          {/* AI Report Assistant */}
+          {/* <AiReportChat authToken={authToken} /> */}
         </div>
       </div>
     </div>
