@@ -3,7 +3,6 @@ import cors from "cors";
 import serverless from "serverless-http";
 import { get } from "https";
 const { authenticateToken } = require('../middleware/authMiddleware'); 
-
 const app = express();
 
 // Import your controllers and middleware here
@@ -100,6 +99,7 @@ app.post('/save-invoice', authenticateToken, authController.saveInvoice);
 app.post('/cashier-update', authenticateToken, authController.updateCashier);
 app.post('/run-dayend', authenticateToken, authController.runDayend);
 app.post('/manual-download', authenticateToken, authController.manualDownload);
+app.post('/ai-report-chat', authenticateToken, authController.aiReportChat);
 
 app.delete('/stock-update-delete', authenticateToken, authController.stockUpdateDelete);
 app.delete('/grnprn-delete', authenticateToken, authController.grnprnDelete);
