@@ -1,10 +1,20 @@
-import React, { useEffect, useState, useContext } from 'react';
+import React, { useEffect, useState, useContext, useRef } from 'react';
 import axios from 'axios';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { AuthContext } from '../AuthContext'; // Make sure the AuthContext path is correct
+import { AuthContext } from '../AuthContext';
+
+// POS (80mm) text sizes: one body size for everything, bigger only for the shop name
+// and the key lines (marked with the "pos-big" class). Used for printing AND for
+// measuring the page height, so both always match.
+const POS_TEXT_CSS = `
+  .print-container, .print-container * { font-size: 10.5px !important; line-height: 1.25 !important; }
+  .print-container h1 { font-size: 18px !important; line-height: 1.2 !important; }
+  .print-container .pos-big, .print-container .pos-big * { font-size: 13px !important; }
+  .print-container .border-4 { border-width: 2px !important; }
+`;
 
 const InvoicePreview = () => {
-  const { authToken, userPermissions } = useContext(AuthContext);
+  const { authToken } = useContext(AuthContext);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
@@ -15,27 +25,46 @@ const InvoicePreview = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // false = A4 print (default), true = POS thermal printer (80mm). Remembered per browser.
+  const [usePosPrinter, setUsePosPrinter] = useState(() => {
+    try {
+      return localStorage.getItem("usePosPrinter") === "1";
+    } catch (e) {
+      return false;
+    }
+  });
+
+  const receiptRef = useRef(null);
+  // Height (mm) of the receipt in POS mode. "@page { size: 80mm auto }" is INVALID CSS
+  // (auto cannot be mixed with a length) so Chrome ignores it and uses A4.
+  // We measure the real receipt height and use "size: 80mm <height>mm" instead.
+  const [posHeightMm, setPosHeightMm] = useState(null);
+
+  const handlePosToggle = (e) => {
+    const checked = e.target.checked;
+    setUsePosPrinter(checked);
+    try {
+      localStorage.setItem("usePosPrinter", checked ? "1" : "0");
+    } catch (err) {}
+  };
+
   const token = localStorage.getItem("authToken");
 
-  // Permission check (adjust according to your permission structure)
+  // Permission is enforced by the backend (t_invoicePreview)
   const hasPermission = true;
 
-
   useEffect(() => {
-    // 1. Token / authentication check
     if (!authToken || !token) {
       navigate('/login');
       return;
     }
 
-    // 2. Permission check – block access if not allowed
     if (!hasPermission) {
       setError("You do not have permission to view the invoice preview.");
       setLoading(false);
       return;
     }
 
-    // 3. Required parameter check
     if (!documentNo) {
       setError("Invoice number is missing.");
       setLoading(false);
@@ -77,11 +106,75 @@ const InvoicePreview = () => {
     fetchInvoice();
   }, [documentNo, company, token, authToken, hasPermission, navigate]);
 
+  // Measure receipt height: receipt is 80mm wide inside a wide iframe viewport, because
+  // Chrome lays the page out with the wide (sm:) styles when printing.
+  useEffect(() => {
+    if (!usePosPrinter || !invoiceData) return;
+    let cancelled = false;
+    let iframe = null;
+
+    const run = async () => {
+      await new Promise((r) => requestAnimationFrame(r));
+      const src = receiptRef.current;
+      if (!src || cancelled) return;
+
+      iframe = document.createElement("iframe");
+      iframe.setAttribute("aria-hidden", "true");
+      iframe.style.cssText =
+        "position:fixed;left:-10000px;top:0;width:1000px;height:5000px;border:0;visibility:hidden;";
+      document.body.appendChild(iframe);
+
+      const doc = iframe.contentDocument;
+      doc.open();
+      doc.write(
+        "<!doctype html><html><head><meta charset='utf-8'></head><body style='margin:0'></body></html>"
+      );
+      doc.close();
+
+      // Copy the app's CSS (Tailwind etc.) into the iframe
+      const loads = [];
+      document.querySelectorAll('link[rel="stylesheet"], style').forEach((node) => {
+        const copy = node.cloneNode(true);
+        if (copy.tagName === "LINK") {
+          loads.push(new Promise((res) => { copy.onload = res; copy.onerror = res; }));
+        }
+        doc.head.appendChild(copy);
+      });
+      const posStyle = doc.createElement("style");
+      posStyle.textContent = POS_TEXT_CSS;
+      doc.head.appendChild(posStyle);
+
+      await Promise.race([
+        Promise.all(loads),
+        new Promise((r) => setTimeout(r, 1500)),
+      ]);
+      if (cancelled) return;
+
+      const clone = src.cloneNode(true);
+      clone.querySelectorAll(".no-print").forEach((n) => n.remove());
+      clone.style.cssText =
+        "position:static;width:80mm;max-width:80mm;padding:2mm 3mm;margin:0;box-sizing:border-box;border:none;box-shadow:none;";
+      doc.body.appendChild(clone);
+
+      const px = clone.getBoundingClientRect().height;
+      const mm = Math.ceil((px * 25.4) / 96) + 8; // small safety margin
+      if (!cancelled && mm > 20) setPosHeightMm(mm);
+    };
+
+    run()
+      .catch(() => {})
+      .finally(() => {
+        if (iframe && iframe.parentNode) iframe.parentNode.removeChild(iframe);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [usePosPrinter, invoiceData]);
+
   const handlePrint = () => {
     window.print();
   };
-
-  // Render
 
   if (loading) {
     return (
@@ -97,12 +190,6 @@ const InvoicePreview = () => {
         <div className="bg-white p-10 rounded-xl shadow-xl text-center max-w-lg border">
           <h2 className="text-2xl font-bold text-red-600 mb-4">Error</h2>
           <p className="text-gray-700 mb-6 text-lg">{error}</p>
-          {/* <button
-            onClick={() => navigate('/invoice')}
-            className="bg-black text-white px-8 py-3 rounded-lg hover:bg-gray-800 transition"
-          >
-            Go Back
-          </button> */}
         </div>
       </div>
     );
@@ -124,22 +211,27 @@ const InvoicePreview = () => {
     0
   );
 
-  const cashPaid = parseFloat(
-    invoiceData.cashPaid ||
-      invoiceData.paymentAmount ||
-      invoiceData.cashAmount ||
-      invoiceData.paidAmount ||
-      0
-  );
+  // Payment split (older invoices have no payment record → treat as full credit)
+  const hasPaymentRecord =
+    invoiceData.cashAmount !== null &&
+    invoiceData.cashAmount !== undefined &&
+    invoiceData.creditAmount !== null &&
+    invoiceData.creditAmount !== undefined;
 
-  const balance = cashPaid - subTotal;
+  const cashAmount = hasPaymentRecord ? parseFloat(invoiceData.cashAmount) || 0 : 0;
+  const creditAmount = hasPaymentRecord
+    ? parseFloat(invoiceData.creditAmount) || 0
+    : subTotal;
 
   const shopName = invoiceData.companyName?.trim() || "SHOP NAME";
   const shopAddress = (invoiceData.address || "").trim() || "";
   const shopTel = (invoiceData.phone || "").trim() || "N/A";
 
   return (
-    <div className="w-full sm:w-[420px] mx-auto my-2 sm:my-4 bg-white font-mono text-xs sm:text-sm leading-tight shadow-lg border border-gray-300 print-container">
+    <div
+      ref={receiptRef}
+      className="w-full sm:w-[420px] mx-auto my-2 sm:my-4 bg-white font-mono text-xs sm:text-sm leading-tight shadow-lg border border-gray-300 print-container"
+    >
       {/* Header */}
       <div className="text-center py-2 sm:py-3 px-3 sm:px-4 border-b-2 border-dashed border-black">
         <h1 className="text-xl sm:text-2xl font-bold uppercase">{shopName}</h1>
@@ -148,20 +240,29 @@ const InvoicePreview = () => {
       </div>
 
       {/* Invoice Info */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 text-xs sm:text-sm px-3 sm:px-4 py-2 border-b border-dashed border-black gap-1">
-        <div>CASHIER: {invoiceData.cashierName || "CASHIER"}</div>
-        <div className="sm:text-right">INVOICE NO: {documentNo}</div>
-        <div>CUSTOMER: {invoiceData.customerName || "WALK-IN"}</div>
+      <div className="grid grid-cols-1 text-xs sm:text-sm px-3 sm:px-4 py-2 border-b border-dashed border-black gap-1">
+        {/* Cashier (left) + Invoice No (right) on the same line */}
+        <div className="flex items-baseline justify-between gap-2 info-row">
+          <span className="min-w-0 break-words">
+            CASHIER: {invoiceData.cashierName || "CASHIER"}
+          </span>
+          <span className="whitespace-nowrap">INVOICE NO: {documentNo}</span>
+        </div>
+        <div className="break-words">
+          CUSTOMER: {invoiceData.customerName || "WALK-IN"}
+        </div>
       </div>
 
       {/* Items */}
       <div className="border-t-2 border-b-2 border-dashed border-black py-2 px-3 sm:px-4">
-        <div className="grid grid-cols-5 text-[10px] sm:text-xs border-b border-black pb-1 mb-1 font-bold">
-          <div>PRODUCT</div>
-          <div className="text-center">QTY</div>
+        <div className="border-b border-black pb-1 mb-1 font-bold text-[10px] sm:text-xs">
+          <div className="text-left">PRODUCT</div>
+          <div className="grid grid-cols-4 gap-x-2">
+          <div className="text-left">QTY</div>
           <div className="text-right">U/PRICE</div>
           <div className="text-right">DISC</div>
           <div className="text-right">VALUE</div>
+          </div>
         </div>
 
         {invoiceData.items.map((item, idx) => (
@@ -169,9 +270,8 @@ const InvoicePreview = () => {
             <div className="font-bold text-[10px] sm:text-xs break-words">
               {item.PRODUCT_CODE} {item.PRODUCT_NAME}
             </div>
-            <div className="grid grid-cols-5 text-[10px] sm:text-xs">
-              <div></div>
-              <div className="text-center">
+            <div className="grid grid-cols-4 gap-x-2 text-[10px] sm:text-xs">
+              <div className="text-left">
                 {parseFloat(item.QUANTITY || 0).toFixed(3)}
               </div>
               <div className="text-right">
@@ -188,16 +288,20 @@ const InvoicePreview = () => {
         ))}
       </div>
 
-      {/* Totals */}
+      {/* Totals + Payment */}
       <div className="px-3 sm:px-4 text-xs sm:text-sm">
         <div className="flex justify-between border-b-2 border-dashed border-black py-1 font-bold">
           <span>SUB TOTAL</span>
           <span>{subTotal.toFixed(2)}</span>
         </div>
 
-        <div className="flex justify-between font-bold text-base sm:text-lg mt-3">
+        <div className="flex justify-between font-bold text-base sm:text-lg mt-3 pos-big">
+          <span>CASH</span>
+          <span>{cashAmount.toFixed(2)}</span>
+        </div>
+        <div className="flex justify-between font-bold text-base sm:text-lg mt-1 pos-big">
           <span>CREDIT</span>
-          <span>{subTotal.toFixed(2)}</span>
+          <span>{creditAmount.toFixed(2)}</span>
         </div>
         <div className="border-t-2 border-dotted border-black my-2"></div>
       </div>
@@ -222,9 +326,9 @@ const InvoicePreview = () => {
         </span>
       </div>
 
-      {/* Discount Box – only show if there is actual discount */}
+      {/* Discount Box */}
       {totalDiscount > 0.001 && (
-        <div className="text-center border-4 border-black py-2 sm:py-3 mx-4 sm:mx-8 my-3 font-bold text-base sm:text-xl">
+        <div className="text-center border-4 border-black py-2 sm:py-3 mx-4 sm:mx-8 my-3 font-bold text-base sm:text-xl pos-big">
           YOU HAVE TOTAL DISCOUNT
           <br />
           {totalDiscount.toFixed(2)}
@@ -238,7 +342,7 @@ const InvoicePreview = () => {
             {invoiceData.message.trim()}
           </div>
         )}
-        <p className="font-bold text-base sm:text-lg">THANK YOU COME AGAIN</p>
+        <p className="font-bold text-base sm:text-lg pos-big">THANK YOU COME AGAIN</p>
       </div>
 
       {/* Signature */}
@@ -251,6 +355,15 @@ const InvoicePreview = () => {
 
       {/* Print Button */}
       <div className="text-center pb-4 sm:pb-6 no-print px-3">
+        <label className="flex items-center justify-center gap-2 mb-3 text-sm sm:text-base cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={usePosPrinter}
+            onChange={handlePosToggle}
+            className="w-4 h-4 sm:w-5 sm:h-5 accent-black cursor-pointer"
+          />
+          <span>Print with POS printer</span>
+        </label>
         <button
           onClick={handlePrint}
           className="bg-black text-white px-6 sm:px-10 py-3 sm:py-4 rounded-xl text-base sm:text-xl hover:bg-gray-800 transition shadow-md w-full sm:w-auto"
@@ -259,11 +372,24 @@ const InvoicePreview = () => {
         </button>
       </div>
 
-      {/* Print Styles */}
-      <style jsx>{`
+      {/* Print Styles: @page must be top-level (not inside @media) to take effect */}
+      <style>{`
+        @page {
+          ${
+            usePosPrinter
+              ? `size: 80mm ${posHeightMm || 297}mm; margin: 0;`
+              : "size: A4; margin: 10mm;"
+          }
+        }
         @media print {
           .no-print {
             display: none !important;
+          }
+          html,
+          body {
+            margin: 0 !important;
+            padding: 0 !important;
+            background: #fff !important;
           }
           body * {
             visibility: hidden;
@@ -272,19 +398,20 @@ const InvoicePreview = () => {
           .print-container * {
             visibility: visible;
           }
+          ${usePosPrinter ? POS_TEXT_CSS : ""}
           .print-container {
             position: absolute;
             left: 0;
             top: 0;
-            width: 80mm;
-            padding: 8mm 6mm;
-            margin: 0;
-            box-shadow: none;
-            border: none;
-          }
-          @page {
-            margin: 0;
-            size: 80mm auto;
+            box-sizing: border-box;
+            margin: 0 !important;
+            box-shadow: none !important;
+            border: none !important;
+            ${
+              usePosPrinter
+                ? "width: 80mm !important; max-width: 80mm !important; padding: 2mm 3mm !important;"
+                : "width: 100% !important; max-width: 190mm !important; padding: 0 !important;"
+            }
           }
         }
       `}</style>
