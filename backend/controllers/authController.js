@@ -582,6 +582,30 @@ async function getTodaySalesByBranch(pool, req) {
   return { companies, todayMap };
 }
 
+// Helper: make sure RT_WEB database exists
+const ensureRtWebDatabase = async (pool) => {
+  await pool.request().query(`
+    IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = 'RT_WEB')
+    BEGIN
+      CREATE DATABASE [RT_WEB];
+    END
+  `);
+};
+ 
+// Adds CASH_AMOUNT / CREDIT_AMOUNT to the EXISTING tb_INVOICE_DETAILS (no new table).
+// NOT NULL with DEFAULT 0 (existing rows get 0).
+const ENSURE_INVOICE_PAYMENT_COLUMNS_SQL = `
+  USE [RT_WEB];
+  IF OBJECT_ID('tb_INVOICE_DETAILS', 'U') IS NOT NULL
+  BEGIN
+    IF COL_LENGTH('tb_INVOICE_DETAILS', 'CASH_AMOUNT') IS NULL
+      ALTER TABLE tb_INVOICE_DETAILS ADD CASH_AMOUNT MONEY NOT NULL
+        CONSTRAINT DF_tb_INVOICE_DETAILS_CASH_AMOUNT DEFAULT 0;
+    IF COL_LENGTH('tb_INVOICE_DETAILS', 'CREDIT_AMOUNT') IS NULL
+      ALTER TABLE tb_INVOICE_DETAILS ADD CREDIT_AMOUNT MONEY NOT NULL
+        CONSTRAINT DF_tb_INVOICE_DETAILS_CREDIT_AMOUNT DEFAULT 0;
+  END
+`;
 
 //sync db
 exports.syncDatabases = async (req, res) => {
@@ -2585,88 +2609,44 @@ exports.dashboardOptions = async (req, res) => {
 };
 
 // Get dashboard Customer data function
+// Get dashboard Customer data function
 exports.dashboardCustomerOptions = async (req, res) => {
   try {
-    console.log("User IP:", req.user?.ip);
-    console.log("User Port:", req.user?.port);
-
     const user_ip = String(req.user.ip).trim();
 
     if (mssql.connected) {
       await mssql.close();
-      console.log("✅ Database connection closed successfully");
     }
 
     const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
 
     if (!pool || !pool.connected) {
-      console.error("❌ Database connection failed");
       return res.status(500).json({
         success: false,
         message: "Database connection failed",
       });
     }
 
-    try {
-      // Switch database context to posback for CUSTOMER table
-      await pool.request().query(`USE [${posback}];`);
-    } catch (dbError) {
-      console.error(
-        `❌ Failed to switch to database ${posback}:`,
-        dbError.message,
-      );
-      return res.status(500).json({
-        success: false,
-        message: `Database ${posback} not accessible`,
-      });
-    }
-
-    // Check if table exists
-    try {
-      const tableCheck = await pool.request().query(`
-        SELECT TABLE_NAME 
-        FROM INFORMATION_SCHEMA.TABLES 
-        WHERE TABLE_NAME = 'tb_CUSTOMER'
-      `);
-
-      if (tableCheck.recordset.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message: "Customer table not found",
-        });
-      }
-    } catch (tableError) {
-      console.error("Table check error:", tableError.message);
-    }
-
     const result = await pool.request().query(`
-      SELECT CUSTOMER, CUSTOMER_NAME 
-      FROM tb_CUSTOMER;
+      SELECT CUSTOMER, CUSTOMER_NAME
+      FROM [${posback}].dbo.tb_CUSTOMER
+      ORDER BY CUSTOMER_NAME;
     `);
 
-    const records = result.recordset || [];
-
-    if (records.length === 0) {
-      return res.status(200).json({
-        success: true,
-        message: "No customers found",
-        userData: [],
-      });
-    }
-
-    const userData = records.map(({ CUSTOMER, CUSTOMER_NAME }) => ({
-      CUSTOMER: CUSTOMER?.trim(),
-      CUSTOMER_NAME: CUSTOMER_NAME?.trim(),
-    }));
+    const userData = (result.recordset || []).map(
+      ({ CUSTOMER, CUSTOMER_NAME }) => ({
+        CUSTOMER: CUSTOMER?.trim(),
+        CUSTOMER_NAME: CUSTOMER_NAME?.trim(),
+      })
+    );
 
     return res.status(200).json({
       success: true,
-      message: "Dashboard data retrieved successfully",
+      message: userData.length ? "Customers retrieved successfully" : "No customers found",
       userData,
     });
   } catch (error) {
-    console.error("❌ Error retrieving dashboard data:", error.message);
-    console.error("Stack trace:", error.stack);
+    console.error("❌ Error retrieving customers:", error.message);
     return res.status(500).json({
       success: false,
       message: "Failed to retrieve customer names",
@@ -2674,6 +2654,48 @@ exports.dashboardCustomerOptions = async (req, res) => {
     });
   }
 };
+
+
+// Get dashboard Customer data function
+// exports.dashboardCustomerOptions = async (req, res) => {
+//   try {
+//     const user_ip = String(req.user.ip).trim();
+
+//     if (mssql.connected) {
+//       await mssql.close();
+//     }
+
+//     const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+
+//     if (!pool || !pool.connected) {
+//       return res.status(500).json({ success: false, message: "Database connection failed" });
+//     }
+
+//     const result = await pool.request().query(`
+//       SELECT CUSTOMER, CUSTOMER_NAME
+//       FROM [${posback}].dbo.tb_CUSTOMER
+//       ORDER BY CUSTOMER_NAME;
+//     `);
+
+//     const userData = (result.recordset || []).map(({ CUSTOMER, CUSTOMER_NAME }) => ({
+//       CUSTOMER: CUSTOMER?.trim(),
+//       CUSTOMER_NAME: CUSTOMER_NAME?.trim(),
+//     }));
+
+//     return res.status(200).json({
+//       success: true,
+//       message: userData.length ? "Customers retrieved successfully" : "No customers found",
+//       userData,
+//     });
+//   } catch (error) {
+//     console.error("❌ Error retrieving customers:", error.message);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to retrieve customer names",
+//       error: process.env.NODE_ENV === "development" ? error.message : undefined,
+//     });
+//   }
+// };
 
 // Get vendor data function
 exports.vendorOptions = async (req, res) => {
@@ -7977,34 +7999,32 @@ exports.getCompanies = async (req, res) => {
   }
 };
 
-// GET - Invoice Preview (FIXED)
+// GET - Invoice Preview (now returns cashAmount / creditAmount)
 exports.getInvoicePreview = async (req, res) => {
   try {
     let { documentNo, company } = req.query;
     documentNo = (documentNo || "").trim().toUpperCase();
     company = (company || "").trim().toUpperCase();
-
+ 
     if (!documentNo) {
       return res.status(400).json({ message: "Document number is required" });
     }
-
-    // Authentication & user validation
+ 
     if (!req.user || !req.user.username) {
       return res.status(401).json({ message: "Unauthorized - please log in" });
     }
-
+ 
     const username = req.user.username;
     const user_ip = String(req.user.ip).trim();
-
-    // Permission check
-    // FIXED: Connect to MAIN database for permission check, not user database
+ 
+    // Permission check (MAIN database)
     if (mssql.connected) await mssql.close();
-    const mainPool = await connectToDatabase(); // This connects to RTPOS_MAIN
-
+    const mainPool = await connectToDatabase();
+ 
     if (!mainPool || !mainPool.connected) {
       return res.status(500).json({ message: "Database connection failed" });
     }
-
+ 
     const permResult = await mainPool
       .request()
       .input("username", mssql.NVarChar(100), username).query(`
@@ -8013,31 +8033,31 @@ exports.getInvoicePreview = async (req, res) => {
         FROM tb_USERS
         WHERE username = @username
       `);
-
+ 
     if (permResult.recordset.length === 0) {
       return res
         .status(403)
         .json({ message: "No permission record found for the user" });
     }
-
+ 
     const hasPermission = permResult.recordset[0].t_invoicePreview === "T";
-
+ 
     if (!hasPermission) {
       return res.status(403).json({
         message: "You do not have permission to view the invoice preview",
       });
     }
-
-    // Now connect to user database for invoice data
+ 
+    // User database
     if (mssql.connected) await mssql.close();
     const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
-
+ 
     if (!pool || !pool.connected) {
       return res
         .status(500)
         .json({ message: "User database connection failed" });
     }
-
+ 
     // Auto-detect company if not provided
     if (!company) {
       const detect = await pool
@@ -8048,17 +8068,17 @@ exports.getInvoicePreview = async (req, res) => {
           FROM tb_INVOICE_DETAILS 
           WHERE DOCUMENT_NO = @docNo
         `);
-
+ 
       if (detect.recordset.length === 0) {
         return res.status(404).json({
           message: "Invoice not found. Unable to determine company code.",
         });
       }
-
+ 
       company = detect.recordset[0].COMPANY_CODE.trim();
     }
-
-    // Fetch company information
+ 
+    // Company information
     const companyResult = await pool
       .request()
       .input("company", mssql.NVarChar(10), company).query(`
@@ -8067,16 +8087,24 @@ exports.getInvoicePreview = async (req, res) => {
         FROM tb_COMPANY 
         WHERE COMPANY_CODE = @company
       `);
-
+ 
     if (companyResult.recordset.length === 0) {
       return res.status(404).json({
         message: `Company not found (code: ${company})`,
       });
     }
-
+ 
     const companyInfo = companyResult.recordset[0];
-
-    // Fetch invoice items
+ 
+    // Do the payment columns exist yet? (older databases may not have them)
+    const colCheck = await pool.request().query(`
+      SELECT CASE WHEN COL_LENGTH('RT_WEB.dbo.tb_INVOICE_DETAILS', 'CASH_AMOUNT') IS NOT NULL
+                   AND COL_LENGTH('RT_WEB.dbo.tb_INVOICE_DETAILS', 'CREDIT_AMOUNT') IS NOT NULL
+             THEN 1 ELSE 0 END AS HasPay
+    `);
+    const hasPayCols = colCheck.recordset[0].HasPay === 1;
+ 
+    // Invoice items
     const itemsResult = await pool
       .request()
       .input("docNo", mssql.NVarChar(30), documentNo)
@@ -8092,22 +8120,36 @@ exports.getInvoicePreview = async (req, res) => {
           UNITPRICE,
           DISCOUNT_AMOUNT,
           TOTAL,
-          TRUSER
+          TRUSER${hasPayCols ? ",\n          CASH_AMOUNT,\n          CREDIT_AMOUNT" : ""}
         FROM tb_INVOICE_DETAILS
         WHERE DOCUMENT_NO = @docNo 
           AND COMPANY_CODE = @company
         ORDER BY PRODUCT_CODE
       `);
-
+ 
     if (itemsResult.recordset.length === 0) {
       return res.status(404).json({
         message: `No items found for invoice ${documentNo} under company ${company}`,
       });
     }
-
+ 
     const items = itemsResult.recordset;
     const firstItem = items[0];
-
+ 
+    // Payment split is stored on every row of the invoice (same value) -> read from first row.
+    // Legacy invoices (saved before this feature) have 0 + 0 -> send null so the
+    // frontend shows them as full credit.
+    let cashAmount = null;
+    let creditAmount = null;
+    if (hasPayCols) {
+      const c = Number(firstItem.CASH_AMOUNT) || 0;
+      const cr = Number(firstItem.CREDIT_AMOUNT) || 0;
+      if (c + cr > 0) {
+        cashAmount = c;
+        creditAmount = cr;
+      }
+    }
+ 
     return res.status(200).json({
       success: true,
       invoice: {
@@ -8119,6 +8161,8 @@ exports.getInvoicePreview = async (req, res) => {
         message: companyInfo.RECEIPT_TEXT?.trim() || "",
         customerName: firstItem.CUSTOMER_NAME?.trim() || "WALK-IN CUSTOMER",
         cashierName: firstItem.TRUSER?.trim() || "CASHIER",
+        cashAmount,
+        creditAmount,
         items,
       },
     });
@@ -8478,42 +8522,38 @@ exports.insertInvoiceTemp = async (req, res) => {
   }
 };
 
-// POST - Save invoice (FINAL - UPDATE)
+
+// POST - Save invoice (now validates Cash + Credit == Invoice Total)
 exports.saveInvoice = async (req, res) => {
   let pool = null;
   let transaction = null;
-
+ 
   try {
     console.log("=== SAVE INVOICE START ===");
-    const { company, customer } = req.body;
+    const { company, customer, cashAmount, creditAmount } = req.body;
     const username = req.user.username;
-
+ 
     if (!company || !customer) {
       return res
         .status(400)
         .json({ message: "Company and Customer are required" });
     }
-
+ 
     const user_ip = String(req.user.ip).trim();
     if (mssql.connected) await mssql.close();
-
+ 
     pool = await connectToUserDatabase(user_ip, req.user.port.trim());
     if (!pool || !pool.connected) {
       return res.status(500).json({ message: "Database connection failed" });
     }
-
+ 
     // 1. Ensure RT_WEB database exists
-    await pool.request().query(`
-      IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = 'RT_WEB')
-      BEGIN
-        CREATE DATABASE [RT_WEB];
-      END
-    `);
-
+    await ensureRtWebDatabase(pool);
+ 
     // 2. Create tb_InvoiceTemp if missing (with TRUSER)
     await pool.request().query(`
       USE [RT_WEB];
-
+ 
       IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='tb_InvoiceTemp' AND xtype='U')
       BEGIN
         CREATE TABLE tb_InvoiceTemp (
@@ -8536,8 +8576,7 @@ exports.saveInvoice = async (req, res) => {
         );
         PRINT 'Created tb_InvoiceTemp';
       END
-
-      -- Add TRUSER if missing
+ 
       IF NOT EXISTS (
         SELECT * FROM sys.columns 
         WHERE object_id = OBJECT_ID('tb_InvoiceTemp') AND name = 'TRUSER'
@@ -8547,11 +8586,11 @@ exports.saveInvoice = async (req, res) => {
         PRINT 'Added TRUSER column';
       END
     `);
-
+ 
     // 3. Create tb_DOCUMENT if missing
     await pool.request().query(`
       USE [RT_WEB];
-
+ 
       IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='tb_DOCUMENT' AND xtype='U')
       BEGIN
         CREATE TABLE tb_DOCUMENT (
@@ -8566,128 +8605,185 @@ exports.saveInvoice = async (req, res) => {
         PRINT 'Created tb_DOCUMENT';
       END
     `);
-
+ 
+    // 4. Add CASH_AMOUNT / CREDIT_AMOUNT columns to tb_INVOICE_DETAILS if missing
+    await pool.request().query(ENSURE_INVOICE_PAYMENT_COLUMNS_SQL);
+ 
     transaction = pool.transaction();
     await transaction.begin();
-
+ 
     try {
-      // Table setup (keep your existing one)
-
       const hasTRUSERResult = await transaction.request().query(`
         SELECT CASE WHEN EXISTS (SELECT * FROM sys.columns 
                     WHERE object_id = OBJECT_ID('tb_InvoiceTemp') AND name = 'TRUSER')
               THEN 1 ELSE 0 END as HasTRUSER
       `);
       const hasTRUSER = hasTRUSERResult.recordset[0].HasTRUSER === 1;
-
-      // Count items
-      let countQuery = `SELECT COUNT(*) as count FROM tb_InvoiceTemp WHERE COMPANY_CODE = @company AND CUSTOMER_CODE = @customer`;
+ 
+      // Count items + invoice total from the temp table
+      let countQuery = `
+        SELECT COUNT(*) as count, ISNULL(SUM(TOTAL), 0) as grandTotal
+        FROM tb_InvoiceTemp
+        WHERE COMPANY_CODE = @company AND CUSTOMER_CODE = @customer`;
       if (hasTRUSER) countQuery += ` AND TRUSER = @username`;
-
+ 
       const countReq = transaction
         .request()
         .input("company", mssql.NVarChar(10), company.trim())
         .input("customer", mssql.NVarChar(20), customer.trim());
       if (hasTRUSER) countReq.input("username", mssql.NVarChar(50), username);
-
+ 
       const countResult = await countReq.query(countQuery);
       const itemCount = countResult.recordset[0].count;
-
+      const grandTotal = Number(countResult.recordset[0].grandTotal) || 0;
+ 
       if (itemCount === 0) {
         await transaction.rollback();
         return res.status(400).json({ message: "No items found to save" });
       }
-
-      // ============ CHECK IF ROW EXISTS FOR THIS COMPANY IN tb_DOCUMENT ============
+ 
+      // ============ PAYMENT VALIDATION (cash + credit must equal total) ============
+      const toCents = (v) => Math.round((parseFloat(v) || 0) * 100);
+      const totalCents = toCents(grandTotal);
+ 
+      let cashCents;
+      let creditCents;
+ 
+      if (
+        (cashAmount === undefined || cashAmount === null) &&
+        (creditAmount === undefined || creditAmount === null)
+      ) {
+        // Old client without payment fields → whole invoice on credit
+        cashCents = 0;
+        creditCents = totalCents;
+      } else {
+        cashCents = toCents(cashAmount);
+        creditCents = toCents(creditAmount);
+      }
+ 
+      if (cashCents < 0 || creditCents < 0) {
+        await transaction.rollback();
+        return res.status(400).json({
+          message: "Cash and Credit amounts cannot be negative",
+        });
+      }
+ 
+      if (cashCents + creditCents !== totalCents) {
+        await transaction.rollback();
+        return res.status(400).json({
+          message: `Cash (${(cashCents / 100).toFixed(2)}) + Credit (${(
+            creditCents / 100
+          ).toFixed(2)}) = ${((cashCents + creditCents) / 100).toFixed(
+            2
+          )} does not match the invoice total (${(totalCents / 100).toFixed(2)})`,
+        });
+      }
+ 
+      // ============ NEXT INVOICE NUMBER (duplicate-proof) ============
+      const paddedCompany = company.trim().padStart(2, "0");
+ 
+      // Lock the counter row so two saves at the same time cannot read the same number
       const rowCheck = await transaction
         .request()
         .input("company", mssql.NVarChar(10), company.trim()).query(`
-          SELECT INVOICE FROM tb_DOCUMENT WHERE COMPANY_CODE = @company
+          SELECT INVOICE
+          FROM RT_WEB.dbo.tb_DOCUMENT WITH (UPDLOCK, HOLDLOCK)
+          WHERE COMPANY_CODE = @company
         `);
-
-      let currentInvoiceNo = 1; // default for new company
-
-      if (rowCheck.recordset.length > 0) {
-        // Row exists → get current invoice no and increment
-        currentInvoiceNo = rowCheck.recordset[0].INVOICE + 1;
-        console.log(
-          `Existing row found for company ${company}. Updating INVOICE to ${currentInvoiceNo}`,
-        );
-      } else {
-        console.log(
-          `No row for company ${company}. Creating new with INVOICE = 1`,
-        );
+ 
+      let counterNo = rowCheck.recordset.length > 0
+        ? Number(rowCheck.recordset[0].INVOICE) || 0
+        : 0;
+ 
+      // Highest invoice number that ALREADY exists in tb_INVOICE_DETAILS for this company.
+      // If the counter was reset / out of sync, we still never reuse a saved number.
+      const maxDocResult = await transaction
+        .request()
+        .input("company", mssql.NVarChar(10), company.trim())
+        .input("prefix", mssql.NVarChar(12), paddedCompany + "%").query(`
+          SELECT MAX(DOCUMENT_NO) AS maxDoc
+          FROM RT_WEB.dbo.tb_INVOICE_DETAILS
+          WHERE COMPANY_CODE = @company AND DOCUMENT_NO LIKE @prefix
+        `);
+ 
+      let maxExistingNo = 0;
+      const maxDoc = (maxDocResult.recordset[0].maxDoc || "").trim();
+      if (maxDoc) {
+        const n = parseInt(maxDoc.slice(paddedCompany.length), 10);
+        if (!isNaN(n)) maxExistingNo = n;
       }
-
-      // Generate padded document number for INVOICE_DETAILS
-      const paddedCompany = company.trim().padStart(2, "0");
+ 
+      const currentInvoiceNo = Math.max(counterNo, maxExistingNo) + 1;
       const documentNumber =
         paddedCompany + String(currentInvoiceNo).padStart(8, "0");
-      console.log(`Generated Document No: ${documentNumber}`);
-
-      // ============ UPSERT (Update if exists, Insert if not) into tb_DOCUMENT ============
+ 
+      // ============ UPSERT tb_DOCUMENT ============
       await transaction
         .request()
         .input("company", mssql.NVarChar(10), company.trim())
         .input("invoiceNo", mssql.Numeric(18, 0), currentInvoiceNo)
         .input("repuser", mssql.NVarChar(50), username).query(`
-          IF EXISTS (SELECT 1 FROM tb_DOCUMENT WHERE COMPANY_CODE = @company)
+          IF EXISTS (SELECT 1 FROM RT_WEB.dbo.tb_DOCUMENT WHERE COMPANY_CODE = @company)
           BEGIN
-            UPDATE tb_DOCUMENT 
+            UPDATE RT_WEB.dbo.tb_DOCUMENT 
             SET INVOICE = @invoiceNo, REPUSER = @repuser, INSERT_TIME = GETDATE()
             WHERE COMPANY_CODE = @company
           END
           ELSE
           BEGIN
-            INSERT INTO tb_DOCUMENT (COMPANY_CODE, GRN, PRN, TOG, INVOICE, REPUSER)
+            INSERT INTO RT_WEB.dbo.tb_DOCUMENT (COMPANY_CODE, GRN, PRN, TOG, INVOICE, REPUSER)
             VALUES (@company, 1, 1, 1, @invoiceNo, @repuser)
           END
         `);
-
+ 
       // ============ INSERT INTO tb_INVOICE_DETAILS ============
       let insertQuery = `
         INSERT INTO tb_INVOICE_DETAILS 
         (DOCUMENT_NO, COMPANY_CODE, COMPANY_NAME, CUSTOMER_CODE, CUSTOMER_NAME,
          PRODUCT_CODE, PRODUCT_NAME, COSTPRICE, UNITPRICE, STOCK, QUANTITY,
-         DISCOUNT, DISCOUNT_AMOUNT, TOTAL${hasTRUSER ? ", TRUSER" : ""})
+         DISCOUNT, DISCOUNT_AMOUNT, TOTAL${hasTRUSER ? ", TRUSER" : ""},
+         CASH_AMOUNT, CREDIT_AMOUNT)
         SELECT 
           @docNo,
           COMPANY_CODE, COMPANY_NAME, CUSTOMER_CODE, CUSTOMER_NAME,
           PRODUCT_CODE, PRODUCT_NAME, COSTPRICE, UNITPRICE, STOCK, QUANTITY,
-          DISCOUNT, DISCOUNT_AMOUNT, TOTAL${hasTRUSER ? ", TRUSER" : ""}
+          DISCOUNT, DISCOUNT_AMOUNT, TOTAL${hasTRUSER ? ", TRUSER" : ""},
+          @cash, @credit
         FROM tb_InvoiceTemp
         WHERE COMPANY_CODE = @company AND CUSTOMER_CODE = @customer
       `;
       if (hasTRUSER) insertQuery += ` AND TRUSER = @username`;
-
+ 
       const insertReq = transaction
         .request()
         .input("docNo", mssql.NVarChar(10), documentNumber)
         .input("company", mssql.NVarChar(10), company.trim())
-        .input("customer", mssql.NVarChar(20), customer.trim());
+        .input("customer", mssql.NVarChar(20), customer.trim())
+        .input("cash", mssql.Money, cashCents / 100)
+        .input("credit", mssql.Money, creditCents / 100);
       if (hasTRUSER) insertReq.input("username", mssql.NVarChar(50), username);
-
+ 
       const insertResult = await insertReq.query(insertQuery);
       const itemsSaved = insertResult.rowsAffected[0];
-
+ 
       // ============ CLEAR TEMP TABLE ============
       let deleteQuery = `DELETE FROM tb_InvoiceTemp WHERE COMPANY_CODE = @company AND CUSTOMER_CODE = @customer`;
       if (hasTRUSER) deleteQuery += ` AND TRUSER = @username`;
-
+ 
       const deleteReq = transaction
         .request()
         .input("company", mssql.NVarChar(10), company.trim())
         .input("customer", mssql.NVarChar(20), customer.trim());
       if (hasTRUSER) deleteReq.input("username", mssql.NVarChar(50), username);
-
+ 
       await deleteReq.query(deleteQuery);
-
+ 
       await transaction.commit();
-
+ 
       console.log(
-        `Invoice saved! Company: ${company}, Invoice No: ${currentInvoiceNo}, Document No: ${documentNumber}, Items: ${itemsSaved}`,
+        `Invoice saved! Company: ${company}, Document No: ${documentNumber}, Items: ${itemsSaved}, Cash: ${cashCents / 100}, Credit: ${creditCents / 100}`,
       );
-
+ 
       return res.status(200).json({
         saved: 1,
         message: "Invoice saved successfully",
@@ -8695,6 +8791,8 @@ exports.saveInvoice = async (req, res) => {
         invoiceNumber: currentInvoiceNo,
         documentNumber,
         companyCode: company,
+        cashAmount: cashCents / 100,
+        creditAmount: creditCents / 100,
       });
     } catch (innerError) {
       if (transaction) await transaction.rollback();

@@ -9,6 +9,10 @@ const app = express();
 const authController = require("../controllers/authController");
 const debugRoutes = require('../routes/debug');
 
+Object.keys(authController).length;
+const names = ["dashboardOptions","dashboardCustomerOptions","vendorOptions","productName","loadingDashboard","getTodayYesterdaySales","getSalesTrend","getBranchPerformance","getTopSalesProducts","getBranchTodayYesterdaySales","aiReportChat"];
+names.forEach((n) => { if (typeof authController[n] !== "function") console.log("MISSING:", n); });
+
 app.use(
   cors({
     origin: ["https://retailtarget.lk", "https://retail-web-xo4u.vercel.app", "http://localhost:3000", "http://localhost:3001"],
