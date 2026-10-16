@@ -129,6 +129,12 @@ function App() {
     setPaymentError("");
   };
 
+  // Product select / search / scan, payment section reset
+  const resetPayment = () => {
+    setPaymentMethod("CREDIT");
+    applyPaymentDefaults("CREDIT");
+  };
+
   // Refs
   const quantityRef = useRef(null);
   const discountRef = useRef(null);
@@ -655,6 +661,7 @@ function App() {
         setSalesData(response.data.salesData[0]);
         setUnitType(response.data.salesData[0].UNIT || "");
         setQuantityError("");
+        resetPayment();
       }
       if (response.data.colorWiseData.length > 0) {
         const colorWiseData = response.data.colorWiseData;
