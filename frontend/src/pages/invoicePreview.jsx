@@ -4,14 +4,56 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../AuthContext';
 
 // POS (80mm) text sizes: one body size for everything, bigger only for the shop name
-// and the key lines (marked with the "pos-big" class). Used for printing AND for
-// measuring the page height, so both always match.
+// and the key lines (marked with the "pos-big" class). The footer (copyright + message,
+// marked "pos-footer") is smaller so every footer line stays on ONE line.
+// Used for printing AND for measuring the page height, so both always match.
 const POS_TEXT_CSS = `
   .print-container, .print-container * { font-size: 10.5px !important; line-height: 1.25 !important; }
   .print-container h1 { font-size: 18px !important; line-height: 1.2 !important; }
   .print-container .pos-big, .print-container .pos-big * { font-size: 13px !important; }
+  .print-container .pos-footer, .print-container .pos-footer * { font-size: 8.5px !important; }
   .print-container .border-4 { border-width: 2px !important; }
 `;
+
+// ---- POS page height tuning ----
+// Printed receipt height = measured height * POS_PRINT_SCALE.
+//   * blank space still at the bottom  -> make POS_PRINT_SCALE smaller (e.g. 0.82)
+//   * receipt cut off / goes to page 2 -> make it bigger (e.g. 0.88)
+const POS_PRINT_SCALE = 0.85;
+// Blank space kept after the phone-number line (mm). About one line of text.
+const POS_END_SPACE_MM = 5;
+
+// Shown when the company has no footer message saved in the database
+const DEFAULT_MESSAGE =
+  "WE ARE HAPPY TO EXCHANGE PRODUCTS RETURNED IN\nSALEABLE CONDITION. ALONG WITH RECEIPT.";
+
+// Max characters that fit on one footer line (80mm paper, 8.5px mono)
+const FOOTER_MAX_CHARS = 46;
+
+// Footer message -> at most 2 lines, each line stays on one line when printed.
+const buildMessageLines = (msg) => {
+  const raw = (msg || "")
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  if (raw.length === 0) return [];
+  if (raw.length <= 2 && raw.every((l) => l.length <= FOOTER_MAX_CHARS)) return raw;
+
+  const words = raw.join(" ").replace(/\s+/g, " ").split(" ");
+  const lines = [];
+  let current = "";
+  words.forEach((w) => {
+    const next = current ? `${current} ${w}` : w;
+    if (next.length <= FOOTER_MAX_CHARS || !current) {
+      current = next;
+    } else {
+      lines.push(current);
+      current = w;
+    }
+  });
+  if (current) lines.push(current);
+  return lines;
+};
 
 const InvoicePreview = () => {
   const { authToken } = useContext(AuthContext);
@@ -25,6 +67,9 @@ const InvoicePreview = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Customer code + name (resolved from invoice data, or looked up from the customer list)
+  const [customerInfo, setCustomerInfo] = useState({ code: "", name: "" });
+
   // false = A4 print (default), true = POS thermal printer (80mm). Remembered per browser.
   const [usePosPrinter, setUsePosPrinter] = useState(() => {
     try {
@@ -35,10 +80,6 @@ const InvoicePreview = () => {
   });
 
   const receiptRef = useRef(null);
-  // Height (mm) of the receipt in POS mode. "@page { size: 80mm auto }" is INVALID CSS
-  // (auto cannot be mixed with a length) so Chrome ignores it and uses A4.
-  // We measure the real receipt height and use "size: 80mm <height>mm" instead.
-  const [posHeightMm, setPosHeightMm] = useState(null);
 
   const handlePosToggle = (e) => {
     const checked = e.target.checked;
@@ -106,28 +147,77 @@ const InvoicePreview = () => {
     fetchInvoice();
   }, [documentNo, company, token, authToken, hasPermission, navigate]);
 
-  // Measure receipt height: receipt is 80mm wide inside a wide iframe viewport, because
-  // Chrome lays the page out with the wide (sm:) styles when printing.
+  // Resolve customer CODE + NAME.
+  // 1) use whatever the invoice API returns
+  // 2) if only one of them is known (or both are the same), look the customer up
+  //    in the customer list so both can be printed
   useEffect(() => {
-    if (!usePosPrinter || !invoiceData) return;
+    if (!invoiceData) return;
+
+    const code = String(
+      invoiceData.customerCode ?? invoiceData.customer ?? invoiceData.CUSTOMER ?? ""
+    ).trim();
+    const name = String(
+      invoiceData.customerName ?? invoiceData.CUSTOMER_NAME ?? ""
+    ).trim();
+
+    setCustomerInfo({ code, name });
+
+    if (code && name && code.toUpperCase() !== name.toUpperCase()) return;
+
+    const key = (code || name).toUpperCase();
+    if (!key || !token) return;
+
     let cancelled = false;
-    let iframe = null;
+    axios
+      .get(`${process.env.REACT_APP_BACKEND_URL}customers`, {
+        headers: { Authorization: `Bearer ${token}` },
+        timeout: 10000,
+      })
+      .then((res) => {
+        if (cancelled) return;
+        const list = Array.isArray(res.data?.userData) ? res.data.userData : [];
+        const match = list.find(
+          (c) =>
+            (c.CUSTOMER || "").trim().toUpperCase() === key ||
+            (c.CUSTOMER_NAME || "").trim().toUpperCase() === key
+        );
+        if (match) {
+          setCustomerInfo({
+            code: (match.CUSTOMER || "").trim(),
+            name: (match.CUSTOMER_NAME || "").trim(),
+          });
+        }
+      })
+      .catch(() => {});
 
-    const run = async () => {
-      await new Promise((r) => requestAnimationFrame(r));
-      const src = receiptRef.current;
-      if (!src || cancelled) return;
+    return () => {
+      cancelled = true;
+    };
+  }, [invoiceData, token]);
 
-      iframe = document.createElement("iframe");
-      iframe.setAttribute("aria-hidden", "true");
-      iframe.style.cssText =
-        "position:fixed;left:-10000px;top:0;width:1000px;height:5000px;border:0;visibility:hidden;";
-      document.body.appendChild(iframe);
+  // POS print: the receipt is copied into a hidden iframe that is exactly 80mm wide.
+  // That is the SAME width Chrome uses for the printed page, so the layout (and the
+  // measured height) is identical to what gets printed -> no blank space at the bottom.
+  const printPos = async () => {
+    const src = receiptRef.current;
+    if (!src) return;
 
+    const iframe = document.createElement("iframe");
+    iframe.setAttribute("aria-hidden", "true");
+    iframe.style.cssText =
+      "position:fixed;left:-10000px;top:0;width:80mm;height:2000px;border:0;visibility:hidden;";
+    document.body.appendChild(iframe);
+
+    const cleanup = () => {
+      if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+    };
+
+    try {
       const doc = iframe.contentDocument;
       doc.open();
       doc.write(
-        "<!doctype html><html><head><meta charset='utf-8'></head><body style='margin:0'></body></html>"
+        "<!doctype html><html><head><meta charset='utf-8'></head><body style='margin:0;background:#fff'></body></html>"
       );
       doc.close();
 
@@ -136,7 +226,12 @@ const InvoicePreview = () => {
       document.querySelectorAll('link[rel="stylesheet"], style').forEach((node) => {
         const copy = node.cloneNode(true);
         if (copy.tagName === "LINK") {
-          loads.push(new Promise((res) => { copy.onload = res; copy.onerror = res; }));
+          loads.push(
+            new Promise((res) => {
+              copy.onload = res;
+              copy.onerror = res;
+            })
+          );
         }
         doc.head.appendChild(copy);
       });
@@ -144,36 +239,53 @@ const InvoicePreview = () => {
       posStyle.textContent = POS_TEXT_CSS;
       doc.head.appendChild(posStyle);
 
-      await Promise.race([
-        Promise.all(loads),
-        new Promise((r) => setTimeout(r, 1500)),
-      ]);
-      if (cancelled) return;
+      await Promise.race([Promise.all(loads), new Promise((r) => setTimeout(r, 2000))]);
+      try {
+        if (doc.fonts && doc.fonts.ready) await doc.fonts.ready;
+      } catch (e) {}
 
       const clone = src.cloneNode(true);
-      clone.querySelectorAll(".no-print").forEach((n) => n.remove());
+      clone.querySelectorAll(".no-print, style").forEach((n) => n.remove());
       clone.style.cssText =
         "position:static;width:80mm;max-width:80mm;padding:2mm 3mm;margin:0;box-sizing:border-box;border:none;box-shadow:none;";
       doc.body.appendChild(clone);
 
-      const px = clone.getBoundingClientRect().height;
-      const mm = Math.ceil((px * 25.4) / 96) + 8; // small safety margin
-      if (!cancelled && mm > 20) setPosHeightMm(mm);
-    };
+      await new Promise((r) => setTimeout(r, 100)); // let layout settle
 
-    run()
-      .catch(() => {})
-      .finally(() => {
-        if (iframe && iframe.parentNode) iframe.parentNode.removeChild(iframe);
-      });
+      // Height = from the top of the receipt to the bottom of the phone-number line
+      // (".pos-end"), plus ONE line of blank space. Anything after it (buttons etc.) is ignored.
+      const endEl = clone.querySelector(".pos-end");
+      const topPx = clone.getBoundingClientRect().top;
+      const bottomPx = endEl
+        ? endEl.getBoundingClientRect().bottom
+        : clone.getBoundingClientRect().bottom;
+      const px = bottomPx - topPx;
+      // Chrome shrinks the receipt a little when it prints it, so the printed receipt is
+      // shorter than the measured one. POS_PRINT_SCALE corrects for that.
+      const mm = Math.ceil(((px * 25.4) / 96) * POS_PRINT_SCALE) + POS_END_SPACE_MM;
 
-    return () => {
-      cancelled = true;
-    };
-  }, [usePosPrinter, invoiceData]);
+      const pageStyle = doc.createElement("style");
+      pageStyle.textContent = `
+        @page { size: 80mm ${mm}mm; margin: 0; }
+        html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
+      `;
+      doc.head.appendChild(pageStyle);
+
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+    } catch (err) {
+      console.error("POS print failed:", err);
+    } finally {
+      setTimeout(cleanup, 1500);
+    }
+  };
 
   const handlePrint = () => {
-    window.print();
+    if (usePosPrinter) {
+      printPos();
+    } else {
+      window.print();
+    }
   };
 
   if (loading) {
@@ -227,6 +339,18 @@ const InvoicePreview = () => {
   const shopAddress = (invoiceData.address || "").trim() || "";
   const shopTel = (invoiceData.phone || "").trim() || "N/A";
 
+  // Customer: "CODE NAME"
+  const { code: custCode, name: custName } = customerInfo;
+  const customerLabel =
+    custCode && custName && custCode.toUpperCase() !== custName.toUpperCase()
+      ? `${custCode} ${custName}`
+      : custCode || custName || "WALK-IN";
+
+  // Use the message saved for the company; if there is none, use the default exchange note
+  const messageLines = buildMessageLines(
+    invoiceData.message?.trim() ? invoiceData.message : DEFAULT_MESSAGE
+  );
+
   return (
     <div
       ref={receiptRef}
@@ -248,9 +372,7 @@ const InvoicePreview = () => {
           </span>
           <span className="whitespace-nowrap">INVOICE NO: {documentNo}</span>
         </div>
-        <div className="break-words">
-          CUSTOMER: {invoiceData.customerName || "WALK-IN"}
-        </div>
+        <div className="break-words">CUSTOMER: {customerLabel}</div>
       </div>
 
       {/* Items */}
@@ -314,10 +436,10 @@ const InvoicePreview = () => {
         <div className="text-right">{invoiceData.items.length}</div>
       </div>
 
-      {/* Date & Time */}
-      <div className="flex flex-col sm:flex-row justify-between text-[10px] sm:text-xs px-3 sm:px-4 mt-3 pb-2 gap-1">
-        <span>DATE : {new Date().toLocaleDateString('en-GB')}</span>
-        <span>
+      {/* Date & Time (always side by side, so screen / print / measuring all match) */}
+      <div className="flex flex-row justify-between text-[10px] sm:text-xs px-3 sm:px-4 mt-3 pb-2 gap-1">
+        <span className="whitespace-nowrap">DATE : {new Date().toLocaleDateString('en-GB')}</span>
+        <span className="whitespace-nowrap">
           END TIME :{" "}
           {new Date().toLocaleTimeString([], {
             hour: '2-digit',
@@ -335,22 +457,26 @@ const InvoicePreview = () => {
         </div>
       )}
 
-      {/* Footer Message */}
-      <div className="text-center text-xs sm:text-sm px-3 sm:px-4 pb-2">
-        {invoiceData.message?.trim() && (
-          <div className="whitespace-pre-line leading-snug mb-3 text-[10px] sm:text-xs">
-            {invoiceData.message.trim()}
+      {/* Footer Message (max 2 lines, each line stays on one line) */}
+      <div className="text-center text-xs sm:text-sm px-1 pb-2">
+        {messageLines.length > 0 && (
+          <div className="leading-snug mb-3 text-[10px] sm:text-xs pos-footer">
+            {messageLines.map((line, i) => (
+              <div key={i} className="whitespace-nowrap">
+                {line}
+              </div>
+            ))}
           </div>
         )}
         <p className="font-bold text-base sm:text-lg pos-big">THANK YOU COME AGAIN</p>
       </div>
 
-      {/* Signature */}
-      <div className="text-center text-[10px] sm:text-xs px-3 sm:px-4 pb-4 border-t border-dashed border-black pt-2">
-        <p className="font-bold">
-          © Retail Target Software Solutions (Pvt) Ltd Sri Lanka.
+      {/* Signature (smaller font + no wrapping so it stays on ONE line) */}
+      <div className="text-center text-[10px] sm:text-xs px-1 border-t border-dashed border-black pt-2 pos-footer pos-end">
+        <p className="font-bold whitespace-nowrap">
+          © Retail Target Software Solutions (Pvt) Ltd
         </p>
-        <p>+94 76 3 165700 / +94 76 3 165701</p>
+        <p className="whitespace-nowrap">+94 76 3 165700 / +94 76 3 165701</p>
       </div>
 
       {/* Print Button */}
@@ -374,13 +500,7 @@ const InvoicePreview = () => {
 
       {/* Print Styles: @page must be top-level (not inside @media) to take effect */}
       <style>{`
-        @page {
-          ${
-            usePosPrinter
-              ? `size: 80mm ${posHeightMm || 297}mm; margin: 0;`
-              : "size: A4; margin: 10mm;"
-          }
-        }
+        @page { size: A4; margin: 10mm; }
         @media print {
           .no-print {
             display: none !important;
@@ -398,7 +518,6 @@ const InvoicePreview = () => {
           .print-container * {
             visibility: visible;
           }
-          ${usePosPrinter ? POS_TEXT_CSS : ""}
           .print-container {
             position: absolute;
             left: 0;
@@ -407,11 +526,9 @@ const InvoicePreview = () => {
             margin: 0 !important;
             box-shadow: none !important;
             border: none !important;
-            ${
-              usePosPrinter
-                ? "width: 80mm !important; max-width: 80mm !important; padding: 2mm 3mm !important;"
-                : "width: 100% !important; max-width: 190mm !important; padding: 0 !important;"
-            }
+            width: 100% !important;
+            max-width: 190mm !important;
+            padding: 0 !important;
           }
         }
       `}</style>
