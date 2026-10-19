@@ -30,6 +30,33 @@ const DEFAULT_MESSAGE =
 // Max characters that fit on one footer line (80mm paper, 8.5px mono)
 const FOOTER_MAX_CHARS = 46;
 
+// ---- DOCUMENT_DATE / DOCUMENT_TIME (from tb_INVOICE_DETAILS) -> display text ----
+// The API may send them as "2026-10-19T00:00:00.000Z", "2026-10-19", "14:35:10",
+// "1970-01-01T14:35:10.000Z" ... so we read the parts straight from the text
+// (no timezone conversion, so the value shown is exactly what is stored in the DB).
+const formatDocDate = (value) => {
+  if (!value) return "";
+  const m = String(value).match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[3]}/${m[2]}/${m[1]}`; // dd/mm/yyyy
+  return "";
+};
+
+const formatDocTime = (value) => {
+  if (!value) return "";
+  const m = String(value).match(/(\d{1,2}):(\d{2})/);
+  if (!m) return "";
+  let h = parseInt(m[1], 10);
+  const min = m[2];
+  const ampm = h >= 12 ? "PM" : "AM";
+  h = h % 12 || 12;
+  return `${String(h).padStart(2, "0")}:${min} ${ampm}`;
+};
+
+// A refund line = REFUND flag 'T' or a minus quantity
+const isRefundLine = (item) =>
+  String(item.REFUND || "").toUpperCase() === "T" ||
+  (parseFloat(item.QUANTITY) || 0) < 0;
+
 // Footer message -> at most 2 lines, each line stays on one line when printed.
 const buildMessageLines = (msg) => {
   const raw = (msg || "")
@@ -310,8 +337,17 @@ const InvoicePreview = () => {
   if (!invoiceData) return null;
 
   // Calculations
+  // SUB TOTAL = sales lines only. Refund lines are listed in the items but are NOT part
+  // of the payment, so SUB TOTAL always equals CASH + CREDIT.
   const subTotal = invoiceData.items.reduce(
-    (sum, item) => sum + parseFloat(item.TOTAL || 0),
+    (sum, item) =>
+      isRefundLine(item) ? sum : sum + parseFloat(item.TOTAL || 0),
+    0
+  );
+  // Refund total (a minus value) - shown as an information line when there are refund items
+  const refundTotal = invoiceData.items.reduce(
+    (sum, item) =>
+      isRefundLine(item) ? sum + parseFloat(item.TOTAL || 0) : sum,
     0
   );
   const totalDiscount = invoiceData.items.reduce(
@@ -338,6 +374,15 @@ const InvoicePreview = () => {
   const shopName = invoiceData.companyName?.trim() || "SHOP NAME";
   const shopAddress = (invoiceData.address || "").trim() || "";
   const shopTel = (invoiceData.phone || "").trim() || "N/A";
+
+  // Date & time come from tb_INVOICE_DETAILS (DOCUMENT_DATE / DOCUMENT_TIME).
+  // Very old invoices that have no value saved fall back to the current date/time.
+  const displayDate =
+    formatDocDate(invoiceData.documentDate) ||
+    new Date().toLocaleDateString('en-GB');
+  const displayTime =
+    formatDocTime(invoiceData.documentTime) ||
+    new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
   // Customer: "CODE NAME"
   const { code: custCode, name: custName } = customerInfo;
@@ -391,6 +436,7 @@ const InvoicePreview = () => {
           <div key={idx} className="mb-2">
             <div className="font-bold text-[10px] sm:text-xs break-words">
               {item.PRODUCT_CODE} {item.PRODUCT_NAME}
+              {isRefundLine(item) ? " (REFUND)" : ""}
             </div>
             <div className="grid grid-cols-4 gap-x-2 text-[10px] sm:text-xs">
               <div className="text-left">
@@ -417,6 +463,14 @@ const InvoicePreview = () => {
           <span>{subTotal.toFixed(2)}</span>
         </div>
 
+        {/* Refund items total (not part of the payment) */}
+        {refundTotal < -0.001 && (
+          <div className="flex justify-between py-1 font-bold">
+            <span>REFUND TOTAL</span>
+            <span>{refundTotal.toFixed(2)}</span>
+          </div>
+        )}
+
         <div className="flex justify-between font-bold text-base sm:text-lg mt-3 pos-big">
           <span>CASH</span>
           <span>{cashAmount.toFixed(2)}</span>
@@ -436,16 +490,10 @@ const InvoicePreview = () => {
         <div className="text-right">{invoiceData.items.length}</div>
       </div>
 
-      {/* Date & Time (always side by side, so screen / print / measuring all match) */}
+      {/* Date & Time (from tb_INVOICE_DETAILS; always side by side, so screen / print / measuring all match) */}
       <div className="flex flex-row justify-between text-[10px] sm:text-xs px-3 sm:px-4 mt-3 pb-2 gap-1">
-        <span className="whitespace-nowrap">DATE : {new Date().toLocaleDateString('en-GB')}</span>
-        <span className="whitespace-nowrap">
-          END TIME :{" "}
-          {new Date().toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit',
-          })}
-        </span>
+        <span className="whitespace-nowrap">DATE : {displayDate}</span>
+        <span className="whitespace-nowrap">END TIME : {displayTime}</span>
       </div>
 
       {/* Discount Box */}

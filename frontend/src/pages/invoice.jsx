@@ -66,6 +66,8 @@ function App() {
   const [quantity, setQuantity] = useState("");
   const [discount, setDiscount] = useState("0");
   const [discountAmount, setDiscountAmount] = useState(0);
+  // Refund tick: when ticked, the item is saved as a MINUS line (qty, discount amount, total all negative)
+  const [isRefund, setIsRefund] = useState(false);
   const [salesData, setSalesData] = useState([]);
   const [inputValue, setInputValue] = useState("");
   const [filteredSuggestions, setFilteredSuggestions] = useState([]);
@@ -95,11 +97,31 @@ function App() {
   // "CASH" | "CREDIT" | "BOTH"
   const [paymentMethod, setPaymentMethod] = useState("CREDIT");
 
-  // Invoice grand total (sum of all item totals)
-  const invoiceTotal = (invoiceTableData || []).reduce(
-    (sum, item) => sum + (parseFloat(item.TOTAL) || 0),
+  // A refund line = REFUND flag 'T' or a minus quantity
+  const isRefundLine = (item) =>
+    String(item.REFUND || "").toUpperCase() === "T" ||
+    (parseFloat(item.QUANTITY) || 0) < 0;
+
+  // Sales total = only the normal (non-refund) lines
+  const salesTotal = (invoiceTableData || []).reduce(
+    (sum, item) => (isRefundLine(item) ? sum : sum + (parseFloat(item.TOTAL) || 0)),
     0
   );
+
+  // Refund total = refund lines only (a minus value). Shown for information,
+  // it is NOT part of the payment (Cash + Credit = sales total).
+  const refundTotal = (invoiceTableData || []).reduce(
+    (sum, item) => (isRefundLine(item) ? sum + (parseFloat(item.TOTAL) || 0) : sum),
+    0
+  );
+
+  // The payment card works only with the sales total
+  const payableTotal = salesTotal;
+
+  // Only refund lines in the invoice (no sales item) -> such an invoice cannot be saved
+  const isRefundOnly =
+    (invoiceTableData || []).length > 0 &&
+    !(invoiceTableData || []).some((item) => !isRefundLine(item));
 
   // Customer dropdown list: show ALL customers when nothing is typed or a customer
   // is already selected, otherwise filter by what the user typed.
@@ -112,9 +134,55 @@ function App() {
       )
     : customers;
 
+  // ---------- Price / discount helpers (defined BEFORE the effects that use them) ----------
+  // Unit price actually used: edited price if the user typed one, otherwise the system price
+  const getEffectiveUnitPrice = () => {
+    if (customUnitPrice !== "" && !isNaN(parseFloat(customUnitPrice))) {
+      return parseFloat(customUnitPrice);
+    }
+    const p = parseFloat(salesData.SCALEPRICE);
+    return isNaN(p) ? 0 : p;
+  };
+
+  // true only when the user typed a unit price that is DIFFERENT from the system price
+  const isPriceEdited = () => {
+    if (customUnitPrice === "" || isNaN(parseFloat(customUnitPrice))) return false;
+    const original = parseFloat(salesData.SCALEPRICE) || 0;
+    return Math.abs(parseFloat(customUnitPrice) - original) > 0.0001;
+  };
+
+  // Discount:
+  //   "10%"  -> isPercent = true,  percent = 10, amount = subtotal * 10%
+  //   "100"  -> isPercent = false, percent = 0,  amount = 100
+  const calcDiscount = () => {
+    const price = getEffectiveUnitPrice();
+    const qty = parseFloat(quantity) || 0;
+    const subtotal = price * qty;
+    const raw = (discount ?? "").toString().trim();
+    const none = { isPercent: false, percent: 0, amount: 0, subtotal };
+
+    if (!raw || raw === "0") return none;
+
+    if (raw.includes("%")) {
+      const p = parseFloat(raw.replace("%", ""));
+      if (isNaN(p)) return none;
+      return {
+        isPercent: true,
+        percent: p,
+        amount: Math.round(subtotal * (p / 100) * 100) / 100,
+        subtotal,
+      };
+    }
+
+    const a = parseFloat(raw);
+    if (isNaN(a)) return none;
+    return { isPercent: false, percent: 0, amount: a, subtotal };
+  };
+
   // Default cash/credit amounts for a payment method
+  // (uses payableTotal, so a negative invoice total gives 0.00 / 0.00)
   const applyPaymentDefaults = (method) => {
-    const totalStr = fromCents(toCents(invoiceTotal));
+    const totalStr = fromCents(toCents(payableTotal));
     if (method === "CASH") {
       setCashAmount(totalStr);
       setCreditAmount("0.00");
@@ -192,40 +260,17 @@ function App() {
     }
   }, [scannerEnabled, selectedCompany, colorWiseTableData]);
 
+  // Discount amount: recalculated whenever discount / qty / price (system OR edited) changes
   useEffect(() => {
-    const calculateDiscountAmount = () => {
-      const unitPrice = parseFloat(salesData.SCALEPRICE) || 0;
-      const qty = parseFloat(quantity) || 0;
-      const subtotal = unitPrice * qty;
+    setDiscountAmount(calcDiscount().amount);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [discount, quantity, customUnitPrice, salesData.SCALEPRICE]);
 
-      if (!discount) {
-        setDiscountAmount(0);
-        return;
-      }
-
-      let discountValue = discount.toString().trim();
-      let calculatedDiscountAmount = 0;
-
-      if (discountValue.includes("%")) {
-        let percent = parseFloat(discountValue.replace("%", ""));
-        if (!isNaN(percent)) {
-          calculatedDiscountAmount = subtotal * (percent / 100);
-        }
-      } else {
-        let amt = parseFloat(discountValue);
-        if (!isNaN(amt)) {
-          calculatedDiscountAmount = amt;
-        }
-      }
-
-      setDiscountAmount(calculatedDiscountAmount);
-    };
-
-    calculateDiscountAmount();
-
+  useEffect(() => {
     if (initialData && selectedCompany && selectedCustomer) {
       fetchInvoiceTableData();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     discount,
     quantity,
@@ -264,11 +309,12 @@ function App() {
     }
   }, []);
 
-  // ---------- Payment: whenever invoice total changes, default = full credit ----------
+  // ---------- Payment: whenever the payable total changes, reset to defaults ----------
+  // (payable total is never below 0, so the payment card never shows a minus value)
   useEffect(() => {
     applyPaymentDefaults(paymentMethod);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [toCents(invoiceTotal)]);
+  }, [toCents(payableTotal)]);
 
   if (!authToken) {
     return <Navigate to="/login" replace />;
@@ -295,7 +341,7 @@ function App() {
     setCashAmount(val);
     if (paymentMethod === "BOTH") {
       // Auto-fill the remaining part into credit
-      const remaining = Math.max(toCents(invoiceTotal) - toCents(val), 0);
+      const remaining = Math.max(toCents(payableTotal) - toCents(val), 0);
       setCreditAmount(fromCents(remaining));
     }
     setPaymentError("");
@@ -306,7 +352,7 @@ function App() {
     setCreditAmount(val);
     if (paymentMethod === "BOTH") {
       // Auto-fill the remaining part into cash
-      const remaining = Math.max(toCents(invoiceTotal) - toCents(val), 0);
+      const remaining = Math.max(toCents(payableTotal) - toCents(val), 0);
       setCashAmount(fromCents(remaining));
     }
     setPaymentError("");
@@ -321,7 +367,16 @@ function App() {
   };
 
   const validatePayment = () => {
-    const totalC = toCents(invoiceTotal);
+    // Refund-only invoice is not allowed
+    if (isRefundOnly) {
+      return {
+        valid: false,
+        message:
+          "Refund-only invoice cannot be saved. Add at least one sales item.",
+      };
+    }
+
+    const totalC = toCents(payableTotal);
     const cashC = toCents(cashAmount);
     const creditC = toCents(creditAmount);
 
@@ -611,8 +666,9 @@ function App() {
     }
   };
 
-  let costPrice = (salesData.COSTPRICE || 0).toFixed(2);
-  let salesPrice = (salesData.SCALEPRICE || 0).toFixed(2);
+  let costPrice = (parseFloat(salesData.COSTPRICE) || 0).toFixed(2);
+  let avgCost = (parseFloat(salesData.AVGCOST) || 0).toFixed(2);
+  let salesPrice = (parseFloat(salesData.SCALEPRICE) || 0).toFixed(2);
 
   const getCameraStream = async () => {
     try {
@@ -661,6 +717,7 @@ function App() {
         setSalesData(response.data.salesData[0]);
         setUnitType(response.data.salesData[0].UNIT || "");
         setQuantityError("");
+        setIsRefund(false);
         resetPayment();
       }
       if (response.data.colorWiseData.length > 0) {
@@ -805,6 +862,9 @@ function App() {
     }
   };
 
+  // DISCOUNT column in the DB:
+  //   > 0  -> it is a PERCENTAGE (show "10%")
+  //   = 0  -> amount-type discount (or no discount), the real value is in DISCOUNT_AMOUNT
   const formatDiscountDisplay = (discountValue) => {
     if (
       discountValue === null ||
@@ -814,97 +874,43 @@ function App() {
       return "0";
     }
 
-    const discountStr = String(discountValue).trim();
+    const numValue = parseFloat(String(discountValue).replace("%", ""));
+    if (isNaN(numValue) || numValue <= 0) return "0";
 
-    if (discountStr.includes("%")) {
-      return discountStr;
-    }
-
-    const numValue = parseFloat(discountStr);
-    if (isNaN(numValue)) return discountStr;
-
-    return numValue % 1 === 0 ? `${numValue}` : `${numValue.toFixed(2)}`;
+    const shown = numValue % 1 === 0 ? `${numValue}` : `${numValue.toFixed(2)}`;
+    return `${shown}%`;
   };
 
   const calculateTotal = () => {
-    const qty = parseFloat(quantity) || 0;
-
-    let price = 0;
-    if (customUnitPrice !== "" && !isNaN(parseFloat(customUnitPrice))) {
-      price = parseFloat(customUnitPrice);
-    } else if (
-      salesData.SCALEPRICE &&
-      !isNaN(parseFloat(salesData.SCALEPRICE))
-    ) {
-      price = parseFloat(salesData.SCALEPRICE);
-    }
-
-    const subtotal = price * qty;
-
-    if (!discount || discount === "0") return subtotal;
-
-    let discountValue = discount.toString().trim();
-    let discountAmount = 0;
-
-    if (discountValue.includes("%")) {
-      let percent = parseFloat(discountValue.replace("%", ""));
-      if (!isNaN(percent)) {
-        discountAmount = subtotal * (percent / 100);
-      }
-    } else {
-      let amt = parseFloat(discountValue);
-      if (!isNaN(amt)) {
-        discountAmount = amt;
-      }
-    }
-
-    const total = subtotal - discountAmount;
+    const d = calcDiscount();
+    const total = d.subtotal - d.amount;
     return total < 0 ? 0 : total;
   };
 
   const validateDiscount = () => {
-    if (!discount || discount === "0") return { valid: true, message: "" };
+    const raw = (discount ?? "").toString().trim();
+    if (!raw || raw === "0") return { valid: true, message: "" };
 
-    const qty = parseFloat(quantity) || 0;
+    const d = calcDiscount();
 
-    let price = 0;
-    if (customUnitPrice !== "" && !isNaN(parseFloat(customUnitPrice))) {
-      price = parseFloat(customUnitPrice);
-    } else if (
-      salesData.SCALEPRICE &&
-      !isNaN(parseFloat(salesData.SCALEPRICE))
-    ) {
-      price = parseFloat(salesData.SCALEPRICE);
-    }
-
-    const subtotal = price * qty;
-
-    let discountValue = discount.toString().trim();
-
-    if (discountValue.includes("%")) {
-      let percent = parseFloat(discountValue.replace("%", ""));
-      if (!isNaN(percent)) {
-        if (percent < 0 || percent > 100) {
-          return {
-            valid: false,
-            message: "Discount percentage must be between 0% and 100%",
-          };
-        }
+    if (d.isPercent) {
+      if (d.percent < 0 || d.percent > 100) {
+        return {
+          valid: false,
+          message: "Discount percentage must be between 0% and 100%",
+        };
       }
     } else {
-      let amt = parseFloat(discountValue);
-      if (!isNaN(amt)) {
-        if (amt > subtotal) {
-          return {
-            valid: false,
-            message: `Discount amount (${amt}) cannot exceed subtotal (${subtotal.toFixed(
-              2
-            )})`,
-          };
-        }
-        if (amt < 0) {
-          return { valid: false, message: "Discount amount cannot be negative" };
-        }
+      if (d.amount > d.subtotal) {
+        return {
+          valid: false,
+          message: `Discount amount (${d.amount}) cannot exceed subtotal (${d.subtotal.toFixed(
+            2
+          )})`,
+        };
+      }
+      if (d.amount < 0) {
+        return { valid: false, message: "Discount amount cannot be negative" };
       }
     }
 
@@ -981,12 +987,7 @@ function App() {
     isSubmittingRef.current = true;
     setDisable(true);
 
-    const unitPriceValue =
-      customUnitPrice !== "" && !isNaN(parseFloat(customUnitPrice))
-        ? parseFloat(customUnitPrice).toFixed(2)
-        : salesData.SCALEPRICE
-        ? parseFloat(salesData.SCALEPRICE).toFixed(2)
-        : "0.00";
+    const unitPriceValue = getEffectiveUnitPrice().toFixed(2);
 
     const discountValidation = validateDiscount();
     if (!discountValidation.valid) {
@@ -1012,17 +1013,16 @@ function App() {
     try {
       const qty = parseFloat(quantity) || 0;
 
-      let discountValue = 0;
-      if (discount && discount !== "0") {
-        const discountStr = discount.toString().trim();
-        if (discountStr.includes("%")) {
-          discountValue = parseFloat(discountStr.replace("%", "")) || 0;
-        } else {
-          discountValue = parseFloat(discountStr) || 0;
-        }
-      }
+      // Discount rules:
+      //  - percentage ("10%") -> DISCOUNT = 10,  DISCOUNT_AMOUNT = calculated amount
+      //  - direct amount ("100") -> DISCOUNT = 0, DISCOUNT_AMOUNT = 100
+      const d = calcDiscount();
+      const discountColumnValue = d.isPercent ? d.percent : 0;
 
-      let totalValue = calculateTotal();
+      // Refund item -> quantity, discount amount and total are saved as MINUS values
+      const sign = isRefund ? -1 : 1;
+      const discountAmountValue = sign * d.amount;
+      const totalValue = sign * calculateTotal();
 
       const response = await axios.post(
         `${process.env.REACT_APP_BACKEND_URL}insert-invoice-temp`,
@@ -1032,11 +1032,15 @@ function App() {
           productCode: salesData.PRODUCT_CODE,
           productName: salesData.PRODUCT_NAME || salesData.PRODUCT_NAMELONG,
           costPrice: salesData.COSTPRICE,
+          avgCost: salesData.AVGCOST, // backend re-reads it from tb_PRODUCT anyway
           unitPrice: unitPriceValue,
+          // "T" only when the user changed the unit price to something different
+          editPrice: isPriceEdited() ? "T" : "F",
           stock: amount,
-          quantity: parseFloat(qty) || 0,
-          discount: discountValue,
-          discountAmount: discountAmount,
+          quantity: sign * (parseFloat(qty) || 0),
+          refund: isRefund ? "T" : "F",
+          discount: discountColumnValue,
+          discountAmount: discountAmountValue,
           total: totalValue,
           customer: selectedCustomer,
           customerName: selectedCustomerName,
@@ -1065,6 +1069,7 @@ function App() {
         setInputValue("");
         setScannedCode("");
         setUnitType("");
+        setIsRefund(false);
 
         await fetchInvoiceTableData();
 
@@ -1208,6 +1213,7 @@ function App() {
         setQuantity("");
         setDiscount("0");
         setDiscountAmount(0);
+        setIsRefund(false);
         setColorWiseTableData([]);
         setCode("");
         setInputValue("");
@@ -1519,12 +1525,7 @@ function App() {
         return;
       }
 
-      const currentUnitPrice =
-        customUnitPrice !== "" && !isNaN(parseFloat(customUnitPrice))
-          ? parseFloat(customUnitPrice)
-          : salesData.SCALEPRICE
-          ? parseFloat(salesData.SCALEPRICE)
-          : 0;
+      const currentUnitPrice = getEffectiveUnitPrice();
 
       if (currentUnitPrice === 0) {
         handleProductSubmit(e);
@@ -1545,12 +1546,7 @@ function App() {
 
       if (disable) return;
 
-      const unitPriceValue =
-        customUnitPrice !== "" && !isNaN(parseFloat(customUnitPrice))
-          ? parseFloat(customUnitPrice)
-          : salesData.SCALEPRICE
-          ? parseFloat(salesData.SCALEPRICE)
-          : 0;
+      const unitPriceValue = getEffectiveUnitPrice();
 
       if (unitPriceValue <= 0 && parseFloat(quantity) > 0) {
         setAlert({
@@ -2063,6 +2059,9 @@ function App() {
                           <p className="text-sm text-gray-700">
                             <strong>Cost Price:</strong> {costPrice}
                           </p>
+                          <p className="text-sm text-gray-700">
+                            <strong>Avg Cost:</strong> {avgCost}
+                          </p>
 
                           {/* Unit Price Input Field */}
                           <div className="flex flex-col w-full gap-1">
@@ -2225,6 +2224,24 @@ function App() {
                                 )}
                               </div>
 
+                              {/* Refund tick */}
+                              <label
+                                htmlFor="refundTick"
+                                className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none"
+                              >
+                                <input
+                                  type="checkbox"
+                                  id="refundTick"
+                                  checked={isRefund}
+                                  onChange={(e) => setIsRefund(e.target.checked)}
+                                  disabled={!salesData.PRODUCT_CODE}
+                                  className="w-4 h-4 accent-red-600 cursor-pointer"
+                                />
+                                <strong className={isRefund ? "text-red-600" : ""}>
+                                  Refund this item
+                                </strong>
+                              </label>
+
                               {/* Discount */}
                               <div className="flex flex-col w-full gap-1">
                                 <div className="flex items-center gap-6">
@@ -2258,11 +2275,7 @@ function App() {
                                           : "border-gray-300"
                                       }`}
                                       placeholder="5% or 100"
-                                      disabled={
-                                        parseFloat(
-                                          customUnitPrice || salesData.SCALEPRICE || 0
-                                        ) <= 0
-                                      }
+                                      disabled={getEffectiveUnitPrice() <= 0}
                                     />
                                   </div>
                                 </div>
@@ -2287,7 +2300,14 @@ function App() {
                                 <span className="text-sm text-gray-700">
                                   <strong>Discount Amount:</strong>
                                 </span>
-                                <span className="text-sm text-gray-700">
+                                <span
+                                  className={`text-sm ${
+                                    isRefund && discountAmount > 0
+                                      ? "text-red-600"
+                                      : "text-gray-700"
+                                  }`}
+                                >
+                                  {isRefund && discountAmount > 0 ? "-" : ""}
                                   {discountAmount.toFixed(2)}
                                 </span>
                               </div>
@@ -2298,7 +2318,10 @@ function App() {
                                   <span className="font-medium text-[#bc4a17]">
                                     Total:
                                   </span>
-                                  <span className="text-black">
+                                  <span
+                                    className={isRefund ? "text-red-600" : "text-black"}
+                                  >
+                                    {isRefund && calculateTotal() > 0 ? "-" : ""}
                                     {calculateTotal().toFixed(2)}
                                   </span>
                                 </div>
@@ -2327,144 +2350,156 @@ function App() {
                     </div>
 
                     {/* ---------- PAYMENT SECTION ---------- */}
-                      <div className="flex justify-end w-full mt-6 mb-9">
-                        <div className="w-full p-4 bg-white border border-gray-300 rounded-lg shadow-md sm:p-5 md:w-[420px]">
-                          <div className="text-base sm:text-lg font-bold text-[#f17e21] mb-3">
-                            Payment
-                          </div>
+                    <div className="flex justify-end w-full mt-6 mb-9">
+                      <div className="w-full p-4 bg-white border border-gray-300 rounded-lg shadow-md sm:p-5 md:w-[420px]">
+                        <div className="text-base sm:text-lg font-bold text-[#f17e21] mb-3">
+                          Payment
+                        </div>
 
-                          {/* Invoice total */}
+                        {/* Sales total (refund lines are NOT included) */}
+                        <div className="flex items-center justify-between pb-3 mb-3 border-b">
+                          <span className="text-sm font-semibold text-gray-700">
+                            Invoice Total
+                          </span>
+                          <span className="text-lg font-bold text-black">
+                            {salesTotal.toFixed(2)}
+                          </span>
+                        </div>
+
+                        {/* Refund total: information only, not part of the payment */}
+                        {refundTotal < 0 && (
                           <div className="flex items-center justify-between pb-3 mb-3 border-b">
-                            <span className="text-sm font-semibold text-gray-700">
-                              Invoice Total
+                            <span className="text-sm font-semibold text-red-600">
+                              Refund (not included)
                             </span>
-                            <span className="text-lg font-bold text-black">
-                              {invoiceTotal.toFixed(2)}
+                            <span className="text-base font-bold text-red-600">
+                              {refundTotal.toFixed(2)}
                             </span>
                           </div>
+                        )}
 
-                          {/* Payment method dropdown */}
-                          <div className="flex items-center gap-4 mb-3">
-                            <label
-                              htmlFor="paymentMethod"
-                              className="text-sm font-medium text-gray-700 min-w-[70px]"
-                            >
-                              Method
-                            </label>
-                            <select
-                              id="paymentMethod"
-                              value={paymentMethod}
-                              onChange={handleMethodChange}
-                              className="w-full px-3 py-2 text-sm text-gray-700 bg-gray-100 border border-gray-300 rounded-md focus:outline-none"
-                            >
-                              <option value="CASH">Cash</option>
-                              <option value="CREDIT">Credit</option>
-                              <option value="BOTH">Cash + Credit</option>
-                            </select>
-                          </div>
+                        {/* Payment method dropdown */}
+                        <div className="flex items-center gap-4 mb-3">
+                          <label
+                            htmlFor="paymentMethod"
+                            className="text-sm font-medium text-gray-700 min-w-[70px]"
+                          >
+                            Method
+                          </label>
+                          <select
+                            id="paymentMethod"
+                            value={paymentMethod}
+                            onChange={handleMethodChange}
+                            className="w-full px-3 py-2 text-sm text-gray-700 bg-gray-100 border border-gray-300 rounded-md focus:outline-none"
+                          >
+                            <option value="CASH">Cash</option>
+                            <option value="CREDIT">Credit</option>
+                            <option value="BOTH">Cash + Credit</option>
+                          </select>
+                        </div>
 
-                          {/* Cash */}
-                          <div className="flex items-center gap-4 mb-3">
-                            <label
-                              htmlFor="cashAmount"
-                              className="text-sm font-medium text-gray-700 min-w-[70px]"
-                            >
-                              Cash
-                            </label>
-                            <input
-                              type="text"
-                              id="cashAmount"
-                              ref={cashRef}
-                              value={cashAmount}
-                              onChange={handleCashChange}
-                              onFocus={(e) => e.target.select()}
-                              onBlur={() => formatOnBlur(cashAmount, setCashAmount)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  e.preventDefault();
-                                  handleSaveInvoice();
-                                }
-                              }}
-                              disabled={paymentMethod === "CREDIT"}
-                              inputMode="decimal"
-                              placeholder="0.00"
-                              className={`w-full px-3 py-2 text-sm text-right text-gray-700 border rounded-md focus:outline-none ${
-                                paymentMethod === "CREDIT"
-                                  ? "bg-gray-200 opacity-60 cursor-not-allowed"
-                                  : "bg-gray-100"
-                              } ${!paymentCheck.valid ? "border-red-500" : "border-gray-300"}`}
-                            />
-                          </div>
-
-                          {/* Credit */}
-                          <div className="flex items-center gap-4 mb-3">
-                            <label
-                              htmlFor="creditAmount"
-                              className="text-sm font-medium text-gray-700 min-w-[70px]"
-                            >
-                              Credit
-                            </label>
-                            <input
-                              type="text"
-                              id="creditAmount"
-                              ref={creditRef}
-                              value={creditAmount}
-                              onChange={handleCreditChange}
-                              onFocus={(e) => e.target.select()}
-                              onBlur={() =>
-                                formatOnBlur(creditAmount, setCreditAmount)
+                        {/* Cash */}
+                        <div className="flex items-center gap-4 mb-3">
+                          <label
+                            htmlFor="cashAmount"
+                            className="text-sm font-medium text-gray-700 min-w-[70px]"
+                          >
+                            Cash
+                          </label>
+                          <input
+                            type="text"
+                            id="cashAmount"
+                            ref={cashRef}
+                            value={cashAmount}
+                            onChange={handleCashChange}
+                            onFocus={(e) => e.target.select()}
+                            onBlur={() => formatOnBlur(cashAmount, setCashAmount)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleSaveInvoice();
                               }
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  e.preventDefault();
-                                  handleSaveInvoice();
-                                }
-                              }}
-                              disabled={paymentMethod === "CASH"}
-                              inputMode="decimal"
-                              placeholder="0.00"
-                              className={`w-full px-3 py-2 text-sm text-right text-gray-700 border rounded-md focus:outline-none ${
-                                paymentMethod === "CASH"
-                                  ? "bg-gray-200 opacity-60 cursor-not-allowed"
-                                  : "bg-gray-100"
-                              } ${!paymentCheck.valid ? "border-red-500" : "border-gray-300"}`}
-                            />
-                          </div>
+                            }}
+                            disabled={paymentMethod === "CREDIT"}
+                            inputMode="decimal"
+                            placeholder="0.00"
+                            className={`w-full px-3 py-2 text-sm text-right text-gray-700 border rounded-md focus:outline-none ${
+                              paymentMethod === "CREDIT"
+                                ? "bg-gray-200 opacity-60 cursor-not-allowed"
+                                : "bg-gray-100"
+                            } ${!paymentCheck.valid ? "border-red-500" : "border-gray-300"}`}
+                          />
+                        </div>
 
-                          {/* Sum */}
-                          <div className="flex items-center justify-between pt-3 border-t">
-                            <span className="text-sm font-semibold text-gray-700">
-                              Cash + Credit
-                            </span>
-                            <span
-                              className={`text-base font-bold ${
-                                paymentCheck.valid ? "text-green-600" : "text-red-600"
-                              }`}
-                            >
-                              {fromCents(toCents(cashAmount) + toCents(creditAmount))}
-                            </span>
-                          </div>
+                        {/* Credit */}
+                        <div className="flex items-center gap-4 mb-3">
+                          <label
+                            htmlFor="creditAmount"
+                            className="text-sm font-medium text-gray-700 min-w-[70px]"
+                          >
+                            Credit
+                          </label>
+                          <input
+                            type="text"
+                            id="creditAmount"
+                            ref={creditRef}
+                            value={creditAmount}
+                            onChange={handleCreditChange}
+                            onFocus={(e) => e.target.select()}
+                            onBlur={() =>
+                              formatOnBlur(creditAmount, setCreditAmount)
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleSaveInvoice();
+                              }
+                            }}
+                            disabled={paymentMethod === "CASH"}
+                            inputMode="decimal"
+                            placeholder="0.00"
+                            className={`w-full px-3 py-2 text-sm text-right text-gray-700 border rounded-md focus:outline-none ${
+                              paymentMethod === "CASH"
+                                ? "bg-gray-200 opacity-60 cursor-not-allowed"
+                                : "bg-gray-100"
+                            } ${!paymentCheck.valid ? "border-red-500" : "border-gray-300"}`}
+                          />
+                        </div>
 
-                          {(paymentError || !paymentCheck.valid) && (
-                            <p className="mt-2 text-sm text-red-600">
-                              {paymentError || paymentCheck.message}
-                            </p>
-                          )}
-
-                          <button
-                            ref={saveButtonRef}
-                            onClick={handleSaveInvoice}
-                            disabled={disable || !hasInvoiceItems}
-                            className={`mt-4 w-full bg-[#000000] hover:bg-gray-800 text-white py-2 px-4 rounded-md shadow-md transition-all text-sm ${
-                              disable || !hasInvoiceItems
-                                ? "opacity-50 cursor-not-allowed"
-                                : ""
+                        {/* Sum */}
+                        <div className="flex items-center justify-between pt-3 border-t">
+                          <span className="text-sm font-semibold text-gray-700">
+                            Cash + Credit
+                          </span>
+                          <span
+                            className={`text-base font-bold ${
+                              paymentCheck.valid ? "text-green-600" : "text-red-600"
                             }`}
                           >
-                            Save & Preview Invoice
-                          </button>
+                            {fromCents(toCents(cashAmount) + toCents(creditAmount))}
+                          </span>
                         </div>
+
+                        {(paymentError || !paymentCheck.valid) && (
+                          <p className="mt-2 text-sm text-red-600">
+                            {paymentError || paymentCheck.message}
+                          </p>
+                        )}
+
+                        <button
+                          ref={saveButtonRef}
+                          onClick={handleSaveInvoice}
+                          disabled={disable || !hasInvoiceItems || isRefundOnly}
+                          className={`mt-4 w-full bg-[#000000] hover:bg-gray-800 text-white py-2 px-4 rounded-md shadow-md transition-all text-sm ${
+                            disable || !hasInvoiceItems || isRefundOnly
+                              ? "opacity-50 cursor-not-allowed"
+                              : ""
+                          }`}
+                        >
+                          Save & Preview Invoice
+                        </button>
                       </div>
+                    </div>
 
                     {/* Invoice items table + Payment */}
                     {hasInvoiceItems ? (
@@ -2494,7 +2529,8 @@ function App() {
                               item.COMPANY_CODE || "",
                               item.COMPANY_NAME || "",
                               item.PRODUCT_CODE || "",
-                              item.PRODUCT_NAME || "",
+                              (item.PRODUCT_NAME || "") +
+                                (parseFloat(item.QUANTITY || 0) < 0 ? " (REFUND)" : ""),
                               parseFloat(item.COSTPRICE || 0).toFixed(2),
                               parseFloat(item.UNITPRICE || 0).toFixed(2),
                               parseFloat(item.STOCK || 0).toFixed(3),
