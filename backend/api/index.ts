@@ -79,6 +79,7 @@ app.get('/connection-details', authenticateToken, authController.serverConnectio
 app.get('/invoice-temp-data', authenticateToken, authController.getInvoiceTempData);
 app.get('/get-invoice-preview', authenticateToken, authController.getInvoicePreview);
 app.get('/saved-invoice-numbers', authenticateToken, authController.savedInvoiceNumbers);
+app.get('/product-promotion', authenticateToken, authController.getProductPromotion);
 
 app.get('/cashiers', authenticateToken, authController.getCashiers);
 app.get('/dayend-sales', authenticateToken, authController.getDayendSales);

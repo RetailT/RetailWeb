@@ -16,6 +16,16 @@ const posback = process.env.DB_DATABASE3;
 const rtweb = process.env.DB_DATABASE2;
 const posmain = process.env.DB_DATABASE1;
 
+// true  -> PD1..PD6 are PERCENTAGES   (5.00 = 5%)
+// false -> PD1..PD6 are RUPEE AMOUNTS (5.00 = Rs. 5)
+const PROMO_IS_PERCENT = false;
+// Only used when PROMO_IS_PERCENT = false
+// true  -> amount x quantity (Rs. per unit)
+// false -> one fixed amount for the whole line
+const PROMO_AMOUNT_IS_PER_UNIT = false;
+// Only rows with this TYPE are quantity-tier product discounts
+const PROMO_TYPE = "PD";
+
 // ---- AI Report Assistant ----
 const { aiReportChat } = require("./aiReportController")({
   connectToUserDatabase,
@@ -8242,6 +8252,122 @@ exports.getInvoiceTempData = async (req, res) => {
     console.error("Error fetching invoice temp data:", error);
     return res.status(500).json({
       message: "Failed to fetch invoice data",
+      error: error.message,
+    });
+  }
+};
+
+// GET /product-promotion
+exports.getProductPromotion = async (req, res) => {
+  try {
+    const productCode = String(req.query.productCode || "").trim();
+    const company = String(req.query.company || "").trim();
+ 
+    if (!productCode) {
+      return res
+        .status(400)
+        .json({ success: false, message: "productCode is required" });
+    }
+ 
+    const user_ip = String(req.user.ip).trim();
+    if (mssql.connected) await mssql.close();
+ 
+    const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+    if (!pool || !pool.connected) {
+      return res
+        .status(500)
+        .json({ success: false, message: "Database connection failed" });
+    }
+ 
+    // A product can have several promotion rows (different dates / companies),
+    // so read all of them (newest first) and pick the right one below.
+    const result = await pool
+      .request()
+      .input("productCode", mssql.NVarChar(30), productCode)
+      .input("type", mssql.NVarChar(10), PROMO_TYPE).query(`
+        USE [${posback}];
+        SELECT
+          IDX, PRODUCT_CODE, TYPE, PROMOTIONMODE, COMPANY_CODE,
+          DATE_ACTIVE, DPD_DATEFROM, DPD_DATETO,
+          PDQ1, PD1, PDQ2, PD2, PDQ3, PD3, PDQ4, PD4, PDQ5, PD5, PDQ6, PD6
+        FROM tb_PROMOTION
+        WHERE LTRIM(RTRIM(PRODUCT_CODE)) = @productCode
+          AND LTRIM(RTRIM(TYPE)) = @type
+          AND ISNULL(PDQ1, 0) > 0
+          AND ISNULL(PD1, 0) > 0
+        ORDER BY IDX DESC
+      `);
+ 
+    const rows = result.recordset || [];
+    if (rows.length === 0) {
+      return res.status(200).json({ success: true, tiers: [] });
+    }
+ 
+    // Is the promotion valid today?
+    // DATE_ACTIVE = 'T' -> the date range (DPD_DATEFROM .. DPD_DATETO) must include today
+    // DATE_ACTIVE = 'F' -> no date restriction
+    const now = new Date();
+    const isInDateRange = (r) => {
+      const active = String(r.DATE_ACTIVE ?? "").trim().toUpperCase();
+      if (!["T", "Y", "1", "TRUE"].includes(active)) return true;
+      if (!r.DPD_DATEFROM || !r.DPD_DATETO) return true;
+      const from = new Date(r.DPD_DATEFROM);
+      const to = new Date(r.DPD_DATETO);
+      to.setHours(23, 59, 59, 999);
+      return now >= from && now <= to;
+    };
+ 
+    const validRows = rows.filter(isInDateRange);
+    if (validRows.length === 0) {
+      return res.status(200).json({ success: true, tiers: [] });
+    }
+ 
+    // Prefer: row for this company -> row with no company -> any other row
+    const norm = (v) => String(v ?? "").trim().replace(/^0+/, "");
+    const rank = (r) => {
+      const c = norm(r.COMPANY_CODE);
+      if (company && c === norm(company)) return 0;
+      if (c === "") return 1;
+      return 2;
+    };
+    const row = [...validRows].sort((a, b) => rank(a) - rank(b))[0];
+ 
+    // Percentage or amount? (PROMOTIONMODE text wins if it clearly says so)
+    const mode = String(row.PROMOTIONMODE || "").toUpperCase();
+    let isPercent = PROMO_IS_PERCENT;
+    if (/%|PERC|PRC/.test(mode)) isPercent = true;
+    else if (/VAL|AMT|AMOUNT|RS/.test(mode)) isPercent = false;
+ 
+    const tiers = [];
+    for (let i = 1; i <= 6; i++) {
+      const qty = Number(row[`PDQ${i}`]) || 0;
+      const disc = Number(row[`PD${i}`]) || 0;
+      if (qty > 0 && disc > 0) {
+        tiers.push({
+          qty,
+          disc,
+          isPercent,
+          perUnit: PROMO_AMOUNT_IS_PER_UNIT,
+        });
+      }
+    }
+    tiers.sort((a, b) => a.qty - b.qty);
+ 
+    return res.status(200).json({
+      success: true,
+      tiers,
+      debug: {
+        idx: row.IDX,
+        type: row.TYPE,
+        promotionMode: row.PROMOTIONMODE,
+        companyCode: row.COMPANY_CODE,
+      },
+    });
+  } catch (error) {
+    console.error("Error in getProductPromotion:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch promotion",
       error: error.message,
     });
   }

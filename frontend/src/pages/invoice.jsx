@@ -90,6 +90,11 @@ function App() {
   const [filteredCustomers, setFilteredCustomers] = useState([]);
   const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
 
+  // ---------- Promotion (quantity-tier discount) state ----------
+  // Tiers of the selected product from POSBACK_SYSTEM.tb_PROMOTION, e.g.
+  // [{ qty: 1, disc: 5, isPercent: true }, { qty: 2, disc: 6, isPercent: true }]
+  const [promoTiers, setPromoTiers] = useState([]);
+
   // ---------- Payment state ----------
   const [cashAmount, setCashAmount] = useState("0.00");
   const [creditAmount, setCreditAmount] = useState("0.00");
@@ -215,6 +220,8 @@ function App() {
   const saveButtonRef = useRef(null);
   const cashRef = useRef(null);
   const creditRef = useRef(null);
+  // true = the cashier typed the discount himself -> the promotion must NOT override it
+  const discountManualRef = useRef(false);
 
   // Effects
   useEffect(() => {
@@ -302,6 +309,38 @@ function App() {
       setDiscount("0");
     }
   }, [quantity]);
+
+  // ---------- Quantity-based promotion ----------
+  // Picks the highest tier the quantity reaches:
+  //   tiers: 1+ -> 5%, 2+ -> 6%  =>  qty 1 = 5%, qty 2 or more = 6%
+  // If the cashier typed a discount himself, this does nothing.
+  useEffect(() => {
+    if (discountManualRef.current) return;
+    if (promoTiers.length === 0) return;
+
+    const qty = parseFloat(quantity) || 0;
+    const price = getEffectiveUnitPrice();
+
+    if (qty <= 0 || price <= 0) {
+      setDiscount("0");
+      return;
+    }
+
+    let best = null;
+    promoTiers.forEach((t) => {
+      if (qty >= t.qty) best = t; // tiers are sorted by qty (ascending)
+    });
+
+    if (!best) {
+      setDiscount("0");
+    } else if (best.isPercent) {
+      setDiscount(`${best.disc}%`);
+    } else {
+      const amt = best.perUnit ? best.disc * qty : best.disc;
+      setDiscount(String(Math.round(amt * 100) / 100));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quantity, promoTiers, customUnitPrice, salesData.SCALEPRICE]);
 
   useEffect(() => {
     if (previewCompany) {
@@ -573,6 +612,28 @@ function App() {
     }
   };
 
+  // Load the quantity-tier promotion of a product (POSBACK_SYSTEM.tb_PROMOTION)
+  const fetchPromotion = async (productCode, companyCode) => {
+    const pc = String(productCode || "").trim();
+    if (!pc) {
+      setPromoTiers([]);
+      return;
+    }
+    try {
+      const res = await axios.get(
+        `${process.env.REACT_APP_BACKEND_URL}product-promotion`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          params: { productCode: pc, company: companyCode || "" },
+        }
+      );
+      setPromoTiers(res.data.success ? res.data.tiers || [] : []);
+    } catch (err) {
+      console.error("Promotion fetch failed:", err);
+      setPromoTiers([]);
+    }
+  };
+
   const handleCompanyChange = (event) => {
     const selectedCode = event.target.value;
 
@@ -719,6 +780,10 @@ function App() {
         setQuantityError("");
         setIsRefund(false);
         resetPayment();
+        // New product -> discount comes from its promotion again (not manual)
+        discountManualRef.current = false;
+        setDiscount("0");
+        fetchPromotion(response.data.salesData[0].PRODUCT_CODE, selectedCompany);
       }
       if (response.data.colorWiseData.length > 0) {
         const colorWiseData = response.data.colorWiseData;
@@ -778,6 +843,7 @@ function App() {
       setInputValue("");
     } catch (err) {
       setSalesData([]);
+      setPromoTiers([]);
       setUnitType("");
       setState(false);
       setAmount("");
@@ -1070,6 +1136,8 @@ function App() {
         setScannedCode("");
         setUnitType("");
         setIsRefund(false);
+        setPromoTiers([]);
+        discountManualRef.current = false;
 
         await fetchInvoiceTableData();
 
@@ -1214,6 +1282,8 @@ function App() {
         setDiscount("0");
         setDiscountAmount(0);
         setIsRefund(false);
+        setPromoTiers([]);
+        discountManualRef.current = false;
         setColorWiseTableData([]);
         setCode("");
         setInputValue("");
@@ -2166,6 +2236,9 @@ function App() {
                                       ref={quantityRef}
                                       value={quantity}
                                       onChange={(e) => {
+                                        // Quantity changed -> the promotion tier for the NEW qty
+                                        // must apply again (even if the cashier edited the discount before)
+                                        discountManualRef.current = false;
                                         let value = e.target.value;
                                         if (
                                           unitType &&
@@ -2255,6 +2328,8 @@ function App() {
                                       ref={discountRef}
                                       value={discount}
                                       onChange={(e) => {
+                                        // The cashier typed it -> promotion must not override
+                                        discountManualRef.current = true;
                                         let val = e.target.value;
                                         val = val.replace(/[^0-9.%]/g, "");
                                         if ((val.match(/%/g) || []).length > 1) {
@@ -2279,6 +2354,24 @@ function App() {
                                     />
                                   </div>
                                 </div>
+
+                                {/* Promotion tiers of this product (info only) */}
+                                {/* {promoTiers.length > 0 && (
+                                  <p className="mt-1 text-xs text-green-700 ml-[90px]">
+                                    Promo:{" "}
+                                    {promoTiers
+                                      .map(
+                                        (t) =>
+                                          `${t.qty}+ → ${t.disc}${
+                                            t.isPercent ? "%" : ""
+                                          }`
+                                      )
+                                      .join(" | ")}
+                                    {discountManualRef.current
+                                      ? " (manual discount)"
+                                      : ""}
+                                  </p>
+                                )} */}
 
                                 {discount &&
                                   discount !== "0" &&
