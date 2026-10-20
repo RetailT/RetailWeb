@@ -619,19 +619,32 @@ function App() {
       setPromoTiers([]);
       return;
     }
-    try {
-      const res = await axios.get(
-        `${process.env.REACT_APP_BACKEND_URL}product-promotion`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-          params: { productCode: pc, company: companyCode || "" },
+    // The backend can fail now and then (it opens / closes the DB connection per
+    // request, and several requests run at the same time right after a scan).
+    // So try up to 3 times before giving up, otherwise the discount is lost.
+    const MAX_TRIES = 3;
+    for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
+      try {
+        const res = await axios.get(
+          `${process.env.REACT_APP_BACKEND_URL}product-promotion`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            params: { productCode: pc, company: companyCode || "" },
+          }
+        );
+        setPromoTiers(res.data.success ? res.data.tiers || [] : []);
+        return;
+      } catch (err) {
+        console.error(
+          `Promotion fetch failed (try ${attempt}/${MAX_TRIES}):`,
+          err.response?.data?.error || err.response?.data?.message || err.message
+        );
+        if (attempt < MAX_TRIES) {
+          await new Promise((r) => setTimeout(r, 500 * attempt));
         }
-      );
-      setPromoTiers(res.data.success ? res.data.tiers || [] : []);
-    } catch (err) {
-      console.error("Promotion fetch failed:", err);
-      setPromoTiers([]);
+      }
     }
+    setPromoTiers([]);
   };
 
   const handleCompanyChange = (event) => {

@@ -18,13 +18,11 @@ const posmain = process.env.DB_DATABASE1;
 
 // true  -> PD1..PD6 are PERCENTAGES   (5.00 = 5%)
 // false -> PD1..PD6 are RUPEE AMOUNTS (5.00 = Rs. 5)
-const PROMO_IS_PERCENT = false;
-// Only used when PROMO_IS_PERCENT = false
+
+// Only used for TYPE = 'PD' (amount discount)
 // true  -> amount x quantity (Rs. per unit)
 // false -> one fixed amount for the whole line
 const PROMO_AMOUNT_IS_PER_UNIT = false;
-// Only rows with this TYPE are quantity-tier product discounts
-const PROMO_TYPE = "PD";
 
 // ---- AI Report Assistant ----
 const { aiReportChat } = require("./aiReportController")({
@@ -8257,7 +8255,7 @@ exports.getInvoiceTempData = async (req, res) => {
   }
 };
 
-// GET /product-promotion
+// GET - Product-promotion
 exports.getProductPromotion = async (req, res) => {
   try {
     const productCode = String(req.query.productCode || "").trim();
@@ -8279,12 +8277,11 @@ exports.getProductPromotion = async (req, res) => {
         .json({ success: false, message: "Database connection failed" });
     }
  
-    // A product can have several promotion rows (different dates / companies),
-    // so read all of them (newest first) and pick the right one below.
+    // A product can have several promotion rows (different dates / companies /
+    // versions), so read all of them (newest first) and pick the right one below.
     const result = await pool
       .request()
-      .input("productCode", mssql.NVarChar(30), productCode)
-      .input("type", mssql.NVarChar(10), PROMO_TYPE).query(`
+      .input("productCode", mssql.NVarChar(30), productCode).query(`
         USE [${posback}];
         SELECT
           IDX, PRODUCT_CODE, TYPE, PROMOTIONMODE, COMPANY_CODE,
@@ -8292,7 +8289,7 @@ exports.getProductPromotion = async (req, res) => {
           PDQ1, PD1, PDQ2, PD2, PDQ3, PD3, PDQ4, PD4, PDQ5, PD5, PDQ6, PD6
         FROM tb_PROMOTION
         WHERE LTRIM(RTRIM(PRODUCT_CODE)) = @productCode
-          AND LTRIM(RTRIM(TYPE)) = @type
+          AND UPPER(LTRIM(RTRIM(TYPE))) IN ('PD', 'PDP')
           AND ISNULL(PDQ1, 0) > 0
           AND ISNULL(PD1, 0) > 0
         ORDER BY IDX DESC
@@ -8322,7 +8319,8 @@ exports.getProductPromotion = async (req, res) => {
       return res.status(200).json({ success: true, tiers: [] });
     }
  
-    // Prefer: row for this company -> row with no company -> any other row
+    // Prefer: row for this company -> row with no company -> any other row.
+    // Inside the same rank the newest IDX stays first (array.sort is stable).
     const norm = (v) => String(v ?? "").trim().replace(/^0+/, "");
     const rank = (r) => {
       const c = norm(r.COMPANY_CODE);
@@ -8332,24 +8330,23 @@ exports.getProductPromotion = async (req, res) => {
     };
     const row = [...validRows].sort((a, b) => rank(a) - rank(b))[0];
  
-    // Percentage or amount? (PROMOTIONMODE text wins if it clearly says so)
-    const mode = String(row.PROMOTIONMODE || "").toUpperCase();
-    let isPercent = PROMO_IS_PERCENT;
-    if (/%|PERC|PRC/.test(mode)) isPercent = true;
-    else if (/VAL|AMT|AMOUNT|RS/.test(mode)) isPercent = false;
+    // TYPE decides percentage / amount
+    const type = String(row.TYPE || "").trim().toUpperCase();
+    const isPercent = type === "PDP";
  
     const tiers = [];
     for (let i = 1; i <= 6; i++) {
       const qty = Number(row[`PDQ${i}`]) || 0;
       const disc = Number(row[`PD${i}`]) || 0;
-      if (qty > 0 && disc > 0) {
-        tiers.push({
-          qty,
-          disc,
-          isPercent,
-          perUnit: PROMO_AMOUNT_IS_PER_UNIT,
-        });
-      }
+      if (qty <= 0 || disc <= 0) continue;
+      // A percentage above 100 makes no sense -> ignore that tier
+      if (isPercent && disc > 100) continue;
+      tiers.push({
+        qty,
+        disc,
+        isPercent,
+        perUnit: isPercent ? false : PROMO_AMOUNT_IS_PER_UNIT,
+      });
     }
     tiers.sort((a, b) => a.qty - b.qty);
  
@@ -8359,7 +8356,6 @@ exports.getProductPromotion = async (req, res) => {
       debug: {
         idx: row.IDX,
         type: row.TYPE,
-        promotionMode: row.PROMOTIONMODE,
         companyCode: row.COMPANY_CODE,
       },
     });
