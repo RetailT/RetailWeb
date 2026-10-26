@@ -40,6 +40,7 @@ import { AuthProvider } from './AuthContext';
 import InvoicePreview from './pages/invoicePreview'; // new page
 import CashierController from './pages/cashierController';
 import Dayend from "./pages/dayend";
+import InvoiceTemplateDesigner from './pages/invoiceTemplateDesigner'; // new page
 
 
 function App() {
@@ -87,6 +88,7 @@ function App() {
         <Route path="/stock-wise-vendor" element={<ProtectedRoute> <StockWiseVendor /> </ProtectedRoute>}/>
         <Route path="/cashier-controller" element={<ProtectedRoute> <CashierController /> </ProtectedRoute>}/>
         <Route path="/dayend" element={<ProtectedRoute><Dayend /></ProtectedRoute>} />
+        <Route path="/invoice-template-designer" element={<ProtectedRoute><InvoiceTemplateDesigner /></ProtectedRoute>} />
       </Routes>
     </Router>
     </AuthProvider>
