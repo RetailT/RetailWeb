@@ -1021,8 +1021,8 @@ exports.register = async (req, res) => {
       .input("password", mssql.VarChar, hashedPassword).query(`
         USE [${posmain}];
         INSERT INTO tb_USERS (username, email, password, resetToken, resetTokenExpiry, ip_address, port, CUSTOMERID, a_permission,
-        a_sync, d_company, d_department, d_category, d_scategory, d_vendor, d_invoice, d_sales_report, d_productView, t_scan, t_invoice, t_invoicePreview, t_stock, t_grn, t_prn, t_tog, t_stock_update, u_cashier_controller)
-        VALUES (@username, @email, @password, '', '', '', '', NULL, 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F','F', 'F','F', 'F','F', 'F', 'F', 'F', 'F', 'F', 'F')
+        a_sync, d_company, d_department, d_category, d_scategory, d_vendor, d_invoice, d_sales_report, d_productView, t_scan, t_invoice, t_invoicePreview, t_stock, t_grn, t_prn, t_tog, t_stock_update, u_cashier_controller, t_invoiceDesigner)
+        VALUES (@username, @email, @password, '', '', '', '', NULL, 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F','F', 'F','F', 'F','F', 'F', 'F', 'F', 'F', 'F', 'F', 'F')
       `);
 
     return res.status(201).json({ message: "User added successfully" });
