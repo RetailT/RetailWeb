@@ -2,6 +2,14 @@ import React, { useEffect, useState, useContext, useRef } from 'react';
 import axios from 'axios';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../AuthContext';
+import {
+  buildDocument,
+  printDocument,
+  normalizePaper,
+  getPrintSettings,
+  savePrintSettings,
+  DEFAULT_PRINT_SETTINGS,
+} from '../utils/invoiceTemplate';
 
 // POS (80mm) text sizes: one body size for everything, bigger only for the shop name
 // and the key lines (marked with the "pos-big" class). The footer (copyright + message,
@@ -15,13 +23,8 @@ const POS_TEXT_CSS = `
   .print-container .border-4 { border-width: 2px !important; }
 `;
 
-// ---- POS page height tuning ----
-// Printed receipt height = measured height * POS_PRINT_SCALE.
-//   * blank space still at the bottom  -> make POS_PRINT_SCALE smaller (e.g. 0.82)
-//   * receipt cut off / goes to page 2 -> make it bigger (e.g. 0.88)
-const POS_PRINT_SCALE = 0.85;
-// Blank space kept after the phone-number line (mm). About one line of text.
-const POS_END_SPACE_MM = 5;
+// NOTE: the page height / bottom space / print width of the POS print are NOT fixed here
+// any more. They come from the "Print settings" of this computer (utils/invoiceTemplate.js).
 
 // Shown when the company has no footer message saved in the database
 const DEFAULT_MESSAGE =
@@ -29,6 +32,12 @@ const DEFAULT_MESSAGE =
 
 // Max characters that fit on one footer line (80mm paper, 8.5px mono)
 const FOOTER_MAX_CHARS = 46;
+
+// AMILA = legacy Sinhala font (the product Sinhala names in the DB are typed with it).
+// Put the font file at  public/fonts/AMILA.ttf  (a PC that has AMILA installed uses its own copy).
+const amilaFaceCss = () =>
+  `@font-face{font-family:"AMILA";src:local("AMILA"),url("${window.location.origin}/fonts/AMILA.ttf") format("truetype");font-display:swap;}`;
+const SINHALA_FONT = '"AMILA", sans-serif';
 
 // ---- DOCUMENT_DATE / DOCUMENT_TIME (from tb_INVOICE_DETAILS) -> display text ----
 // The API may send them as "2026-10-19T00:00:00.000Z", "2026-10-19", "14:35:10",
@@ -57,6 +66,26 @@ const isRefundLine = (item) =>
   String(item.REFUND || "").toUpperCase() === "T" ||
   (parseFloat(item.QUANTITY) || 0) < 0;
 
+// Unit price AFTER the discount (what the customer really pays for ONE unit):
+// TOTAL / QUANTITY  (e.g. 2 x 575.00 with 50.00 discount -> 1100.00 / 2 = 550.00)
+const netUnitPrice = (item) => {
+  const qty = parseFloat(item.QUANTITY) || 0;
+  if (!qty) return parseFloat(item.UNITPRICE) || 0;
+  return (parseFloat(item.TOTAL) || 0) / qty;
+};
+
+// The saved custom layouts still have the column title "DISC".
+// The column now shows the price after discount, so the title is changed to "PRICE".
+const relabelDiscountHeader = (html) =>
+  String(html || "").replace(/(>\s*)DISC\.?(\s*<)/gi, "$1PRICE$2");
+
+// Money with thousand separators for the custom template (e.g. 2,500.00)
+const fmtMoney = (n) =>
+  (Number(n) || 0).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
 // Footer message -> at most 2 lines, each line stays on one line when printed.
 const buildMessageLines = (msg) => {
   const raw = (msg || "")
@@ -82,6 +111,223 @@ const buildMessageLines = (msg) => {
   return lines;
 };
 
+// The backend can fail now and then (it opens / closes ONE shared DB connection per
+// request), so try up to 3 times before giving up. Only network / 5xx errors are retried.
+const withRetry = async (fn, tries = 3) => {
+  for (let attempt = 1; attempt <= tries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const status = err.response?.status;
+      const retryable = !status || status >= 500;
+      if (!retryable || attempt === tries) throw err;
+      await new Promise((r) => setTimeout(r, 600 * attempt));
+    }
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Ruler test page (80mm): shows how much of the paper width the printer really prints.
+// Ticks every 2mm, numbers staggered above / below the ticks, and a border box that
+// touches both paper edges. Whatever is missing on the printed paper is outside the
+// printable area of this printer.
+// ---------------------------------------------------------------------------
+const buildRulerHtml = (W = 80) => {
+  let marks = "";
+  for (let mm = 0; mm <= W; mm += 2) {
+    const above = mm % 4 === 0;
+    marks += `<div class="t" style="left:${mm}mm"></div>`;
+    marks += `<div class="n ${above ? "up" : "down"}" style="left:${mm}mm">${mm}</div>`;
+  }
+  return `<!doctype html><html><head><meta charset="utf-8"><style>
+    @page { size: ${W}mm 44mm; margin: 0; }
+    html, body { margin: 0; padding: 0; background: #fff; }
+    body { position: relative; width: ${W}mm; height: 44mm; overflow: hidden;
+           font-family: "Courier New", monospace; color: #000;
+           -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .box { position: absolute; left: 0; top: 0; width: ${W}mm; height: 44mm;
+           border: 0.5mm solid #000; box-sizing: border-box; }
+    .t { position: absolute; top: 13mm; height: 14mm; border-left: 0.3mm solid #000; }
+    .n { position: absolute; font-size: 7px; transform: translateX(-50%); }
+    .up { top: 9.5mm; }
+    .down { top: 28mm; }
+    .h { position: absolute; left: 2mm; top: 2mm; font-size: 8px; font-weight: bold; }
+    .f { position: absolute; left: 2mm; top: 33mm; width: ${W - 4}mm; font-size: 6.5px; line-height: 1.3; }
+  </style></head><body>
+    <div class="box"></div>
+    <div class="h">RULER TEST - paper ${W}mm</div>
+    ${marks}
+    <div class="f">Last number fully printed on the right = Print width (ignore 0 and ${W}).</div>
+  </body></html>`;
+};
+
+const printRulerTest = async () => {
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("aria-hidden", "true");
+  iframe.setAttribute("sandbox", "allow-same-origin allow-modals");
+  iframe.style.cssText =
+    "position:fixed;left:-10000px;top:0;width:80mm;height:200mm;border:0;visibility:hidden;";
+
+  try {
+    await new Promise((resolve) => {
+      iframe.onload = resolve;
+      iframe.srcdoc = buildRulerHtml(80);
+      document.body.appendChild(iframe);
+    });
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+  } catch (err) {
+    console.error("Ruler test print failed:", err);
+  } finally {
+    setTimeout(() => {
+      if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+    }, 1500);
+  }
+};
+
+// Printer calibration of THIS computer (saved in this browser only)
+const PrintSettingsPanel = () => {
+  const [s, setS] = useState(() => getPrintSettings());
+  const [saved, setSaved] = useState(false);
+
+  const change = (key, value) => {
+    setS((prev) => ({ ...prev, [key]: value }));
+    setSaved(false);
+  };
+
+  const handleSave = () => {
+    setS(savePrintSettings(s));
+    setSaved(true);
+  };
+
+  const handleReset = () => {
+    setS(savePrintSettings(DEFAULT_PRINT_SETTINGS));
+    setSaved(true);
+  };
+
+  const inputCls =
+    "w-20 px-2 py-1 text-right bg-white border border-gray-300 rounded-md";
+
+  return (
+    <div className="max-w-[380px] mx-auto mt-3 p-3 text-left text-xs bg-gray-50 border border-gray-300 rounded-md no-print">
+      <p className="mb-2 font-bold">Print settings (saved on this computer only)</p>
+
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <label>Page height (%)</label>
+        <input
+          type="number"
+          min="50"
+          max="150"
+          value={s.scalePct}
+          onChange={(e) => change("scalePct", e.target.value)}
+          className={inputCls}
+        />
+      </div>
+      <p className="mb-2 text-gray-500">
+        Blank paper keeps coming after the bill: lower it (e.g. 80). Bill is cut off or goes
+        to a 2nd page: raise it (e.g. 100).
+      </p>
+
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <label>Space at the bottom (mm)</label>
+        <input
+          type="number"
+          min="0"
+          max="60"
+          value={s.extraMm}
+          onChange={(e) => change("extraMm", e.target.value)}
+          className={inputCls}
+        />
+      </div>
+
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <label>Print width (mm, 0 = paper width)</label>
+        <input
+          type="number"
+          min="0"
+          max="300"
+          value={s.widthMm}
+          onChange={(e) => change("widthMm", e.target.value)}
+          className={inputCls}
+        />
+      </div>
+      <p className="mb-2 text-gray-500">
+        A printer cannot print the full paper width (an 80mm roll usually prints about 72mm), so the
+        last digits on the right can get cut off. Press <b>Print ruler test</b>, look at the paper
+        and enter the last number on the right that is fully printed (e.g. 72). The bill is then
+        made that wide and centered.
+      </p>
+      <p className="mb-3 text-gray-500">
+        In the Chrome print window use: Margins = None, Scale = Default (100), and the
+        80mm roll as the paper size.
+      </p>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          onClick={handleSave}
+          className="px-3 py-1.5 text-white bg-black rounded-md hover:bg-gray-800"
+        >
+          Save
+        </button>
+        <button
+          onClick={handleReset}
+          className="px-3 py-1.5 bg-white border border-gray-300 rounded-md hover:bg-gray-100"
+        >
+          Reset
+        </button>
+        <button
+          onClick={printRulerTest}
+          className="px-3 py-1.5 bg-white border border-gray-300 rounded-md hover:bg-gray-100"
+        >
+          Print ruler test
+        </button>
+        {saved && <span className="text-green-700">Saved</span>}
+      </div>
+    </div>
+  );
+};
+
+// Shows a custom (designer) template inside an iframe. The frame height follows the content.
+const TemplatePreviewFrame = ({ docHtml, widthMm }) => {
+  const frameRef = useRef(null);
+  const [height, setHeight] = useState(400);
+
+  const measure = () => {
+    try {
+      const body = frameRef.current?.contentDocument?.body;
+      if (body) setHeight(Math.ceil(body.getBoundingClientRect().height) + 4);
+    } catch (e) {}
+  };
+
+  useEffect(() => {
+    // measure again later (logo images may load after the first measure)
+    const t1 = setTimeout(measure, 300);
+    const t2 = setTimeout(measure, 1200);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [docHtml]);
+
+  return (
+    <iframe
+      ref={frameRef}
+      title="Invoice"
+      srcDoc={docHtml}
+      sandbox="allow-same-origin"
+      scrolling="no"
+      onLoad={measure}
+      style={{
+        width: `${widthMm}mm`,
+        height,
+        border: 0,
+        display: "block",
+        background: "#fff",
+      }}
+    />
+  );
+};
+
 const InvoicePreview = () => {
   const { authToken } = useContext(AuthContext);
   const [searchParams] = useSearchParams();
@@ -93,6 +339,13 @@ const InvoicePreview = () => {
   const [invoiceData, setInvoiceData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Custom layout made in the Invoice Template Designer (null = none saved -> built-in layout)
+  const [template, setTemplate] = useState(null);
+  // true = ignore the custom layout and show the built-in one (only users who can edit layouts)
+  const [useDefaultLayout, setUseDefaultLayout] = useState(false);
+  // show / hide the printer calibration panel
+  const [showPrintSettings, setShowPrintSettings] = useState(false);
 
   // Customer code + name (resolved from invoice data, or looked up from the customer list)
   const [customerInfo, setCustomerInfo] = useState({ code: "", name: "" });
@@ -108,6 +361,10 @@ const InvoicePreview = () => {
 
   const receiptRef = useRef(null);
 
+  // StrictMode (dev) runs effects twice -> two requests at the same time -> the backend's
+  // shared DB connection gets closed by the second one. Remember which invoice already started.
+  const startedKeyRef = useRef("");
+
   const handlePosToggle = (e) => {
     const checked = e.target.checked;
     setUsePosPrinter(checked);
@@ -118,7 +375,8 @@ const InvoicePreview = () => {
 
   const token = localStorage.getItem("authToken");
 
-  // Permission is enforced by the backend (t_invoicePreview)
+  // Any logged-in user may view / print an invoice. Only editing the layout needs a
+  // permission (the backend tells us in invoice.canEditTemplate).
   const hasPermission = true;
 
   useEffect(() => {
@@ -139,6 +397,11 @@ const InvoicePreview = () => {
       return;
     }
 
+    // Run only once per invoice (see startedKeyRef above)
+    const key = `${documentNo}|${company}`;
+    if (startedKeyRef.current === key) return;
+    startedKeyRef.current = key;
+
     const fetchInvoice = async () => {
       try {
         const params = { documentNo: documentNo.trim().toUpperCase() };
@@ -146,16 +409,34 @@ const InvoicePreview = () => {
           params.company = company.trim().toUpperCase();
         }
 
-        const response = await axios.get(
-          `${process.env.REACT_APP_BACKEND_URL}get-invoice-preview`,
-          {
+        const response = await withRetry(() =>
+          axios.get(`${process.env.REACT_APP_BACKEND_URL}get-invoice-preview`, {
             headers: { Authorization: `Bearer ${token}` },
             params,
-          }
+          })
         );
 
         if (response.data.success) {
-          setInvoiceData(response.data.invoice);
+          const inv = response.data.invoice;
+
+          // Custom layout of this company (or the "*" default). Any failure -> built-in layout.
+          // The invoice is set only AFTER this, so the "customers" request (started by the
+          // effect below) never runs at the same time as the template request.
+          let tpl = null;
+          try {
+            const tRes = await withRetry(() =>
+              axios.get(`${process.env.REACT_APP_BACKEND_URL}invoice-template`, {
+                headers: { Authorization: `Bearer ${token}` },
+                params: { company: inv.companyCode || company || "" },
+              })
+            );
+            tpl = tRes.data?.template || null;
+          } catch (tErr) {
+            console.warn("Invoice template could not be loaded, using default layout");
+          }
+
+          setTemplate(tpl);
+          setInvoiceData(inv);
         } else {
           setError(response.data.message || "Invoice not found.");
         }
@@ -226,9 +507,13 @@ const InvoicePreview = () => {
   // POS print: the receipt is copied into a hidden iframe that is exactly 80mm wide.
   // That is the SAME width Chrome uses for the printed page, so the layout (and the
   // measured height) is identical to what gets printed -> no blank space at the bottom.
+  // Page height / bottom space / print width come from the Print settings of this computer.
   const printPos = async () => {
     const src = receiptRef.current;
     if (!src) return;
+
+    const ps = getPrintSettings();
+    const printW = ps.widthMm > 0 ? ps.widthMm : 80;
 
     const iframe = document.createElement("iframe");
     iframe.setAttribute("aria-hidden", "true");
@@ -263,7 +548,7 @@ const InvoicePreview = () => {
         doc.head.appendChild(copy);
       });
       const posStyle = doc.createElement("style");
-      posStyle.textContent = POS_TEXT_CSS;
+      posStyle.textContent = POS_TEXT_CSS + amilaFaceCss();
       doc.head.appendChild(posStyle);
 
       await Promise.race([Promise.all(loads), new Promise((r) => setTimeout(r, 2000))]);
@@ -273,23 +558,27 @@ const InvoicePreview = () => {
 
       const clone = src.cloneNode(true);
       clone.querySelectorAll(".no-print, style").forEach((n) => n.remove());
-      clone.style.cssText =
-        "position:static;width:80mm;max-width:80mm;padding:2mm 3mm;margin:0;box-sizing:border-box;border:none;box-shadow:none;";
+      clone.style.cssText = `position:static;width:${printW}mm;max-width:${printW}mm;padding:2mm 3mm;margin:0 auto;box-sizing:border-box;border:none;box-shadow:none;`;
       doc.body.appendChild(clone);
+
+      // make sure the AMILA font is loaded before measuring / printing
+      try {
+        await doc.fonts.load('10px "AMILA"');
+        await doc.fonts.ready;
+      } catch (e) {}
 
       await new Promise((r) => setTimeout(r, 100)); // let layout settle
 
       // Height = from the top of the receipt to the bottom of the phone-number line
-      // (".pos-end"), plus ONE line of blank space. Anything after it (buttons etc.) is ignored.
+      // (".pos-end"), plus the bottom space. Anything after it (buttons etc.) is ignored.
       const endEl = clone.querySelector(".pos-end");
       const topPx = clone.getBoundingClientRect().top;
       const bottomPx = endEl
         ? endEl.getBoundingClientRect().bottom
         : clone.getBoundingClientRect().bottom;
       const px = bottomPx - topPx;
-      // Chrome shrinks the receipt a little when it prints it, so the printed receipt is
-      // shorter than the measured one. POS_PRINT_SCALE corrects for that.
-      const mm = Math.ceil(((px * 25.4) / 96) * POS_PRINT_SCALE) + POS_END_SPACE_MM;
+      // Page height % (Print settings) corrects for the way the printer / Chrome scales the bill.
+      const mm = Math.ceil(((px * 25.4) / 96) * (ps.scalePct / 100)) + ps.extraMm;
 
       const pageStyle = doc.createElement("style");
       pageStyle.textContent = `
@@ -307,18 +596,15 @@ const InvoicePreview = () => {
     }
   };
 
-  const handlePrint = () => {
-    if (usePosPrinter) {
-      printPos();
-    } else {
-      window.print();
-    }
-  };
-
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-xl font-mono">Loading invoice preview...</div>
+      <div className="flex flex-col items-center justify-center min-h-screen gap-4 bg-gray-100">
+        <div
+          className="border-4 border-orange-500 rounded-full w-14 h-14 border-t-transparent animate-spin"
+          role="status"
+          aria-label="Loading"
+        />
+        <p className="text-sm font-medium text-gray-400">Loading invoice preview...</p>
       </div>
     );
   }
@@ -335,6 +621,9 @@ const InvoicePreview = () => {
   }
 
   if (!invoiceData) return null;
+
+  // Only users with the "invoice designer" permission may edit the layout / switch layouts
+  const canEditTemplate = !!invoiceData.canEditTemplate;
 
   // Calculations
   // SUB TOTAL = sales lines only. Refund lines are listed in the items but are NOT part
@@ -396,6 +685,131 @@ const InvoicePreview = () => {
     invoiceData.message?.trim() ? invoiceData.message : DEFAULT_MESSAGE
   );
 
+  // ---------- Custom layout (designer template) ----------
+  // Users who cannot edit layouts always get the custom layout (when one is saved).
+  const useTemplate = !!template && !(canEditTemplate && useDefaultLayout);
+  const templatePaper = template ? normalizePaper(template) : null;
+  let templateDoc = "";
+
+  if (useTemplate) {
+    const templateData = {
+      shopName,
+      shopAddress,
+      shopTel: shopTel === "N/A" ? "" : shopTel,
+      cashier: invoiceData.cashierName || "CASHIER",
+      invoiceNo: documentNo,
+      customer: customerLabel,
+      date: displayDate,
+      time: displayTime,
+      subTotal: fmtMoney(subTotal),
+      refundTotal: fmtMoney(refundTotal),
+      cash: fmtMoney(cashAmount),
+      credit: fmtMoney(creditAmount),
+      totalDiscount: fmtMoney(totalDiscount),
+      noOfPieces: noOfPieces.toFixed(3),
+      noOfProducts: String(invoiceData.items.length),
+      message: invoiceData.message?.trim() ? invoiceData.message : DEFAULT_MESSAGE,
+      hasRefund: refundTotal < -0.001,
+      hasDiscount: totalDiscount > 0.001,
+      items: invoiceData.items.map((item) => {
+        const nameEn = String(item.PRODUCT_NAME || "").trim();
+        const nameSi = String(item.PRODUCT_NAME_SINHALA || "").trim();
+        return {
+          code: String(item.PRODUCT_CODE || "").trim(),
+          // name = English only (the Sinhala text is legacy AMILA text, it must not be mixed
+          // into a normal font). Use {{nameSinhala}} in the template with font-family AMILA.
+          name: nameEn,
+          nameEnglish: nameEn,
+          nameSinhala: nameSi,
+          qty: parseFloat(item.QUANTITY || 0).toFixed(3),
+          unitPrice: fmtMoney(item.UNITPRICE),
+          // {{discount}} in the layout now gives the unit price AFTER the discount
+          discount: fmtMoney(netUnitPrice(item)),
+          netPrice: fmtMoney(netUnitPrice(item)),
+          // the real discount amount of the line, if a layout ever needs it
+          discountAmount: fmtMoney(item.DISCOUNT_AMOUNT),
+          total: fmtMoney(item.TOTAL),
+          refundTag: isRefundLine(item) ? " (REFUND)" : "",
+          isRefund: isRefundLine(item),
+        };
+      }),
+    };
+
+    templateDoc = buildDocument({
+      html: relabelDiscountHeader(template.html),
+      css: `${amilaFaceCss()}\n${template.css || ""}`,
+      paper: templatePaper,
+      data: templateData,
+    });
+  }
+
+  const handlePrint = () => {
+    if (useTemplate) {
+      printDocument(templateDoc, templatePaper);
+    } else if (usePosPrinter) {
+      printPos();
+    } else {
+      window.print();
+    }
+  };
+
+  const designerUrl = `/invoice-template-designer?company=${encodeURIComponent(
+    invoiceData.companyCode || company || "*"
+  )}`;
+
+  // ---------- Custom layout view ----------
+  if (useTemplate) {
+    return (
+      <div className="w-full my-2 sm:my-4">
+        <div className="overflow-x-auto">
+          <div
+            className="mx-auto bg-white border border-gray-300 shadow-lg"
+            style={{ width: `${templatePaper.widthMm}mm` }}
+          >
+            <TemplatePreviewFrame docHtml={templateDoc} widthMm={templatePaper.widthMm} />
+          </div>
+        </div>
+
+        <div className="px-3 pb-4 text-center sm:pb-6 no-print">
+          <button
+            onClick={handlePrint}
+            className="bg-black text-white px-6 sm:px-10 py-3 sm:py-4 rounded-xl text-base sm:text-xl hover:bg-gray-800 transition shadow-md w-full sm:w-auto mt-4"
+          >
+            🖨️ Print Invoice
+          </button>
+          <div className="flex justify-center gap-4 mt-3 text-sm">
+            {canEditTemplate && (
+              <>
+                <button
+                  onClick={() => setUseDefaultLayout(true)}
+                  className="text-gray-600 underline hover:text-black"
+                >
+                  Use default layout
+                </button>
+                <a
+                  href={designerUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-600 underline hover:text-black"
+                >
+                  Edit layout
+                </a>
+              </>
+            )}
+            <button
+              onClick={() => setShowPrintSettings((v) => !v)}
+              className="text-gray-600 underline hover:text-black"
+            >
+              Print settings
+            </button>
+          </div>
+          {showPrintSettings && <PrintSettingsPanel />}
+        </div>
+      </div>
+    );
+  }
+
+  // ---------- Built-in (default) layout ----------
   return (
     <div
       ref={receiptRef}
@@ -427,33 +841,39 @@ const InvoicePreview = () => {
           <div className="grid grid-cols-4 gap-x-2">
           <div className="text-left">QTY</div>
           <div className="text-right">U/PRICE</div>
-          <div className="text-right">DISC</div>
+          <div className="text-right">PRICE</div>
           <div className="text-right">VALUE</div>
           </div>
         </div>
 
-        {invoiceData.items.map((item, idx) => (
-          <div key={idx} className="mb-2">
-            <div className="font-bold text-[10px] sm:text-xs break-words">
-              {item.PRODUCT_CODE} {item.PRODUCT_NAME}
-              {isRefundLine(item) ? " (REFUND)" : ""}
+        {invoiceData.items.map((item, idx) => {
+          const sinhalaName = String(item.PRODUCT_NAME_SINHALA || "").trim();
+          return (
+            <div key={idx} className="mb-2">
+              <div className="font-bold text-[10px] sm:text-xs break-words">
+                {item.PRODUCT_CODE} {item.PRODUCT_NAME}
+                {sinhalaName && (
+                  <span style={{ fontFamily: SINHALA_FONT }}> {sinhalaName}</span>
+                )}
+                {isRefundLine(item) ? " (REFUND)" : ""}
+              </div>
+              <div className="grid grid-cols-4 gap-x-2 text-[10px] sm:text-xs">
+                <div className="text-left">
+                  {parseFloat(item.QUANTITY || 0).toFixed(3)}
+                </div>
+                <div className="text-right">
+                  {parseFloat(item.UNITPRICE || 0).toFixed(2)}
+                </div>
+                <div className="text-right">
+                  {netUnitPrice(item).toFixed(2)}
+                </div>
+                <div className="text-right font-bold">
+                  {parseFloat(item.TOTAL || 0).toFixed(2)}
+                </div>
+              </div>
             </div>
-            <div className="grid grid-cols-4 gap-x-2 text-[10px] sm:text-xs">
-              <div className="text-left">
-                {parseFloat(item.QUANTITY || 0).toFixed(3)}
-              </div>
-              <div className="text-right">
-                {parseFloat(item.UNITPRICE || 0).toFixed(2)}
-              </div>
-              <div className="text-right">
-                {parseFloat(item.DISCOUNT_AMOUNT || 0).toFixed(2)}
-              </div>
-              <div className="text-right font-bold">
-                {parseFloat(item.TOTAL || 0).toFixed(2)}
-              </div>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Totals + Payment */}
@@ -544,10 +964,39 @@ const InvoicePreview = () => {
         >
           🖨️ Print Invoice
         </button>
+
+        <div className="flex justify-center gap-4 mt-3 text-sm">
+          {canEditTemplate && template && (
+            <button
+              onClick={() => setUseDefaultLayout(false)}
+              className="text-gray-600 underline hover:text-black"
+            >
+              Use custom layout
+            </button>
+          )}
+          {canEditTemplate && (
+            <a
+              href={designerUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-600 underline hover:text-black"
+            >
+              Customize layout
+            </a>
+          )}
+          <button
+            onClick={() => setShowPrintSettings((v) => !v)}
+            className="text-gray-600 underline hover:text-black"
+          >
+            Print settings
+          </button>
+        </div>
+        {showPrintSettings && <PrintSettingsPanel />}
       </div>
 
       {/* Print Styles: @page must be top-level (not inside @media) to take effect */}
       <style>{`
+        ${amilaFaceCss()}
         @page { size: A4; margin: 10mm; }
         @media print {
           .no-print {

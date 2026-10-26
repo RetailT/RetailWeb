@@ -19,8 +19,10 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json());
+// 4mb: invoice templates can contain a small base64 logo (Vercel body limit is 4.5mb)
+app.use(express.json({ limit: "4mb" }));
 app.use('/debug', debugRoutes);
+
 // Define routes
 app.get("/", (req: Request, res: Response) => {
   res.send("Hello from Nodejs and Express!");
@@ -112,6 +114,12 @@ app.delete('/delete-invoice-temp-item', authenticateToken, authController.delete
 app.delete('/cashier-delete', authenticateToken, authController.deleteCashier);
 
 app.put('/reset-database-connection', authenticateToken, authController.resetDatabaseConnection);
+
+// Invoice template designer
+app.get('/invoice-template', authenticateToken, authController.getInvoiceTemplate);
+app.post('/invoice-template', authenticateToken, authController.saveInvoiceTemplate);
+app.delete('/invoice-template', authenticateToken, authController.deleteInvoiceTemplate);
+
 
 
 // for local development -- comment out in production

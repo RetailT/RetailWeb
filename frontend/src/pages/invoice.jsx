@@ -28,6 +28,12 @@ const sanitizeAmount = (val) => {
   return v;
 };
 
+// AMILA = legacy Sinhala font (the product Sinhala names in the DB are typed with it).
+// Put the font file at  public/fonts/AMILA.ttf  (a PC that has AMILA installed uses its own copy).
+const amilaFaceCss = () =>
+  `@font-face{font-family:"AMILA";src:local("AMILA"),url("${window.location.origin}/fonts/AMILA.ttf") format("truetype");font-display:swap;}`;
+const SINHALA_FONT = '"AMILA", sans-serif';
+
 function App() {
   const { authToken } = useContext(AuthContext);
   const [data, setData] = useState([]);
@@ -925,8 +931,11 @@ function App() {
     }
   };
 
+  // Table columns: 0 Company Code, 1 Company Name, 2 Product Code, 3 Product Name,
+  // 4 Product Name (Sinhala), 5 Cost Price, 6 Unit Price, 7 Stock, 8 Quantity,
+  // 9 Discount, 10 Discount Amount, 11 Total
   const handleRowChange = (rowIndex, colIndex, value) => {
-    if (colIndex === 7) {
+    if (colIndex === 8) {
       const updatedData = [...invoiceTableData];
       updatedData[rowIndex].QUANTITY = value;
 
@@ -1018,6 +1027,7 @@ function App() {
           "Company Name",
           "Product Code",
           "Product Name",
+          "Product Name (Sinhala)",
           "Cost Price",
           "Unit Price",
           "Stock",
@@ -1103,6 +1113,8 @@ function App() {
       const discountAmountValue = sign * d.amount;
       const totalValue = sign * calculateTotal();
 
+      // NOTE: the Sinhala product name is NOT sent from here.
+      // The backend (insertInvoiceTemp) reads it from tb_PRODUCT by product code.
       const response = await axios.post(
         `${process.env.REACT_APP_BACKEND_URL}insert-invoice-temp`,
         {
@@ -1706,6 +1718,9 @@ function App() {
 
   return (
     <div>
+      {/* AMILA font + Sinhala column (5th column) of the invoice items table */}
+      <style>{`${amilaFaceCss()}
+        #invoice-items-wrap td:nth-child(5) { font-family: "AMILA", sans-serif; font-size: 1.15em; }`}</style>
       <Navbar />
       <div className="flex flex-col min-h-screen">
         <div
@@ -2139,6 +2154,16 @@ function App() {
                             <strong>Product Name:</strong>{" "}
                             {salesData.PRODUCT_NAMELONG}
                           </p>
+                          {/* Shown only if the /scan API returns PRODUCT_NAME_SINHALA */}
+                          {salesData.PRODUCT_NAME_SINHALA &&
+                            String(salesData.PRODUCT_NAME_SINHALA).trim() && (
+                              <p className="text-sm text-gray-700">
+                                <strong>Sinhala Name:</strong>{" "}
+                                <span style={{ fontFamily: SINHALA_FONT }}>
+                                  {String(salesData.PRODUCT_NAME_SINHALA).trim()}
+                                </span>
+                              </p>
+                            )}
                           <p className="text-sm text-gray-700">
                             <strong>Cost Price:</strong> {costPrice}
                           </p>
@@ -2367,24 +2392,6 @@ function App() {
                                     />
                                   </div>
                                 </div>
-
-                                {/* Promotion tiers of this product (info only) */}
-                                {/* {promoTiers.length > 0 && (
-                                  <p className="mt-1 text-xs text-green-700 ml-[90px]">
-                                    Promo:{" "}
-                                    {promoTiers
-                                      .map(
-                                        (t) =>
-                                          `${t.qty}+ → ${t.disc}${
-                                            t.isPercent ? "%" : ""
-                                          }`
-                                      )
-                                      .join(" | ")}
-                                    {discountManualRef.current
-                                      ? " (manual discount)"
-                                      : ""}
-                                  </p>
-                                )} */}
 
                                 {discount &&
                                   discount !== "0" &&
@@ -2616,13 +2623,14 @@ function App() {
                           </div>
                         </div>
 
-                        <div className="overflow-hidden bg-white border border-gray-300 rounded-lg shadow-md">
+                        <div id="invoice-items-wrap" className="overflow-hidden bg-white border border-gray-300 rounded-lg shadow-md">
                           <Table
                             headers={[
                               "Company Code",
                               "Company Name",
                               "Product Code",
                               "Product Name",
+                              "Product Name (Sinhala)",
                               "Cost Price",
                               "Unit Price",
                               "Stock",
@@ -2637,6 +2645,7 @@ function App() {
                               item.PRODUCT_CODE || "",
                               (item.PRODUCT_NAME || "") +
                                 (parseFloat(item.QUANTITY || 0) < 0 ? " (REFUND)" : ""),
+                              String(item.PRODUCT_NAME_SINHALA || "").trim(),
                               parseFloat(item.COSTPRICE || 0).toFixed(2),
                               parseFloat(item.UNITPRICE || 0).toFixed(2),
                               parseFloat(item.STOCK || 0).toFixed(3),
@@ -2646,8 +2655,8 @@ function App() {
                               parseFloat(item.TOTAL || 0).toFixed(2),
                             ])}
                             editableColumns={[]}
-                            formatColumns={[4, 5, 9, 10]}
-                            rightAlignedColumns={[4, 5, 6, 7, 8, 9, 10]}
+                            formatColumns={[5, 6, 10, 11]}
+                            rightAlignedColumns={[5, 6, 7, 8, 9, 10, 11]}
                             onRowChange={handleRowChange}
                             onDeleteRow={handleDeleteRow}
                           />

@@ -8579,7 +8579,10 @@ exports.getCompanies = async (req, res) => {
 //   }
 // };
 
-// GET - Invoice Preview (now returns cashAmount / creditAmount + documentDate / documentTime)
+// GET - Invoice Preview (cashAmount / creditAmount + documentDate / documentTime
+//       + PRODUCT_NAME_SINHALA)
+//   * Any logged-in user can view / print an invoice
+//   * canEditTemplate tells the frontend if this user may edit the invoice layout
 exports.getInvoicePreview = async (req, res) => {
   try {
     let { documentNo, company } = req.query;
@@ -8597,35 +8600,12 @@ exports.getInvoicePreview = async (req, res) => {
     const username = req.user.username;
     const user_ip = String(req.user.ip).trim();
  
-    // Permission check (MAIN database)
-    if (mssql.connected) await mssql.close();
-    const mainPool = await connectToDatabase();
- 
-    if (!mainPool || !mainPool.connected) {
-      return res.status(500).json({ message: "Database connection failed" });
-    }
- 
-    const permResult = await mainPool
-      .request()
-      .input("username", mssql.NVarChar(100), username).query(`
-        USE [RTPOS_MAIN];
-        SELECT t_invoicePreview 
-        FROM tb_USERS
-        WHERE username = @username
-      `);
- 
-    if (permResult.recordset.length === 0) {
-      return res
-        .status(403)
-        .json({ message: "No permission record found for the user" });
-    }
- 
-    const hasPermission = permResult.recordset[0].t_invoicePreview === "T";
- 
-    if (!hasPermission) {
-      return res.status(403).json({
-        message: "You do not have permission to view the invoice preview",
-      });
+    // Layout-edit permission only. A failure here must never block the preview.
+    let canEditTemplate = false;
+    try {
+      canEditTemplate = await canEditInvoiceTemplate(username);
+    } catch (permErr) {
+      console.warn("Template edit permission check failed:", permErr.message);
     }
  
     // User database
@@ -8684,7 +8664,14 @@ exports.getInvoicePreview = async (req, res) => {
     `);
     const hasPayCols = colCheck.recordset[0].HasPay === 1;
  
-    // Invoice items (DOCUMENT_DATE / DOCUMENT_TIME added)
+    // Does the Sinhala name column exist yet? (older databases may not have it)
+    const sinCheck = await pool.request().query(`
+      SELECT CASE WHEN COL_LENGTH('RT_WEB.dbo.tb_INVOICE_DETAILS', 'PRODUCT_NAME_SINHALA') IS NOT NULL
+             THEN 1 ELSE 0 END AS HasSin
+    `);
+    const hasSinCol = sinCheck.recordset[0].HasSin === 1;
+ 
+    // Invoice items (DOCUMENT_DATE / DOCUMENT_TIME / PRODUCT_NAME_SINHALA)
     const itemsResult = await pool
       .request()
       .input("docNo", mssql.NVarChar(30), documentNo)
@@ -8697,7 +8684,7 @@ exports.getInvoicePreview = async (req, res) => {
           CUSTOMER_CODE,
           CUSTOMER_NAME,
           PRODUCT_CODE,
-          PRODUCT_NAME,
+          PRODUCT_NAME,${hasSinCol ? "\n          PRODUCT_NAME_SINHALA," : ""}
           QUANTITY,
           UNITPRICE,
           DISCOUNT_AMOUNT,
@@ -8749,6 +8736,8 @@ exports.getInvoicePreview = async (req, res) => {
         cashierName: firstItem.TRUSER?.trim() || "CASHIER",
         cashAmount,
         creditAmount,
+        // may this user edit the invoice layout? (hides the edit links for everybody else)
+        canEditTemplate,
         items,
       },
     });
@@ -9112,6 +9101,7 @@ exports.savedInvoiceNumbers = async (req, res) => {
 // POST - Insert invoice temp item
 //   * AVGCOST  : read from POSBACK_SYSTEM.tb_PRODUCT
 //   * EDITPRICE: 'T' only if the unit price differs from the product's SCALEPRICE, else 'F'
+//   * PRODUCT_NAME_SINHALA: read from tb_PRODUCT.PRODUCT_NAME_SINHALA
 exports.insertInvoiceTemp = async (req, res) => {
   try {
     console.log("=== INSERT INVOICE TEMP START ===");
@@ -9216,6 +9206,26 @@ exports.insertInvoiceTemp = async (req, res) => {
       }
     }
  
+    // Sinhala product name from POSBACK_SYSTEM.dbo.tb_PRODUCT
+    //   PRODUCT_NAME_UNICODE (if filled) -> otherwise PRODUCT_NAMESHORT (legacy-font Sinhala)
+    // Separate query, so a failure here never breaks the insert.
+    let productNameSinhala = "";
+    try {
+      const sinRes = await pool
+        .request()
+        .input("productCode", mssql.NVarChar(30), productCode).query(`
+          USE [${posback}];
+          SELECT PRODUCT_NAMESHORT, PRODUCT_NAME_UNICODE FROM tb_PRODUCT
+          WHERE LTRIM(RTRIM(PRODUCT_CODE)) = LTRIM(RTRIM(@productCode))
+        `);
+      const sinRow = sinRes.recordset[0] || {};
+      const uni = String(sinRow.PRODUCT_NAME_UNICODE || "").trim();
+      const short = String(sinRow.PRODUCT_NAMESHORT || "").trim();
+      productNameSinhala = uni || short;
+    } catch (sinErr) {
+      console.log("Sinhala name not available:", sinErr.message);
+    }
+ 
     // Check if RT_WEB database exists
     try {
       const dbCheck = await pool.request().query(`
@@ -9236,7 +9246,7 @@ exports.insertInvoiceTemp = async (req, res) => {
       });
     }
  
-    // Create/Update temp table (TRUSER, AVGCOST, EDITPRICE columns)
+    // Create/Update temp table (TRUSER, AVGCOST, EDITPRICE, REFUND, PRODUCT_NAME_SINHALA)
     try {
       await pool.request().query(`
         USE [RT_WEB];
@@ -9252,6 +9262,7 @@ exports.insertInvoiceTemp = async (req, res) => {
             CUSTOMER_NAME NVARCHAR(100),
             PRODUCT_CODE NVARCHAR(30),
             PRODUCT_NAME NVARCHAR(100),
+            PRODUCT_NAME_SINHALA NVARCHAR(200) NULL,
             COSTPRICE MONEY,
             AVGCOST MONEY,
             UNITPRICE MONEY,
@@ -9286,6 +9297,10 @@ exports.insertInvoiceTemp = async (req, res) => {
           IF NOT EXISTS (SELECT * FROM sys.columns 
                         WHERE object_id = OBJECT_ID('tb_InvoiceTemp') AND name = 'REFUND')
             ALTER TABLE tb_InvoiceTemp ADD REFUND CHAR(1) NULL;
+ 
+          IF NOT EXISTS (SELECT * FROM sys.columns 
+                        WHERE object_id = OBJECT_ID('tb_InvoiceTemp') AND name = 'PRODUCT_NAME_SINHALA')
+            ALTER TABLE tb_InvoiceTemp ADD PRODUCT_NAME_SINHALA NVARCHAR(200) NULL;
         END
       `);
       console.log("Table setup completed successfully");
@@ -9333,6 +9348,8 @@ exports.insertInvoiceTemp = async (req, res) => {
       editPrice,
       "REFUND:",
       isRefund ? "T" : "F",
+      "SINHALA:",
+      productNameSinhala || "(none)",
     );
  
     const result = await pool
@@ -9343,6 +9360,7 @@ exports.insertInvoiceTemp = async (req, res) => {
       .input("customerName", mssql.NVarChar(100), customerName || "")
       .input("productCode", mssql.NChar(30), productCode)
       .input("productName", mssql.NVarChar(100), productName || "")
+      .input("productNameSinhala", mssql.NVarChar(200), productNameSinhala)
       .input("costPrice", mssql.Money, safeCost)
       .input("avgCost", mssql.Money, safeAvgCost)
       .input("unitPrice", mssql.Money, safePrice)
@@ -9356,10 +9374,10 @@ exports.insertInvoiceTemp = async (req, res) => {
       .input("username", mssql.NVarChar(50), username).query(`
         USE [RT_WEB];
         INSERT INTO tb_InvoiceTemp 
-        (COMPANY_CODE, COMPANY_NAME, CUSTOMER_CODE, CUSTOMER_NAME, PRODUCT_CODE, PRODUCT_NAME, 
+        (COMPANY_CODE, COMPANY_NAME, CUSTOMER_CODE, CUSTOMER_NAME, PRODUCT_CODE, PRODUCT_NAME, PRODUCT_NAME_SINHALA,
         COSTPRICE, AVGCOST, UNITPRICE, EDITPRICE, REFUND, STOCK, QUANTITY, DISCOUNT, DISCOUNT_AMOUNT, TOTAL, 
         TRUSER, INSERT_TIME)
-        VALUES (@company, @companyName, @customerCode, @customerName, @productCode, @productName, 
+        VALUES (@company, @companyName, @customerCode, @customerName, @productCode, @productName, @productNameSinhala,
                 @costPrice, @avgCost, @unitPrice, @editPrice, @refund, @stock, @quantity, @discount, @discountAmount, @total, 
                 @username, GETDATE())
       `);
@@ -9676,7 +9694,7 @@ exports.insertInvoiceTemp = async (req, res) => {
 // POST - Save invoice
 //   * Cash + Credit must equal the SALES total (refund lines are NOT part of the payment)
 //   * Refund lines (minus qty / total) are still saved in tb_INVOICE_DETAILS as they are
-//   * saves DOCUMENT_DATE / DOCUMENT_TIME / AVGCOST / EDITPRICE
+//   * saves DOCUMENT_DATE / DOCUMENT_TIME / AVGCOST / EDITPRICE / PRODUCT_NAME_SINHALA
 exports.saveInvoice = async (req, res) => {
   let pool = null;
   let transaction = null;
@@ -9703,7 +9721,7 @@ exports.saveInvoice = async (req, res) => {
     // 1. Ensure RT_WEB database exists
     await ensureRtWebDatabase(pool);
  
-    // 2. Create tb_InvoiceTemp if missing (with TRUSER, AVGCOST, EDITPRICE)
+    // 2. Create tb_InvoiceTemp if missing (with TRUSER, AVGCOST, EDITPRICE, REFUND, PRODUCT_NAME_SINHALA)
     await pool.request().query(`
       USE [RT_WEB];
  
@@ -9717,6 +9735,7 @@ exports.saveInvoice = async (req, res) => {
           CUSTOMER_NAME NVARCHAR(100),
           PRODUCT_CODE NVARCHAR(30),
           PRODUCT_NAME NVARCHAR(100),
+          PRODUCT_NAME_SINHALA NVARCHAR(200) NULL,
           COSTPRICE MONEY,
           AVGCOST MONEY,
           UNITPRICE MONEY,
@@ -9756,6 +9775,12 @@ exports.saveInvoice = async (req, res) => {
         WHERE object_id = OBJECT_ID('tb_InvoiceTemp') AND name = 'REFUND'
       )
         ALTER TABLE tb_InvoiceTemp ADD REFUND CHAR(1) NULL;
+ 
+      IF NOT EXISTS (
+        SELECT * FROM sys.columns 
+        WHERE object_id = OBJECT_ID('tb_InvoiceTemp') AND name = 'PRODUCT_NAME_SINHALA'
+      )
+        ALTER TABLE tb_InvoiceTemp ADD PRODUCT_NAME_SINHALA NVARCHAR(200) NULL;
     `);
  
     // 3. Create tb_DOCUMENT if missing
@@ -9787,6 +9812,14 @@ exports.saveInvoice = async (req, res) => {
          AND COL_LENGTH('tb_INVOICE_DETAILS', 'REFUND') IS NULL
         ALTER TABLE tb_INVOICE_DETAILS ADD REFUND CHAR(1) NOT NULL
           CONSTRAINT DF_tb_INVOICE_DETAILS_REFUND DEFAULT 'F';
+    `);
+ 
+    // 6. Add PRODUCT_NAME_SINHALA column to tb_INVOICE_DETAILS if missing
+    await pool.request().query(`
+      USE [RT_WEB];
+      IF OBJECT_ID('tb_INVOICE_DETAILS', 'U') IS NOT NULL
+         AND COL_LENGTH('tb_INVOICE_DETAILS', 'PRODUCT_NAME_SINHALA') IS NULL
+        ALTER TABLE tb_INVOICE_DETAILS ADD PRODUCT_NAME_SINHALA NVARCHAR(200) NULL;
     `);
  
     transaction = pool.transaction();
@@ -9936,13 +9969,13 @@ exports.saveInvoice = async (req, res) => {
         INSERT INTO tb_INVOICE_DETAILS 
         (DOCUMENT_NO, DOCUMENT_DATE, DOCUMENT_TIME,
          COMPANY_CODE, COMPANY_NAME, CUSTOMER_CODE, CUSTOMER_NAME,
-         PRODUCT_CODE, PRODUCT_NAME, COSTPRICE, AVGCOST, UNITPRICE, STOCK, QUANTITY,
+         PRODUCT_CODE, PRODUCT_NAME, PRODUCT_NAME_SINHALA, COSTPRICE, AVGCOST, UNITPRICE, STOCK, QUANTITY,
          DISCOUNT, DISCOUNT_AMOUNT, TOTAL${hasTRUSER ? ", TRUSER" : ""},
          CASH_AMOUNT, CREDIT_AMOUNT, EDITPRICE, REFUND)
         SELECT 
           @docNo, CAST(GETDATE() AS DATE), CONVERT(VARCHAR(8), GETDATE(), 108),
           COMPANY_CODE, COMPANY_NAME, CUSTOMER_CODE, CUSTOMER_NAME,
-          PRODUCT_CODE, PRODUCT_NAME, COSTPRICE, ISNULL(AVGCOST, 0), UNITPRICE, STOCK, QUANTITY,
+          PRODUCT_CODE, PRODUCT_NAME, ISNULL(PRODUCT_NAME_SINHALA, ''), COSTPRICE, ISNULL(AVGCOST, 0), UNITPRICE, STOCK, QUANTITY,
           DISCOUNT, DISCOUNT_AMOUNT, TOTAL${hasTRUSER ? ", TRUSER" : ""},
           @cash, @credit, ISNULL(EDITPRICE, 'F'), ISNULL(REFUND, 'F')
         FROM tb_InvoiceTemp
@@ -11267,3 +11300,270 @@ Object.assign(
     mssql,
   })
 );
+
+// =====================================================================
+// INVOICE TEMPLATE DESIGNER  (GET / POST / DELETE  /invoice-template)
+// =====================================================================
+const INVOICE_TEMPLATE_PAPER_TYPES = ["POS80", "POS58", "A4", "CUSTOM"];
+
+const ENSURE_INVOICE_TEMPLATE_TABLE_SQL = `
+  IF OBJECT_ID('RT_WEB.dbo.tb_INVOICE_TEMPLATE', 'U') IS NULL
+  BEGIN
+    CREATE TABLE RT_WEB.dbo.tb_INVOICE_TEMPLATE (
+      IDX             INT IDENTITY(1,1) PRIMARY KEY,
+      COMPANY_CODE    NVARCHAR(10)  NOT NULL,
+      TEMPLATE_NAME   NVARCHAR(100) NULL,
+      PAPER_TYPE      NVARCHAR(10)  NOT NULL CONSTRAINT DF_INVTPL_PAPER   DEFAULT 'POS80',
+      PAPER_WIDTH_MM  DECIMAL(6,2)  NOT NULL CONSTRAINT DF_INVTPL_WIDTH   DEFAULT 80,
+      PADDING_MM      DECIMAL(5,2)  NOT NULL CONSTRAINT DF_INVTPL_PADDING DEFAULT 3,
+      HTML            NVARCHAR(MAX) NOT NULL,
+      CSS             NVARCHAR(MAX) NULL,
+      PROJECT_JSON    NVARCHAR(MAX) NULL,
+      IS_ACTIVE       CHAR(1)       NOT NULL CONSTRAINT DF_INVTPL_ACTIVE  DEFAULT 'T',
+      UPDATED_BY      NVARCHAR(50)  NULL,
+      UPDATED_AT      DATETIME      NOT NULL CONSTRAINT DF_INVTPL_UPDATED DEFAULT GETDATE(),
+      CONSTRAINT UQ_INVTPL_COMPANY UNIQUE (COMPANY_CODE)
+    );
+  END
+`;
+
+// Only users with t_invoiceDesigner = 'T' (RTPOS_MAIN.tb_USERS) may change templates.
+// If the column does not exist yet, nobody can edit (run the SQL script first).
+const canEditInvoiceTemplate = async (username) => {
+  if (mssql.connected) await mssql.close();
+  const mainPool = await connectToDatabase();
+  if (!mainPool || !mainPool.connected) {
+    throw new Error("Database connection failed");
+  }
+
+  const colRes = await mainPool.request().query(`
+    SELECT CASE WHEN COL_LENGTH('RTPOS_MAIN.dbo.tb_USERS', 't_invoiceDesigner') IS NOT NULL
+                THEN 1 ELSE 0 END AS HasCol
+  `);
+  if (colRes.recordset[0].HasCol !== 1) return false;
+
+  const perm = await mainPool
+    .request()
+    .input("username", mssql.NVarChar(100), username).query(`
+      USE [RTPOS_MAIN];
+      SELECT t_invoiceDesigner AS perm FROM tb_USERS WHERE username = @username
+    `);
+
+  return (
+    perm.recordset.length > 0 &&
+    String(perm.recordset[0].perm || "").trim().toUpperCase() === "T"
+  );
+};
+
+// GET /invoice-template?company=01[&exact=1]
+//   exact=1 -> only that company's own template (designer)
+//   otherwise -> company template, else the '*' default template (invoice preview)
+exports.getInvoiceTemplate = async (req, res) => {
+  let pool = null;
+  try {
+    const company = String(req.query.company || "").trim();
+    const exact = String(req.query.exact || "") === "1";
+    const user_ip = String(req.user.ip).trim();
+
+    if (mssql.connected) await mssql.close();
+    pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+    if (!pool || !pool.connected) {
+      return res.status(500).json({ success: false, message: "Database connection failed" });
+    }
+
+    const exists = await pool
+      .request()
+      .query(`SELECT OBJECT_ID('RT_WEB.dbo.tb_INVOICE_TEMPLATE', 'U') AS id`);
+    if (!exists.recordset[0].id) {
+      return res.status(200).json({ success: true, template: null });
+    }
+
+    const where = exact
+      ? "COMPANY_CODE = @company"
+      : "COMPANY_CODE IN (@company, '*')";
+
+    const result = await pool
+      .request()
+      .input("company", mssql.NVarChar(10), company).query(`
+        SELECT TOP 1
+          COMPANY_CODE, TEMPLATE_NAME, PAPER_TYPE, PAPER_WIDTH_MM, PADDING_MM,
+          HTML, CSS, PROJECT_JSON, UPDATED_BY, UPDATED_AT
+        FROM RT_WEB.dbo.tb_INVOICE_TEMPLATE
+        WHERE IS_ACTIVE = 'T' AND ${where}
+        ORDER BY CASE WHEN COMPANY_CODE = @company THEN 0 ELSE 1 END
+      `);
+
+    if (result.recordset.length === 0) {
+      return res.status(200).json({ success: true, template: null });
+    }
+
+    const r = result.recordset[0];
+    return res.status(200).json({
+      success: true,
+      template: {
+        companyCode: (r.COMPANY_CODE || "").trim(),
+        name: r.TEMPLATE_NAME || "",
+        paperType: (r.PAPER_TYPE || "POS80").trim(),
+        paperWidthMm: Number(r.PAPER_WIDTH_MM) || 80,
+        paddingMm: Number(r.PADDING_MM) || 0,
+        html: r.HTML || "",
+        css: r.CSS || "",
+        projectJson: r.PROJECT_JSON || "",
+        updatedBy: r.UPDATED_BY || "",
+        updatedAt: r.UPDATED_AT || null,
+      },
+    });
+  } catch (error) {
+    console.error("Error in getInvoiceTemplate:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to load invoice template",
+      error: error.message,
+    });
+  } finally {
+    if (pool) {
+      try { await pool.close(); } catch (e) {}
+    }
+  }
+};
+
+// POST /invoice-template   (create or replace the template of one company)
+exports.saveInvoiceTemplate = async (req, res) => {
+  let pool = null;
+  try {
+    const { company, name, paperType, paperWidthMm, paddingMm, html, css, projectJson } =
+      req.body || {};
+
+    const companyCode = String(company || "").trim();
+    if (!companyCode || companyCode.length > 10) {
+      return res.status(400).json({ success: false, message: "A valid company is required" });
+    }
+    if (typeof html !== "string" || !html.trim()) {
+      return res.status(400).json({ success: false, message: "Template HTML is empty" });
+    }
+
+    const cssText = typeof css === "string" ? css : "";
+    const projectText = typeof projectJson === "string" ? projectJson : "";
+    if (html.length + cssText.length + projectText.length > 3500000) {
+      return res.status(413).json({
+        success: false,
+        message: "Template is too large. Use a smaller logo image (under ~500 KB).",
+      });
+    }
+
+    const type = INVOICE_TEMPLATE_PAPER_TYPES.includes(paperType) ? paperType : "POS80";
+    const presetWidth = { POS80: 80, POS58: 58, A4: 190 }[type];
+    let width = type === "CUSTOM" ? Number(paperWidthMm) : presetWidth;
+    if (!(width >= 30 && width <= 300)) width = 80;
+    let padding = Number(paddingMm);
+    if (!(padding >= 0 && padding <= 20)) padding = 3;
+
+    const username = req.user.username;
+    const allowed = await canEditInvoiceTemplate(username);
+    if (!allowed) {
+      return res.status(403).json({
+        success: false,
+        message: "You do not have permission to edit invoice templates",
+      });
+    }
+
+    const user_ip = String(req.user.ip).trim();
+    if (mssql.connected) await mssql.close();
+    pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+    if (!pool || !pool.connected) {
+      return res.status(500).json({ success: false, message: "Database connection failed" });
+    }
+
+    await ensureRtWebDatabase(pool);
+    await pool.request().query(ENSURE_INVOICE_TEMPLATE_TABLE_SQL);
+
+    await pool
+      .request()
+      .input("company", mssql.NVarChar(10), companyCode)
+      .input("name", mssql.NVarChar(100), String(name || "").slice(0, 100))
+      .input("paperType", mssql.NVarChar(10), type)
+      .input("width", mssql.Decimal(6, 2), width)
+      .input("padding", mssql.Decimal(5, 2), padding)
+      .input("html", mssql.NVarChar(mssql.MAX), html)
+      .input("css", mssql.NVarChar(mssql.MAX), cssText)
+      .input("project", mssql.NVarChar(mssql.MAX), projectText)
+      .input("username", mssql.NVarChar(50), username).query(`
+        IF EXISTS (SELECT 1 FROM RT_WEB.dbo.tb_INVOICE_TEMPLATE WHERE COMPANY_CODE = @company)
+        BEGIN
+          UPDATE RT_WEB.dbo.tb_INVOICE_TEMPLATE
+          SET TEMPLATE_NAME = @name, PAPER_TYPE = @paperType, PAPER_WIDTH_MM = @width,
+              PADDING_MM = @padding, HTML = @html, CSS = @css, PROJECT_JSON = @project,
+              IS_ACTIVE = 'T', UPDATED_BY = @username, UPDATED_AT = GETDATE()
+          WHERE COMPANY_CODE = @company
+        END
+        ELSE
+        BEGIN
+          INSERT INTO RT_WEB.dbo.tb_INVOICE_TEMPLATE
+            (COMPANY_CODE, TEMPLATE_NAME, PAPER_TYPE, PAPER_WIDTH_MM, PADDING_MM,
+             HTML, CSS, PROJECT_JSON, IS_ACTIVE, UPDATED_BY, UPDATED_AT)
+          VALUES
+            (@company, @name, @paperType, @width, @padding,
+             @html, @css, @project, 'T', @username, GETDATE())
+        END
+      `);
+
+    return res.status(200).json({ success: true, message: "Invoice template saved" });
+  } catch (error) {
+    console.error("Error in saveInvoiceTemplate:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to save invoice template",
+      error: error.message,
+    });
+  } finally {
+    if (pool) {
+      try { await pool.close(); } catch (e) {}
+    }
+  }
+};
+
+// DELETE /invoice-template?company=01   (back to the built-in default layout)
+exports.deleteInvoiceTemplate = async (req, res) => {
+  let pool = null;
+  try {
+    const companyCode = String(req.query.company || "").trim();
+    if (!companyCode) {
+      return res.status(400).json({ success: false, message: "Company is required" });
+    }
+
+    const allowed = await canEditInvoiceTemplate(req.user.username);
+    if (!allowed) {
+      return res.status(403).json({
+        success: false,
+        message: "You do not have permission to edit invoice templates",
+      });
+    }
+
+    const user_ip = String(req.user.ip).trim();
+    if (mssql.connected) await mssql.close();
+    pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+    if (!pool || !pool.connected) {
+      return res.status(500).json({ success: false, message: "Database connection failed" });
+    }
+
+    await pool
+      .request()
+      .input("company", mssql.NVarChar(10), companyCode).query(`
+        IF OBJECT_ID('RT_WEB.dbo.tb_INVOICE_TEMPLATE', 'U') IS NOT NULL
+          DELETE FROM RT_WEB.dbo.tb_INVOICE_TEMPLATE WHERE COMPANY_CODE = @company
+      `);
+
+    return res.status(200).json({ success: true, message: "Template removed" });
+  } catch (error) {
+    console.error("Error in deleteInvoiceTemplate:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to remove invoice template",
+      error: error.message,
+    });
+  } finally {
+    if (pool) {
+      try { await pool.close(); } catch (e) {}
+    }
+  }
+};
