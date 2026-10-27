@@ -9,11 +9,180 @@ import {
   getPrintSettings,
   savePrintSettings,
   DEFAULT_PRINT_SETTINGS,
+  SINHALA_FONT_OPTIONS,
+  getSinhalaFontKey,
+  saveSinhalaFontKey,
+  sinhalaLabelCss,
+  hasSinhala,
 } from '../utils/invoiceTemplate';
+
+// ---------------------------------------------------------------------------
+// Bill language (English / Sinhala)
+// ---------------------------------------------------------------------------
+// Latin letters + digits stay in Courier New (mono look).
+// Every Sinhala LABEL is wrapped in <span class="si-t"> and uses a real Sinhala font
+// (Iskoola Pota / Nirmala UI / Noto ... - chosen with the "Sinhala font" list) for the
+// letters AND the spaces. Before, the spaces came from Courier New, so the word spaces
+// were too wide and the headings looked heavy. The CSS of the span is in
+// utils/invoiceTemplate.js -> sinhalaLabelCss().
+
+// Sinhala bill: column widths of the items table (header + every item row use the same
+// widths, so the numbers stay exactly under their headings and the headings stay on ONE line)
+const SI_GRID = { gridTemplateColumns: "0.95fr 1.15fr 0.85fr 1.25fr" };
+
+const LABELS = {
+  en: {
+    tel: "TEL",
+    cashier: "CASHIER",
+    invoiceNo: "INVOICE NO",
+    customer: "CUSTOMER",
+    walkIn: "WALK-IN",
+    product: "PRODUCT",
+    qty: "QTY",
+    uprice: "U/PRICE",
+    price: "PRICE",
+    value: "VALUE",
+    subTotal: "SUB TOTAL",
+    refundTotal: "REFUND TOTAL",
+    cash: "CASH",
+    credit: "CREDIT",
+    pieces: "NO OF PIECES",
+    products: "NO OF PRODUCTS",
+    date: "DATE",
+    endTime: "END TIME",
+    totalDiscount: "YOU HAVE TOTAL DISCOUNT",
+    thanks: "THANK YOU COME AGAIN",
+    refundTag: " (REFUND)",
+    defaultMessage:
+      "WE ARE HAPPY TO EXCHANGE PRODUCTS RETURNED IN\nSALEABLE CONDITION. ALONG WITH RECEIPT.",
+  },
+  si: {
+    tel: "දුරකථන",
+    cashier: "අයකැමි",
+    invoiceNo: "බිල් අංකය",
+    customer: "පාරිභෝගිකයා",
+    walkIn: "සාමාන්‍ය",
+    product: "භාණ්ඩය",
+    qty: "ප්‍රමාණය",
+    uprice: "ඒකක මිල",
+    price: "අපේ මිල",
+    value: "වටිනාකම",
+    subTotal: "එකතුව",
+    refundTotal: "ආපසු ගෙවීම්",
+    cash: "මුදල්",
+    credit: "ක්‍රෙඩිට් කාඩ්",
+    pieces: "කොටස් ගණන",
+    products: "භාණ්ඩ ගණන",
+    date: "දිනය",
+    endTime: "වේලාව",
+    totalDiscount: "ඔබට ලැබුණු මුළු ලාභය",
+    thanks: "ස්තූතියි, නැවත එන්න",
+    refundTag: " (ආපසු)",
+    defaultMessage:
+      "විකිණිය හැකි තත්ත්වයේ භාණ්ඩ, රිසිට්පත සමඟ\nහුවමාරු කර ගත හැකිය.",
+  },
+};
+
+// Footer message translations (Sinhala bill). The English text is compared ignoring
+// capital letters, spaces and punctuation. Add more messages here if a company has its own.
+const MESSAGE_TRANSLATIONS = [
+  { en: LABELS.en.defaultMessage, si: LABELS.si.defaultMessage },
+  // { en: "THANK YOU FOR SHOPPING WITH US", si: "අප සමඟ සාප්පු සවාරි කිරීම ගැන ස්තූතියි" },
+];
+
+const normMsg = (s) =>
+  String(s || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, " ")
+    .trim();
+
+// Message printed in the footer for the selected bill language
+const translateMessage = (msg, lang) => {
+  const text = String(msg || "").trim();
+  if (!text) return LABELS[lang].defaultMessage;
+  if (lang !== "si") return text;
+  const key = normMsg(text);
+  const hit = MESSAGE_TRANSLATIONS.find((m) => normMsg(m.en) === key);
+  return hit ? hit.si : text;
+};
+
+// English label (as written in the saved custom layouts) -> Sinhala label
+// Longest first, so "NO OF PRODUCTS" is replaced before "PRODUCT" etc.
+const TEMPLATE_LABEL_MAP = [
+  ["YOU HAVE TOTAL DISCOUNT", LABELS.si.totalDiscount],
+  ["THANK YOU COME AGAIN", LABELS.si.thanks],
+  ["NO OF PRODUCTS", LABELS.si.products],
+  ["NO OF PIECES", LABELS.si.pieces],
+  ["REFUND TOTAL", LABELS.si.refundTotal],
+  ["INVOICE NO", LABELS.si.invoiceNo],
+  ["END TIME", LABELS.si.endTime],
+  ["SUB TOTAL", LABELS.si.subTotal],
+  ["CUSTOMER", LABELS.si.customer],
+  ["CASHIER", LABELS.si.cashier],
+  ["PRODUCT", LABELS.si.product],
+  ["U/PRICE", LABELS.si.uprice],
+  ["CREDIT", LABELS.si.credit],
+  ["PRICE", LABELS.si.price],
+  ["VALUE", LABELS.si.value],
+  ["DATE", LABELS.si.date],
+  ["CASH", LABELS.si.cash],
+  ["QTY", LABELS.si.qty],
+  ["TEL", LABELS.si.tel],
+].sort((a, b) => b[0].length - a[0].length);
+
+const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
+
+// (^|[^A-Za-z/]) = the label must start a word (no lookbehind, works in old browsers too)
+const TEMPLATE_LABEL_REGEX = TEMPLATE_LABEL_MAP.map(([en, si]) => [
+  new RegExp(`(^|[^A-Za-z/])${escapeRegExp(en)}(?![A-Za-z])`, "g"),
+  si,
+]);
+
+// Every translated label is wrapped in <span class="si-t"> -> Sinhala font + normal spaces
+const translateText = (text) => {
+  let out = text;
+  TEMPLATE_LABEL_REGEX.forEach(([re, si]) => {
+    out = out.replace(re, (m, pre) => `${pre}<span class="si-t">${si}</span>`);
+  });
+  return out;
+};
+
+// Translates ONLY the text between the tags of a saved custom layout (never the tags,
+// attributes or {{placeholders}}). Item name -> Sinhala name (AMILA) or English fallback.
+// wrapMessage = true when the footer message is Sinhala -> {{message}} gets the Sinhala font.
+const translateTemplateHtml = (html, wrapMessage) => {
+  let translated = String(html || "")
+    .split(/(<[^>]+>)/g)
+    .map((part) => (part.startsWith("<") ? part : translateText(part)))
+    .join("");
+
+  if (wrapMessage) {
+    translated = translated.replace(
+      /\{\{\s*message\s*\}\}/g,
+      `<span class="si-msg">{{message}}</span>`
+    );
+  }
+
+  // {{name}} -> Sinhala name in AMILA (only one of the two is filled per item)
+  return translated.replace(
+    /\{\{\s*name\s*\}\}/g,
+    `<span class="amila-name" style="font-family:'AMILA',sans-serif">{{nameSinhala}}</span>{{nameEnglish}}`
+  );
+};
+
+// CSS added to a custom layout in Sinhala mode:
+//  - the Sinhala label font (chosen font + normal word spaces)
+//  - AMILA for the legacy Sinhala product names
+const siTemplateCss = (fontKey) => `
+  ${sinhalaLabelCss(fontKey)}
+  .amila-name, [style*="AMILA" i] { font-family: "AMILA", sans-serif !important; word-spacing: normal !important; }
+`;
 
 // POS (80mm) text sizes: one body size for everything, bigger only for the shop name
 // and the key lines (marked with the "pos-big" class). The footer (copyright + message,
 // marked "pos-footer") is smaller so every footer line stays on ONE line.
+// Sinhala letters look bigger than Latin letters of the same size, so the Sinhala label
+// spans get their own (slightly smaller) sizes.
 // Used for printing AND for measuring the page height, so both always match.
 const POS_TEXT_CSS = `
   .print-container, .print-container * { font-size: 10.5px !important; line-height: 1.25 !important; }
@@ -21,22 +190,30 @@ const POS_TEXT_CSS = `
   .print-container .pos-big, .print-container .pos-big * { font-size: 13px !important; }
   .print-container .pos-footer, .print-container .pos-footer * { font-size: 8.5px !important; }
   .print-container .border-4 { border-width: 2px !important; }
+  /* Items table heading: smaller, always ONE line */
+  .print-container .items-head, .print-container .items-head * { font-size: 9px !important; white-space: nowrap !important; }
+  /* Sinhala labels (more specific rules -> they win over the rules above) */
+  .print-container .si-t { font-size: 9.5px !important; line-height: 1.5 !important; white-space: nowrap !important; }
+  .print-container .si-msg { font-size: 8.5px !important; line-height: 1.5 !important; }
+  .print-container .pos-big .si-t { font-size: 11.5px !important; }
+  .print-container .items-head .si-t { font-size: 8.5px !important; }
+  .print-container .pos-footer .si-t { font-size: 8px !important; }
+  /* Sinhala product names are legacy AMILA text */
+  .print-container .amila-name { font-family: "AMILA", sans-serif !important; word-spacing: normal !important; }
 `;
 
 // NOTE: the page height / bottom space / print width of the POS print are NOT fixed here
 // any more. They come from the "Print settings" of this computer (utils/invoiceTemplate.js).
 
-// Shown when the company has no footer message saved in the database
-const DEFAULT_MESSAGE =
-  "WE ARE HAPPY TO EXCHANGE PRODUCTS RETURNED IN\nSALEABLE CONDITION. ALONG WITH RECEIPT.";
-
 // Max characters that fit on one footer line (80mm paper, 8.5px mono)
 const FOOTER_MAX_CHARS = 46;
+const FOOTER_MAX_CHARS_SI = 38;
 
 // AMILA = legacy Sinhala font (the product Sinhala names in the DB are typed with it).
-// Put the font file at  public/fonts/AMILA.ttf  (a PC that has AMILA installed uses its own copy).
+// Font file: public/fonts/AMILA.ttf  (or public/fonts/amilanormal.ttf - both names are tried).
+// A PC that has AMILA installed uses its own copy.
 const amilaFaceCss = () =>
-  `@font-face{font-family:"AMILA";src:local("AMILA"),url("${window.location.origin}/fonts/AMILA.ttf") format("truetype");font-display:swap;}`;
+  `@font-face{font-family:"AMILA";src:local("AMILA"),local("AMILA Normal"),url("${window.location.origin}/fonts/AMILA.ttf") format("truetype"),url("${window.location.origin}/fonts/amilanormal.ttf") format("truetype");font-display:swap;}`;
 const SINHALA_FONT = '"AMILA", sans-serif';
 
 // ---- DOCUMENT_DATE / DOCUMENT_TIME (from tb_INVOICE_DETAILS) -> display text ----
@@ -87,20 +264,20 @@ const fmtMoney = (n) =>
   });
 
 // Footer message -> at most 2 lines, each line stays on one line when printed.
-const buildMessageLines = (msg) => {
+const buildMessageLines = (msg, maxChars = FOOTER_MAX_CHARS) => {
   const raw = (msg || "")
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter(Boolean);
   if (raw.length === 0) return [];
-  if (raw.length <= 2 && raw.every((l) => l.length <= FOOTER_MAX_CHARS)) return raw;
+  if (raw.length <= 2 && raw.every((l) => l.length <= maxChars)) return raw;
 
   const words = raw.join(" ").replace(/\s+/g, " ").split(" ");
   const lines = [];
   let current = "";
   words.forEach((w) => {
     const next = current ? `${current} ${w}` : w;
-    if (next.length <= FOOTER_MAX_CHARS || !current) {
+    if (next.length <= maxChars || !current) {
       current = next;
     } else {
       lines.push(current);
@@ -287,6 +464,39 @@ const PrintSettingsPanel = () => {
   );
 };
 
+// Bill language selector (English / Sinhala)
+const BillLangSelect = ({ value, onChange }) => (
+  <label className="flex items-center justify-center gap-2 mb-3 text-sm sm:text-base no-print">
+    <span>Bill language:</span>
+    <select
+      value={value}
+      onChange={onChange}
+      className="px-2 py-1 bg-white border border-gray-300 rounded-md cursor-pointer"
+    >
+      <option value="en">English</option>
+      <option value="si">සිංහල (Sinhala)</option>
+    </select>
+  </label>
+);
+
+// Font of the Sinhala labels (Iskoola Pota, Nirmala UI, Noto ...). Only shown in Sinhala mode.
+const SinhalaFontSelect = ({ value, onChange }) => (
+  <label className="flex items-center justify-center gap-2 mb-3 text-sm sm:text-base no-print">
+    <span>Sinhala font:</span>
+    <select
+      value={value}
+      onChange={onChange}
+      className="px-2 py-1 bg-white border border-gray-300 rounded-md cursor-pointer w-36"
+    >
+      {SINHALA_FONT_OPTIONS.map((o) => (
+        <option key={o.key} value={o.key}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  </label>
+);
+
 // Shows a custom (designer) template inside an iframe. The frame height follows the content.
 const TemplatePreviewFrame = ({ docHtml, widthMm }) => {
   const frameRef = useRef(null);
@@ -300,7 +510,7 @@ const TemplatePreviewFrame = ({ docHtml, widthMm }) => {
   };
 
   useEffect(() => {
-    // measure again later (logo images may load after the first measure)
+    // measure again later (logo images / fonts may load after the first measure)
     const t1 = setTimeout(measure, 300);
     const t2 = setTimeout(measure, 1200);
     return () => {
@@ -359,6 +569,18 @@ const InvoicePreview = () => {
     }
   });
 
+  // Bill language: "en" (default) or "si". Remembered per browser.
+  const [billLang, setBillLang] = useState(() => {
+    try {
+      return localStorage.getItem("billLang") === "si" ? "si" : "en";
+    } catch (e) {
+      return "en";
+    }
+  });
+
+  // Font of the Sinhala labels. Remembered per browser.
+  const [siFontKey, setSiFontKey] = useState(() => getSinhalaFontKey());
+
   const receiptRef = useRef(null);
 
   // StrictMode (dev) runs effects twice -> two requests at the same time -> the backend's
@@ -371,6 +593,18 @@ const InvoicePreview = () => {
     try {
       localStorage.setItem("usePosPrinter", checked ? "1" : "0");
     } catch (err) {}
+  };
+
+  const handleLangChange = (e) => {
+    const v = e.target.value === "si" ? "si" : "en";
+    setBillLang(v);
+    try {
+      localStorage.setItem("billLang", v);
+    } catch (err) {}
+  };
+
+  const handleSiFontChange = (e) => {
+    setSiFontKey(saveSinhalaFontKey(e.target.value));
   };
 
   const token = localStorage.getItem("authToken");
@@ -547,8 +781,10 @@ const InvoicePreview = () => {
         }
         doc.head.appendChild(copy);
       });
+      // Sinhala label font (always the font that is selected right now) + POS sizes + AMILA
       const posStyle = doc.createElement("style");
-      posStyle.textContent = POS_TEXT_CSS + amilaFaceCss();
+      posStyle.textContent =
+        sinhalaLabelCss(getSinhalaFontKey()) + POS_TEXT_CSS + amilaFaceCss();
       doc.head.appendChild(posStyle);
 
       await Promise.race([Promise.all(loads), new Promise((r) => setTimeout(r, 2000))]);
@@ -622,6 +858,20 @@ const InvoicePreview = () => {
 
   if (!invoiceData) return null;
 
+  // Labels of the selected bill language
+  const isSi = billLang === "si";
+  const L = LABELS[billLang];
+  // Labels for the built-in layout: in Sinhala mode every label is wrapped in the Sinhala
+  // font span (letters AND spaces in a Sinhala font -> normal word spacing)
+  const LJ = isSi
+    ? Object.fromEntries(
+        Object.entries(L).map(([k, v]) => [
+          k,
+          k === "defaultMessage" ? v : <span className="si-t">{v}</span>,
+        ])
+      )
+    : L;
+
   // Only users with the "invoice designer" permission may edit the layout / switch layouts
   const canEditTemplate = !!invoiceData.canEditTemplate;
 
@@ -678,11 +928,14 @@ const InvoicePreview = () => {
   const customerLabel =
     custCode && custName && custCode.toUpperCase() !== custName.toUpperCase()
       ? `${custCode} ${custName}`
-      : custCode || custName || "WALK-IN";
+      : custCode || custName || L.walkIn;
 
-  // Use the message saved for the company; if there is none, use the default exchange note
+  // Footer message: the message saved for the company (or the default exchange note),
+  // translated to Sinhala when the bill language is Sinhala (see MESSAGE_TRANSLATIONS).
+  const messageText = translateMessage(invoiceData.message, billLang);
   const messageLines = buildMessageLines(
-    invoiceData.message?.trim() ? invoiceData.message : DEFAULT_MESSAGE
+    messageText,
+    isSi ? FOOTER_MAX_CHARS_SI : FOOTER_MAX_CHARS
   );
 
   // ---------- Custom layout (designer template) ----------
@@ -708,7 +961,7 @@ const InvoicePreview = () => {
       totalDiscount: fmtMoney(totalDiscount),
       noOfPieces: noOfPieces.toFixed(3),
       noOfProducts: String(invoiceData.items.length),
-      message: invoiceData.message?.trim() ? invoiceData.message : DEFAULT_MESSAGE,
+      message: messageText,
       hasRefund: refundTotal < -0.001,
       hasDiscount: totalDiscount > 0.001,
       items: invoiceData.items.map((item) => {
@@ -719,7 +972,10 @@ const InvoicePreview = () => {
           // name = English only (the Sinhala text is legacy AMILA text, it must not be mixed
           // into a normal font). Use {{nameSinhala}} in the template with font-family AMILA.
           name: nameEn,
-          nameEnglish: nameEn,
+          // Sinhala bill: only ONE of these two is filled per item
+          //   Sinhala name exists  -> nameSinhala = AMILA text, nameEnglish = ""
+          //   no Sinhala name      -> nameSinhala = "",         nameEnglish = English name
+          nameEnglish: isSi ? (nameSi ? "" : nameEn) : nameEn,
           nameSinhala: nameSi,
           qty: parseFloat(item.QUANTITY || 0).toFixed(3),
           unitPrice: fmtMoney(item.UNITPRICE),
@@ -729,15 +985,18 @@ const InvoicePreview = () => {
           // the real discount amount of the line, if a layout ever needs it
           discountAmount: fmtMoney(item.DISCOUNT_AMOUNT),
           total: fmtMoney(item.TOTAL),
-          refundTag: isRefundLine(item) ? " (REFUND)" : "",
+          refundTag: isRefundLine(item) ? L.refundTag : "",
           isRefund: isRefundLine(item),
         };
       }),
     };
 
+    let tplHtml = relabelDiscountHeader(template.html);
+    if (isSi) tplHtml = translateTemplateHtml(tplHtml, hasSinhala(messageText));
+
     templateDoc = buildDocument({
-      html: relabelDiscountHeader(template.html),
-      css: `${amilaFaceCss()}\n${template.css || ""}`,
+      html: tplHtml,
+      css: `${amilaFaceCss()}\n${template.css || ""}${isSi ? `\n${siTemplateCss(siFontKey)}` : ""}`,
       paper: templatePaper,
       data: templateData,
     });
@@ -771,9 +1030,13 @@ const InvoicePreview = () => {
         </div>
 
         <div className="px-3 pb-4 text-center sm:pb-6 no-print">
+          <div className="mt-4">
+            <BillLangSelect value={billLang} onChange={handleLangChange} />
+            {isSi && <SinhalaFontSelect value={siFontKey} onChange={handleSiFontChange} />}
+          </div>
           <button
             onClick={handlePrint}
-            className="bg-black text-white px-6 sm:px-10 py-3 sm:py-4 rounded-xl text-base sm:text-xl hover:bg-gray-800 transition shadow-md w-full sm:w-auto mt-4"
+            className="bg-black text-white px-6 sm:px-10 py-3 sm:py-4 rounded-xl text-base sm:text-xl hover:bg-gray-800 transition shadow-md w-full sm:w-auto"
           >
             🖨️ Print Invoice
           </button>
@@ -813,36 +1076,53 @@ const InvoicePreview = () => {
   return (
     <div
       ref={receiptRef}
-      className="w-full sm:w-[420px] mx-auto my-2 sm:my-4 bg-white font-mono text-xs sm:text-sm leading-tight shadow-lg border border-gray-300 print-container"
+      className={`w-full sm:w-[420px] mx-auto my-2 sm:my-4 bg-white font-mono text-xs sm:text-sm leading-tight shadow-lg border border-gray-300 print-container ${
+        isSi ? "bill-si" : ""
+      }`}
     >
       {/* Header */}
       <div className="text-center py-2 sm:py-3 px-3 sm:px-4 border-b-2 border-dashed border-black">
         <h1 className="text-xl sm:text-2xl font-bold uppercase">{shopName}</h1>
         {shopAddress && <p className="text-xs sm:text-sm mt-1">{shopAddress}</p>}
-        {shopTel !== "N/A" && <p className="text-xs sm:text-sm mt-1">TEL - {shopTel}</p>}
+        {shopTel !== "N/A" && (
+          <p className="text-xs sm:text-sm mt-1">
+            {LJ.tel} - {shopTel}
+          </p>
+        )}
       </div>
 
       {/* Invoice Info */}
       <div className="grid grid-cols-1 text-xs sm:text-sm px-3 sm:px-4 py-2 border-b border-dashed border-black gap-1">
-        {/* Cashier (left) + Invoice No (right) on the same line */}
-        <div className="flex items-baseline justify-between gap-2 info-row">
+        {/* Cashier (left) + Invoice No (right) on the same line (Sinhala: may wrap) */}
+        <div
+          className={`flex items-baseline justify-between gap-x-2 info-row ${
+            isSi ? "flex-wrap" : ""
+          }`}
+        >
           <span className="min-w-0 break-words">
-            CASHIER: {invoiceData.cashierName || "CASHIER"}
+            {LJ.cashier}: {invoiceData.cashierName || "CASHIER"}
           </span>
-          <span className="whitespace-nowrap">INVOICE NO: {documentNo}</span>
+          <span className={isSi ? "" : "whitespace-nowrap"}>
+            {LJ.invoiceNo}: {documentNo}
+          </span>
         </div>
-        <div className="break-words">CUSTOMER: {customerLabel}</div>
+        <div className="break-words">
+          {LJ.customer}: {customerLabel}
+        </div>
       </div>
 
       {/* Items */}
       <div className="border-t-2 border-b-2 border-dashed border-black py-2 px-3 sm:px-4">
-        <div className="border-b border-black pb-1 mb-1 font-bold text-[10px] sm:text-xs">
-          <div className="text-left">PRODUCT</div>
-          <div className="grid grid-cols-4 gap-x-2">
-          <div className="text-left">QTY</div>
-          <div className="text-right">U/PRICE</div>
-          <div className="text-right">PRICE</div>
-          <div className="text-right">VALUE</div>
+        <div className="border-b border-black pb-1 mb-1 font-bold text-[10px] sm:text-xs items-head">
+          <div className="text-left whitespace-nowrap">{LJ.product}</div>
+          <div
+            className="grid grid-cols-4 gap-x-2"
+            style={isSi ? SI_GRID : undefined}
+          >
+            <div className="text-left whitespace-nowrap">{LJ.qty}</div>
+            <div className="text-right whitespace-nowrap">{LJ.uprice}</div>
+            <div className="text-right whitespace-nowrap">{LJ.price}</div>
+            <div className="text-right whitespace-nowrap">{LJ.value}</div>
           </div>
         </div>
 
@@ -851,13 +1131,33 @@ const InvoicePreview = () => {
           return (
             <div key={idx} className="mb-2">
               <div className="font-bold text-[10px] sm:text-xs break-words">
-                {item.PRODUCT_CODE} {item.PRODUCT_NAME}
-                {sinhalaName && (
-                  <span style={{ fontFamily: SINHALA_FONT }}> {sinhalaName}</span>
+                {item.PRODUCT_CODE}{" "}
+                {isSi ? (
+                  // Sinhala bill: Sinhala name (AMILA); no Sinhala name -> English name
+                  sinhalaName ? (
+                    <span className="amila-name" style={{ fontFamily: SINHALA_FONT }}>
+                      {sinhalaName}
+                    </span>
+                  ) : (
+                    item.PRODUCT_NAME
+                  )
+                ) : (
+                  <>
+                    {item.PRODUCT_NAME}
+                    {sinhalaName && (
+                      <span className="amila-name" style={{ fontFamily: SINHALA_FONT }}>
+                        {" "}
+                        {sinhalaName}
+                      </span>
+                    )}
+                  </>
                 )}
-                {isRefundLine(item) ? " (REFUND)" : ""}
+                {isRefundLine(item) ? LJ.refundTag : ""}
               </div>
-              <div className="grid grid-cols-4 gap-x-2 text-[10px] sm:text-xs">
+              <div
+                className="grid grid-cols-4 gap-x-2 text-[10px] sm:text-xs"
+                style={isSi ? SI_GRID : undefined}
+              >
                 <div className="text-left">
                   {parseFloat(item.QUANTITY || 0).toFixed(3)}
                 </div>
@@ -879,24 +1179,24 @@ const InvoicePreview = () => {
       {/* Totals + Payment */}
       <div className="px-3 sm:px-4 text-xs sm:text-sm">
         <div className="flex justify-between border-b-2 border-dashed border-black py-1 font-bold">
-          <span>SUB TOTAL</span>
+          <span>{LJ.subTotal}</span>
           <span>{subTotal.toFixed(2)}</span>
         </div>
 
         {/* Refund items total (not part of the payment) */}
         {refundTotal < -0.001 && (
           <div className="flex justify-between py-1 font-bold">
-            <span>REFUND TOTAL</span>
+            <span>{LJ.refundTotal}</span>
             <span>{refundTotal.toFixed(2)}</span>
           </div>
         )}
 
         <div className="flex justify-between font-bold text-base sm:text-lg mt-3 pos-big">
-          <span>CASH</span>
+          <span>{LJ.cash}</span>
           <span>{cashAmount.toFixed(2)}</span>
         </div>
         <div className="flex justify-between font-bold text-base sm:text-lg mt-1 pos-big">
-          <span>CREDIT</span>
+          <span>{LJ.credit}</span>
           <span>{creditAmount.toFixed(2)}</span>
         </div>
         <div className="border-t-2 border-dotted border-black my-2"></div>
@@ -904,39 +1204,47 @@ const InvoicePreview = () => {
 
       {/* Summary */}
       <div className="grid grid-cols-2 text-xs sm:text-sm px-3 sm:px-4 mt-2">
-        <div>NO OF PIECES</div>
+        <div>{LJ.pieces}</div>
         <div className="text-right">{noOfPieces.toFixed(3)}</div>
-        <div>NO OF PRODUCTS</div>
+        <div>{LJ.products}</div>
         <div className="text-right">{invoiceData.items.length}</div>
       </div>
 
-      {/* Date & Time (from tb_INVOICE_DETAILS; always side by side, so screen / print / measuring all match) */}
+      {/* Date & Time (from tb_INVOICE_DETAILS; side by side, so screen / print / measuring all match) */}
       <div className="flex flex-row justify-between text-[10px] sm:text-xs px-3 sm:px-4 mt-3 pb-2 gap-1">
-        <span className="whitespace-nowrap">DATE : {displayDate}</span>
-        <span className="whitespace-nowrap">END TIME : {displayTime}</span>
+        <span className="whitespace-nowrap">
+          {LJ.date} : {displayDate}
+        </span>
+        <span className="whitespace-nowrap">
+          {LJ.endTime} : {displayTime}
+        </span>
       </div>
 
       {/* Discount Box */}
       {totalDiscount > 0.001 && (
         <div className="text-center border-4 border-black py-2 sm:py-3 mx-4 sm:mx-8 my-3 font-bold text-base sm:text-xl pos-big">
-          YOU HAVE TOTAL DISCOUNT
+          {LJ.totalDiscount}
           <br />
           {totalDiscount.toFixed(2)}
         </div>
       )}
 
-      {/* Footer Message (max 2 lines, each line stays on one line) */}
+      {/* Footer Message (English: each line stays on one line; Sinhala: may wrap) */}
       <div className="text-center text-xs sm:text-sm px-1 pb-2">
         {messageLines.length > 0 && (
           <div className="leading-snug mb-3 text-[10px] sm:text-xs pos-footer">
             {messageLines.map((line, i) => (
-              <div key={i} className="whitespace-nowrap">
-                {line}
+              <div key={i} className={isSi ? "" : "whitespace-nowrap"}>
+                {isSi && hasSinhala(line) ? (
+                  <span className="si-msg">{line}</span>
+                ) : (
+                  line
+                )}
               </div>
             ))}
           </div>
         )}
-        <p className="font-bold text-base sm:text-lg pos-big">THANK YOU COME AGAIN</p>
+        <p className="font-bold text-base sm:text-lg pos-big">{LJ.thanks}</p>
       </div>
 
       {/* Signature (smaller font + no wrapping so it stays on ONE line) */}
@@ -949,6 +1257,8 @@ const InvoicePreview = () => {
 
       {/* Print Button */}
       <div className="text-center pb-4 sm:pb-6 no-print px-3">
+        <BillLangSelect value={billLang} onChange={handleLangChange} />
+        {isSi && <SinhalaFontSelect value={siFontKey} onChange={handleSiFontChange} />}
         <label className="flex items-center justify-center gap-2 mb-3 text-sm sm:text-base cursor-pointer select-none">
           <input
             type="checkbox"
@@ -997,6 +1307,9 @@ const InvoicePreview = () => {
       {/* Print Styles: @page must be top-level (not inside @media) to take effect */}
       <style>{`
         ${amilaFaceCss()}
+        ${sinhalaLabelCss(siFontKey)}
+        .print-container .items-head, .print-container .items-head * { font-size: 9px !important; white-space: nowrap !important; }
+        .print-container .amila-name { font-family: "AMILA", sans-serif !important; word-spacing: normal !important; }
         @page { size: A4; margin: 10mm; }
         @media print {
           .no-print {

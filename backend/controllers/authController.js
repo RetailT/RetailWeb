@@ -903,6 +903,7 @@ exports.login = async (req, res) => {
         t_stock: user.t_stock,
         t_invoice: user.t_invoice,
         t_invoicePreview: user.t_invoicePreview,
+        // t_invoiceDesigner: user.t_invoiceDesigner,
         t_grn: user.t_grn,
         t_prn: user.t_prn,
         t_tog: user.t_tog,

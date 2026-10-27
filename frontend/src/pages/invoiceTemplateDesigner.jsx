@@ -19,18 +19,45 @@ import {
   STARTER_HTML,
   STARTER_CSS,
   SAMPLE_DATA,
+  DESIGNER_FONTS,
 } from "../utils/invoiceTemplate";
 
 const DEFAULT_PAPER = { type: "POS80", widthMm: 80, paddingMm: 3 };
 
+// AMILA = legacy Sinhala font (same as the invoice preview page).
+// Put the font file at  public/fonts/AMILA.ttf  (a PC that has AMILA installed uses its own copy).
+const amilaFaceCss = () =>
+  `@font-face{font-family:"AMILA";src:local("AMILA"),url("${window.location.origin}/fonts/AMILA.ttf") format("truetype");font-display:swap;}`;
+
 // Canvas = same base CSS as the real print + a grey background around the paper.
 // Live data fields (real values from the selected invoice) get an orange highlight.
 const canvasCss = (paper) => `
+  ${amilaFaceCss()}
   ${baseCss(paper)}
   html { background: #cfcfcf !important; padding: 12px 0; }
   body { margin: 0 auto !important; min-height: 80mm; background: #fff; box-shadow: 0 0 6px rgba(0,0,0,.35); }
   [data-field] { background: rgba(241,126,33,.22); outline: 1px dotted rgba(241,126,33,.9); }
+  [data-field="nameSinhala"] { font-family: "AMILA", sans-serif !important; }
 `;
+
+// Puts our font list (Iskoola Pota, Nirmala UI, Noto ..., Arial ...) into the
+// "Font family" dropdown of the Style panel (Typography). Safe: any failure is ignored.
+const applyDesignerFonts = (ed) => {
+  try {
+    const prop = ed.StyleManager.getProperty("typography", "font-family");
+    if (!prop) return;
+    const options = DESIGNER_FONTS.map(([label, value]) => ({
+      id: value,
+      value,
+      label,
+      name: label,
+    }));
+    prop.set("options", options);
+    if (typeof prop.setOptions === "function") prop.setOptions(options);
+  } catch (e) {
+    console.warn("Designer font list could not be set", e);
+  }
+};
 
 const rowHtml = (left, right, extra = "", attrs = "") =>
   `<div ${attrs} style="display:flex;justify-content:space-between;gap:6px;${extra}"><span>${left}</span><span>${right}</span></div>`;
@@ -62,7 +89,7 @@ const ITEMS_2LINE = `
     <div style="display:flex">
       <div style="flex:1;text-align:left">QTY</div>
       <div style="flex:1;text-align:right">U/PRICE</div>
-      <div style="flex:1;text-align:right">DISC</div>
+      <div style="flex:1;text-align:right">PRICE</div>
       <div style="flex:1;text-align:right">VALUE</div>
     </div>
   </div>
@@ -151,7 +178,10 @@ const FIELD_HELP = [
   "date", "time", "subTotal", "refundTotal", "cash", "credit", "totalDiscount",
   "noOfPieces", "noOfProducts", "message",
 ];
-const ITEM_HELP = ["code", "name", "qty", "unitPrice", "discount", "total", "refundTag"];
+const ITEM_HELP = [
+  "code", "name", "nameEnglish", "nameSinhala", "qty", "unitPrice",
+  "discount", "netPrice", "discountAmount", "total", "refundTag",
+];
 
 const InvoiceTemplateDesigner = () => {
   const { authToken } = useContext(AuthContext);
@@ -223,6 +253,8 @@ const InvoiceTemplateDesigner = () => {
         canvasStyleRef.current = st;
         st.textContent = canvasCss(DEFAULT_PAPER);
       }
+      // Iskoola Pota, Nirmala UI, Noto, Arial ... in the "Font family" list
+      applyDesignerFonts(ed);
       setEditorReady(true);
     });
 
@@ -507,7 +539,8 @@ const InvoiceTemplateDesigner = () => {
     setPreviewDoc(
       buildDocument({
         html: fieldsToPlaceholders(ed.getHtml()),
-        css: ed.getCss({ avoidProtected: true }),
+        // AMILA font face first, so {{nameSinhala}} can use it in the preview / test print
+        css: `${amilaFaceCss()}\n${ed.getCss({ avoidProtected: true })}`,
         paper: normalizePaper(paper),
         data: designDataRef.current || SAMPLE_DATA,
       })
@@ -669,6 +702,13 @@ const InvoiceTemplateDesigner = () => {
               Use the <b>Style</b> panel (brush icon) for font size, bold, alignment, margins and borders.
             </p>
             <p>
+              <b>Fonts:</b> select a text, open the <b>Style</b> panel &gt; <b>Typography</b> &gt; <b>Font family</b>.
+              Iskoola Pota, Nirmala UI, Noto Sans / Serif Sinhala, AMILA, Arial, Tahoma, Verdana, Calibri, Segoe UI,
+              Times New Roman, Georgia, Courier New, Consolas ... are in the list (the font must be installed on the
+              computer that prints). On the <b>Sinhala bill</b> the translated labels always use the Sinhala font chosen
+              on the invoice preview page ("Sinhala font" list), so their word spaces stay normal.
+            </p>
+            <p>
               <b>Items:</b> the designer shows only the <b>first item</b> (that row is repeated for every item when
               printing). Use <b>Preview / Test print</b> to see all items.
             </p>
@@ -678,6 +718,10 @@ const InvoiceTemplateDesigner = () => {
             </p>
             <p>
               <b>Logo:</b> drag the <b>Logo / Image</b> block, upload an image (small file, under ~500 KB) and pick it.
+            </p>
+            <p>
+              <b>Sinhala product name:</b> type <code>{"{{nameSinhala}}"}</code> in the item row. It is shown with the
+              AMILA font. For the English name use <code>{"{{nameEnglish}}"}</code>.
             </p>
             <p>
               <b>Fields</b> (you can also type them in any text): {FIELD_HELP.map((k) => `{{${k}}}`).join("  ")}

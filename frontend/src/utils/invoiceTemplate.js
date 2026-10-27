@@ -16,6 +16,126 @@ export const PAPER_TYPES = {
 };
 
 // ---------------------------------------------------------------------------
+// Sinhala label fonts
+//
+// Why this exists: the bill body is Courier New. When a Sinhala word is printed in
+// Courier New, the SPACES between the Sinhala words come from Courier New too (a space
+// that is as wide as a letter), and the Sinhala letters come from a random fallback font.
+// That is why the Sinhala bill had wide / uneven word spaces and heavy headings.
+//
+// Fix: every Sinhala label is wrapped in <span class="si-t"> (single line labels) or
+// <span class="si-msg"> (footer message). That span uses a REAL Sinhala font for the
+// letters AND for the spaces, so the word spacing is normal.
+// ---------------------------------------------------------------------------
+export const SINHALA_FONT_OPTIONS = [
+  {
+    // DEFAULT. AMILA first; any Sinhala letter AMILA does not have falls back (letter by
+    // letter) to Iskoola Pota / Nirmala UI / Noto, so nothing prints as an empty box.
+    key: "amila",
+    label: "AMILA",
+    stack:
+      '"AMILA","Iskoola Pota","IskoolaPota","Nirmala UI","Noto Sans Sinhala","Noto Serif Sinhala","Sinhala Sangam MN",sans-serif',
+  },
+  {
+    key: "auto",
+    label: "Auto",
+    stack:
+      '"Iskoola Pota","IskoolaPota","Nirmala UI","Noto Sans Sinhala","Noto Serif Sinhala","Sinhala Sangam MN","Segoe UI",sans-serif',
+  },
+  {
+    key: "iskoola",
+    label: "Iskoola Pota",
+    stack: '"Iskoola Pota","IskoolaPota","Nirmala UI","Noto Sans Sinhala",sans-serif',
+  },
+  {
+    key: "nirmala",
+    label: "Nirmala UI",
+    stack: '"Nirmala UI","Iskoola Pota","Noto Sans Sinhala",sans-serif',
+  },
+  {
+    key: "notosans",
+    label: "Noto Sans Sinhala",
+    stack: '"Noto Sans Sinhala","Nirmala UI","Iskoola Pota",sans-serif',
+  },
+  {
+    key: "notoserif",
+    label: "Noto Serif Sinhala",
+    stack: '"Noto Serif Sinhala","Iskoola Pota","Nirmala UI",serif',
+  },
+  {
+    key: "segoe",
+    label: "Segoe UI",
+    stack: '"Segoe UI","Nirmala UI","Iskoola Pota",sans-serif',
+  },
+  {
+    key: "sangam",
+    label: "Sinhala MN (Mac)",
+    stack: '"Sinhala Sangam MN","Sinhala MN","Noto Sans Sinhala",sans-serif',
+  },
+];
+
+const SINHALA_FONT_KEY = "billSinhalaFont";
+
+export const getSinhalaFontKey = () => {
+  try {
+    const k = localStorage.getItem(SINHALA_FONT_KEY);
+    return SINHALA_FONT_OPTIONS.some((o) => o.key === k) ? k : "amila";
+  } catch (e) {
+    return "amila";
+  }
+};
+
+export const saveSinhalaFontKey = (key) => {
+  const k = SINHALA_FONT_OPTIONS.some((o) => o.key === key) ? key : "amila";
+  try {
+    localStorage.setItem(SINHALA_FONT_KEY, k);
+  } catch (e) {}
+  return k;
+};
+
+export const sinhalaFontStack = (key) =>
+  (SINHALA_FONT_OPTIONS.find((o) => o.key === key) || SINHALA_FONT_OPTIONS[0]).stack;
+
+export const hasSinhala = (s) => /[\u0D80-\u0DFF]/.test(String(s || ""));
+
+// CSS for the Sinhala labels (used by the template documents AND the built-in bill)
+export const sinhalaLabelCss = (key) => `
+  .si-t, .si-msg {
+    font-family: ${sinhalaFontStack(key)} !important;
+    word-spacing: normal !important;
+    letter-spacing: normal !important;
+    font-kerning: normal;
+    font-synthesis: weight;
+  }
+  .si-t { white-space: nowrap; font-size: 0.92em; line-height: 1.5; }
+  .si-msg { font-size: 0.95em; line-height: 1.5; }
+`;
+
+// Fonts shown in the designer "Font family" list (Style panel > Typography)
+// [label, css value]
+export const DESIGNER_FONTS = [
+  ["Courier New (POS default)", '"Courier New", Courier, monospace'],
+  ["Iskoola Pota (Sinhala)", '"Iskoola Pota", "Nirmala UI", sans-serif'],
+  ["Nirmala UI (Sinhala)", '"Nirmala UI", "Iskoola Pota", sans-serif'],
+  ["Noto Sans Sinhala", '"Noto Sans Sinhala", "Nirmala UI", sans-serif'],
+  ["Noto Serif Sinhala", '"Noto Serif Sinhala", "Iskoola Pota", serif'],
+  ["AMILA (legacy Sinhala)", '"AMILA", sans-serif'],
+  ["Arial", "Arial, Helvetica, sans-serif"],
+  ["Arial Narrow", '"Arial Narrow", Arial, sans-serif'],
+  ["Calibri", "Calibri, Carlito, sans-serif"],
+  ["Segoe UI", '"Segoe UI", Tahoma, sans-serif'],
+  ["Tahoma", "Tahoma, Geneva, sans-serif"],
+  ["Verdana", "Verdana, Geneva, sans-serif"],
+  ["Trebuchet MS", '"Trebuchet MS", sans-serif'],
+  ["Times New Roman", '"Times New Roman", Times, serif'],
+  ["Georgia", "Georgia, serif"],
+  ["Cambria", "Cambria, serif"],
+  ["Lucida Console", '"Lucida Console", Monaco, monospace'],
+  ["Consolas", "Consolas, monospace"],
+  ["Monospace (any)", "monospace"],
+];
+
+// ---------------------------------------------------------------------------
 // Print calibration (per computer / per printer, saved in this browser)
 //   scalePct : printed page height = measured content height * scalePct / 100
 //              blank paper at the bottom -> lower it  (e.g. 80)
@@ -76,6 +196,8 @@ export const normalizePaper = (p = {}) => {
 };
 
 // Base page CSS: the template CSS comes AFTER this, so the template can override it
+// (Sinhala fonts are listed after Courier so any Sinhala letter that is not inside a
+// label span still falls back to a real Sinhala font)
 export const baseCss = (paperInput) => {
   const p = normalizePaper(paperInput);
   const isA4 = p.type === "A4";
@@ -85,7 +207,7 @@ export const baseCss = (paperInput) => {
     body {
       width: ${p.widthMm}mm;
       padding: ${isA4 ? "0" : `2mm ${p.paddingMm}mm`};
-      font-family: "Courier New", Courier, monospace;
+      font-family: "Courier New", Courier, "Iskoola Pota", "Nirmala UI", "Noto Sans Sinhala", monospace;
       font-size: 11px;
       line-height: 1.25;
       color: #000;
@@ -403,6 +525,13 @@ const fmtMoney = (n) =>
     maximumFractionDigits: 2,
   });
 
+// Unit price AFTER the discount (same as the invoice preview page)
+const netUnitPrice = (item) => {
+  const qty = parseFloat(item.QUANTITY) || 0;
+  if (!qty) return parseFloat(item.UNITPRICE) || 0;
+  return (parseFloat(item.TOTAL) || 0) / qty;
+};
+
 export const buildTemplateData = (inv, documentNo) => {
   const list = inv.items || [];
   const sum = (fn) => list.reduce((s, it) => s + fn(it), 0);
@@ -448,16 +577,25 @@ export const buildTemplateData = (inv, documentNo) => {
     message: inv.message && inv.message.trim() ? inv.message : DEFAULT_MESSAGE,
     hasRefund: refundTotal < -0.001,
     hasDiscount: totalDiscount > 0.001,
-    items: list.map((item) => ({
-      code: String(item.PRODUCT_CODE || "").trim(),
-      name: String(item.PRODUCT_NAME || "").trim(),
-      qty: parseFloat(item.QUANTITY || 0).toFixed(3),
-      unitPrice: fmtMoney(item.UNITPRICE),
-      discount: fmtMoney(item.DISCOUNT_AMOUNT),
-      total: fmtMoney(item.TOTAL),
-      refundTag: isRefundLine(item) ? " (REFUND)" : "",
-      isRefund: isRefundLine(item),
-    })),
+    items: list.map((item) => {
+      const nameEn = String(item.PRODUCT_NAME || "").trim();
+      const nameSi = String(item.PRODUCT_NAME_SINHALA || "").trim();
+      return {
+        code: String(item.PRODUCT_CODE || "").trim(),
+        name: nameEn,
+        nameEnglish: nameEn,
+        nameSinhala: nameSi,
+        qty: parseFloat(item.QUANTITY || 0).toFixed(3),
+        unitPrice: fmtMoney(item.UNITPRICE),
+        // same as the invoice preview: price AFTER the discount
+        discount: fmtMoney(netUnitPrice(item)),
+        netPrice: fmtMoney(netUnitPrice(item)),
+        discountAmount: fmtMoney(item.DISCOUNT_AMOUNT),
+        total: fmtMoney(item.TOTAL),
+        refundTag: isRefundLine(item) ? " (REFUND)" : "",
+        isRefund: isRefundLine(item),
+      };
+    }),
   };
 };
 
@@ -485,9 +623,9 @@ export const SAMPLE_DATA = {
   hasRefund: true,
   hasDiscount: true,
   items: [
-    { code: "100010000277", name: "TUX NOVA OVERSIZED", qty: "1.000", unitPrice: "2,500.00", discount: "125.00", total: "2,375.00", refundTag: "", isRefund: false },
-    { code: "100010000223", name: "APEX MESH TOP", qty: "2.000", unitPrice: "1,500.00", discount: "125.00", total: "2,875.00", refundTag: "", isRefund: false },
-    { code: "300010000003", name: "LINT ROLLER", qty: "-1.000", unitPrice: "450.00", discount: "0.00", total: "-450.00", refundTag: " (REFUND)", isRefund: true },
+    { code: "100010000277", name: "TUX NOVA OVERSIZED", nameEnglish: "TUX NOVA OVERSIZED", nameSinhala: "", qty: "1.000", unitPrice: "2,500.00", discount: "2,375.00", netPrice: "2,375.00", discountAmount: "125.00", total: "2,375.00", refundTag: "", isRefund: false },
+    { code: "100010000223", name: "APEX MESH TOP", nameEnglish: "APEX MESH TOP", nameSinhala: "", qty: "2.000", unitPrice: "1,500.00", discount: "1,437.50", netPrice: "1,437.50", discountAmount: "125.00", total: "2,875.00", refundTag: "", isRefund: false },
+    { code: "300010000003", name: "LINT ROLLER", nameEnglish: "LINT ROLLER", nameSinhala: "", qty: "-1.000", unitPrice: "450.00", discount: "450.00", netPrice: "450.00", discountAmount: "0.00", total: "-450.00", refundTag: " (REFUND)", isRefund: true },
   ],
 };
 
@@ -507,7 +645,7 @@ export const STARTER_HTML = `
 <div class="items">
   <div class="ihead">
     <div>PRODUCT</div>
-    <div class="cols"><div class="col l">QTY</div><div class="col r">U/PRICE</div><div class="col r">DISC</div><div class="col r">VALUE</div></div>
+    <div class="cols"><div class="col l">QTY</div><div class="col r">U/PRICE</div><div class="col r">PRICE</div><div class="col r">VALUE</div></div>
   </div>
   <div class="irow" data-repeat="items">
     <div class="b">{{code}} {{name}}{{refundTag}}</div>
