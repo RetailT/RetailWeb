@@ -722,7 +722,7 @@ const BranchSalesCard = ({ branchName, todaySales, yesterdaySales, colorIndex, f
       <div className="space-y-3">
         <div>
           <div className="flex items-center justify-between mb-1">
-            <span className="text-sm font-medium text-gray-400">Today</span>
+            <span className="text-base font-bold text-gray-600">Today</span>
             <span className={`text-base font-extrabold ${palette.text}`}>{formatCurrency(todaySales)}</span>
           </div>
           <div className="w-full h-2 overflow-hidden bg-gray-100 rounded-full">
@@ -735,8 +735,8 @@ const BranchSalesCard = ({ branchName, todaySales, yesterdaySales, colorIndex, f
 
         <div>
           <div className="flex items-center justify-between mb-1">
-            <span className="text-sm font-medium text-gray-400">Yesterday</span>
-            <span className="text-base font-bold text-gray-500">{formatCurrency(yesterdaySales)}</span>
+            <span className="text-base font-bold text-gray-600">Yesterday</span>
+            <span className="text-base font-extrabold text-gray-500">{formatCurrency(yesterdaySales)}</span>
           </div>
           <div className="w-full h-2 overflow-hidden bg-gray-100 rounded-full">
             <div

@@ -183,6 +183,14 @@ export const savePrintSettings = (s) => {
   return clean;
 };
 
+// Template key: companies with a MODIFY_TYPE (1, 2, 3 ...) share the template of that type
+// ("T1", "T2" ...). No type (empty / 0) -> the company's own template (old behaviour).
+export const templateKeyFor = (modifyType, companyCode) => {
+  const t = String(modifyType ?? "").trim();
+  if (t && t !== "0") return `T${t}`;
+  return String(companyCode || "").trim() || "*";
+};
+
 export const normalizePaper = (p = {}) => {
   const rawType = p.paperType || p.type;
   const type = PAPER_TYPES[rawType] ? rawType : "POS80";

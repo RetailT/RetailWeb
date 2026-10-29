@@ -15,21 +15,36 @@ import {
   sinhalaLabelCss,
   hasSinhala,
 } from '../utils/invoiceTemplate';
+import { getBillTemplate } from '../utils/billTemplates';
+
+// ---------------------------------------------------------------------------
+// Which bill design is used?
+//   1) A layout saved in the Invoice Template Designer for the TYPE of this company
+//      (key "T1", "T2" ... = tb_COMPANY.MODIFY_TYPE)            -> used first
+//   2) The code template of that type (utils/billTemplates.js)  -> html templates
+//   3) Type 1 / no type / unknown type                          -> built-in receipt below
+//   For testing only: add  &tpl=2  to the invoice preview URL to force the CODE template of
+//   type 2 (a designer layout is ignored then).
+// ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
 // Bill language (English / Sinhala)
 // ---------------------------------------------------------------------------
 // Latin letters + digits stay in Courier New (mono look).
 // Every Sinhala LABEL is wrapped in <span class="si-t"> and uses a real Sinhala font
-// (Iskoola Pota / Nirmala UI / Noto ... - chosen with the "Sinhala font" list) for the
-// letters AND the spaces. Before, the spaces came from Courier New, so the word spaces
-// were too wide and the headings looked heavy. The CSS of the span is in
-// utils/invoiceTemplate.js -> sinhalaLabelCss().
+// (chosen with the "Sinhala font" list) for the letters AND the spaces.
+// The CSS of the span is in utils/invoiceTemplate.js -> sinhalaLabelCss().
+// The Sinhala PRODUCT NAME is printed only in the Sinhala bill (English bill = English name only).
 
 // Sinhala bill: column widths of the items table (header + every item row use the same
 // widths, so the numbers stay exactly under their headings and the headings stay on ONE line)
-const SI_GRID = { gridTemplateColumns: "0.95fr 1.15fr 0.85fr 1.25fr" };
+const SI_GRID = { gridTemplateColumns: "0.95fr 1.2fr 0.85fr 1.2fr" };
 
+// Column titles of the items table:
+//   qty      = ප්‍රමාණය / QTY
+//   uprice   = සිල්ලර මිල / UNIT PRICE   (the real price of the product)   <- change the English title here
+//   price    = අපේ මිල / PRICE        (price after the discount)
+//   value    = වටිනාකම / VALUE
 const LABELS = {
   en: {
     tel: "TEL",
@@ -64,7 +79,7 @@ const LABELS = {
     walkIn: "සාමාන්‍ය",
     product: "භාණ්ඩය",
     qty: "ප්‍රමාණය",
-    uprice: "ඒකක මිල",
+    uprice: "සිල්ලර මිල",
     price: "අපේ මිල",
     value: "වටිනාකම",
     subTotal: "එකතුව",
@@ -106,7 +121,7 @@ const translateMessage = (msg, lang) => {
   return hit ? hit.si : text;
 };
 
-// English label (as written in the saved custom layouts) -> Sinhala label
+// English label (as written in the html templates / old saved layouts) -> Sinhala label
 // Longest first, so "NO OF PRODUCTS" is replaced before "PRODUCT" etc.
 const TEMPLATE_LABEL_MAP = [
   ["YOU HAVE TOTAL DISCOUNT", LABELS.si.totalDiscount],
@@ -121,6 +136,7 @@ const TEMPLATE_LABEL_MAP = [
   ["CASHIER", LABELS.si.cashier],
   ["PRODUCT", LABELS.si.product],
   ["U/PRICE", LABELS.si.uprice],
+  ["RETAIL", LABELS.si.uprice],
   ["CREDIT", LABELS.si.credit],
   ["PRICE", LABELS.si.price],
   ["VALUE", LABELS.si.value],
@@ -147,7 +163,7 @@ const translateText = (text) => {
   return out;
 };
 
-// Translates ONLY the text between the tags of a saved custom layout (never the tags,
+// Translates ONLY the text between the tags of an html template (never the tags,
 // attributes or {{placeholders}}). Item name -> Sinhala name (AMILA) or English fallback.
 // wrapMessage = true when the footer message is Sinhala -> {{message}} gets the Sinhala font.
 const translateTemplateHtml = (html, wrapMessage) => {
@@ -170,13 +186,18 @@ const translateTemplateHtml = (html, wrapMessage) => {
   );
 };
 
-// CSS added to a custom layout in Sinhala mode:
+// CSS added to an html template in Sinhala mode:
 //  - the Sinhala label font (chosen font + normal word spaces)
 //  - AMILA for the legacy Sinhala product names
 const siTemplateCss = (fontKey) => `
   ${sinhalaLabelCss(fontKey)}
   .amila-name, [style*="AMILA" i] { font-family: "AMILA", sans-serif !important; word-spacing: normal !important; }
 `;
+
+// The saved designer layouts may still have the column title "DISC".
+// The column shows the price after discount, so the title is changed to "PRICE".
+const relabelDiscountHeader = (html) =>
+  String(html || "").replace(/(>\s*)DISC\.?(\s*<)/gi, "$1PRICE$2");
 
 // POS (80mm) text sizes: one body size for everything, bigger only for the shop name
 // and the key lines (marked with the "pos-big" class). The footer (copyright + message,
@@ -190,13 +211,13 @@ const POS_TEXT_CSS = `
   .print-container .pos-big, .print-container .pos-big * { font-size: 13px !important; }
   .print-container .pos-footer, .print-container .pos-footer * { font-size: 8.5px !important; }
   .print-container .border-4 { border-width: 2px !important; }
-  /* Items table heading: smaller, always ONE line */
-  .print-container .items-head, .print-container .items-head * { font-size: 9px !important; white-space: nowrap !important; }
+  /* Items table heading: bigger, always ONE line */
+  .print-container .items-head, .print-container .items-head * { font-size: 11px !important; white-space: nowrap !important; }
   /* Sinhala labels (more specific rules -> they win over the rules above) */
   .print-container .si-t { font-size: 9.5px !important; line-height: 1.5 !important; white-space: nowrap !important; }
   .print-container .si-msg { font-size: 8.5px !important; line-height: 1.5 !important; }
   .print-container .pos-big .si-t { font-size: 11.5px !important; }
-  .print-container .items-head .si-t { font-size: 8.5px !important; }
+  .print-container .items-head .si-t { font-size: 10.5px !important; }
   .print-container .pos-footer .si-t { font-size: 8px !important; }
   /* Sinhala product names are legacy AMILA text */
   .print-container .amila-name { font-family: "AMILA", sans-serif !important; word-spacing: normal !important; }
@@ -251,12 +272,7 @@ const netUnitPrice = (item) => {
   return (parseFloat(item.TOTAL) || 0) / qty;
 };
 
-// The saved custom layouts still have the column title "DISC".
-// The column now shows the price after discount, so the title is changed to "PRICE".
-const relabelDiscountHeader = (html) =>
-  String(html || "").replace(/(>\s*)DISC\.?(\s*<)/gi, "$1PRICE$2");
-
-// Money with thousand separators for the custom template (e.g. 2,500.00)
+// Money with thousand separators for the html templates (e.g. 2,500.00)
 const fmtMoney = (n) =>
   (Number(n) || 0).toLocaleString("en-US", {
     minimumFractionDigits: 2,
@@ -497,7 +513,7 @@ const SinhalaFontSelect = ({ value, onChange }) => (
   </label>
 );
 
-// Shows a custom (designer) template inside an iframe. The frame height follows the content.
+// Shows an html template inside an iframe. The frame height follows the content.
 const TemplatePreviewFrame = ({ docHtml, widthMm }) => {
   const frameRef = useRef(null);
   const [height, setHeight] = useState(400);
@@ -545,14 +561,16 @@ const InvoicePreview = () => {
 
   const documentNo = searchParams.get('docNo');
   const company = searchParams.get('company');
+  // testing only: ?tpl=2 forces the code template of that type
+  const forcedType = searchParams.get('tpl');
 
   const [invoiceData, setInvoiceData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Custom layout made in the Invoice Template Designer (null = none saved -> built-in layout)
-  const [template, setTemplate] = useState(null);
-  // true = ignore the custom layout and show the built-in one (only users who can edit layouts)
+  // Layout saved in the Invoice Template Designer for the TYPE of this company (null = none)
+  const [savedTpl, setSavedTpl] = useState(null);
+  // true = ignore the designer layout and show the code layout (only users who can edit layouts)
   const [useDefaultLayout, setUseDefaultLayout] = useState(false);
   // show / hide the printer calibration panel
   const [showPrintSettings, setShowPrintSettings] = useState(false);
@@ -653,23 +671,28 @@ const InvoicePreview = () => {
         if (response.data.success) {
           const inv = response.data.invoice;
 
-          // Custom layout of this company (or the "*" default). Any failure -> built-in layout.
+          // Layout saved in the designer for the TYPE of this company ("T1", "T2" ...).
+          // exact = only a layout saved for THIS type (no fallback to another one).
+          // Any failure / none saved -> the code layout is used.
           // The invoice is set only AFTER this, so the "customers" request (started by the
           // effect below) never runs at the same time as the template request.
           let tpl = null;
-          try {
-            const tRes = await withRetry(() =>
-              axios.get(`${process.env.REACT_APP_BACKEND_URL}invoice-template`, {
-                headers: { Authorization: `Bearer ${token}` },
-                params: { company: inv.companyCode || company || "" },
-              })
-            );
-            tpl = tRes.data?.template || null;
-          } catch (tErr) {
-            console.warn("Invoice template could not be loaded, using default layout");
+          if (!forcedType) {
+            try {
+              const typeId = getBillTemplate(inv.modifyType).id;
+              const tRes = await withRetry(() =>
+                axios.get(`${process.env.REACT_APP_BACKEND_URL}invoice-template`, {
+                  headers: { Authorization: `Bearer ${token}` },
+                  params: { company: `T${typeId}`, exact: "1" },
+                })
+              );
+              tpl = tRes.data?.template || null;
+            } catch (tErr) {
+              console.warn("Saved layout could not be loaded, using the code layout");
+            }
           }
 
-          setTemplate(tpl);
+          setSavedTpl(tpl && tpl.html ? tpl : null);
           setInvoiceData(inv);
         } else {
           setError(response.data.message || "Invoice not found.");
@@ -687,7 +710,7 @@ const InvoicePreview = () => {
     };
 
     fetchInvoice();
-  }, [documentNo, company, token, authToken, hasPermission, navigate]);
+  }, [documentNo, company, forcedType, token, authToken, hasPermission, navigate]);
 
   // Resolve customer CODE + NAME.
   // 1) use whatever the invoice API returns
@@ -738,8 +761,8 @@ const InvoicePreview = () => {
     };
   }, [invoiceData, token]);
 
-  // POS print: the receipt is copied into a hidden iframe that is exactly 80mm wide.
-  // That is the SAME width Chrome uses for the printed page, so the layout (and the
+  // POS print (built-in receipt): the receipt is copied into a hidden iframe that is exactly
+  // 80mm wide. That is the SAME width Chrome uses for the printed page, so the layout (and the
   // measured height) is identical to what gets printed -> no blank space at the bottom.
   // Page height / bottom space / print width come from the Print settings of this computer.
   const printPos = async () => {
@@ -938,10 +961,15 @@ const InvoicePreview = () => {
     isSi ? FOOTER_MAX_CHARS_SI : FOOTER_MAX_CHARS
   );
 
-  // ---------- Custom layout (designer template) ----------
-  // Users who cannot edit layouts always get the custom layout (when one is saved).
-  const useTemplate = !!template && !(canEditTemplate && useDefaultLayout);
-  const templatePaper = template ? normalizePaper(template) : null;
+  // ---------- Which layout? ----------
+  // type of this company (tb_COMPANY.MODIFY_TYPE) -> code template
+  const billTpl = getBillTemplate(forcedType || invoiceData.modifyType);
+  // layout saved in the designer for this type (users who can edit layouts may switch it off)
+  const useSaved = !!savedTpl && !(canEditTemplate && useDefaultLayout);
+  const useTemplate = useSaved || !!billTpl.html;
+  const templatePaper = useTemplate
+    ? normalizePaper(useSaved ? savedTpl : billTpl.paper)
+    : null;
   let templateDoc = "";
 
   if (useTemplate) {
@@ -975,14 +1003,16 @@ const InvoicePreview = () => {
           // Sinhala bill: only ONE of these two is filled per item
           //   Sinhala name exists  -> nameSinhala = AMILA text, nameEnglish = ""
           //   no Sinhala name      -> nameSinhala = "",         nameEnglish = English name
+          // English bill: English name only (no Sinhala name)
           nameEnglish: isSi ? (nameSi ? "" : nameEn) : nameEn,
-          nameSinhala: nameSi,
+          nameSinhala: isSi ? nameSi : "",
           qty: parseFloat(item.QUANTITY || 0).toFixed(3),
+          // the real (retail) price of the product
           unitPrice: fmtMoney(item.UNITPRICE),
-          // {{discount}} in the layout now gives the unit price AFTER the discount
+          // price AFTER the discount ({{discount}} = same, for old saved layouts)
           discount: fmtMoney(netUnitPrice(item)),
           netPrice: fmtMoney(netUnitPrice(item)),
-          // the real discount amount of the line, if a layout ever needs it
+          // the real discount amount of the line
           discountAmount: fmtMoney(item.DISCOUNT_AMOUNT),
           total: fmtMoney(item.TOTAL),
           refundTag: isRefundLine(item) ? L.refundTag : "",
@@ -991,12 +1021,13 @@ const InvoicePreview = () => {
       }),
     };
 
-    let tplHtml = relabelDiscountHeader(template.html);
+    let tplHtml = useSaved ? relabelDiscountHeader(savedTpl.html) : billTpl.html;
+    const tplCss = useSaved ? savedTpl.css : billTpl.css;
     if (isSi) tplHtml = translateTemplateHtml(tplHtml, hasSinhala(messageText));
 
     templateDoc = buildDocument({
       html: tplHtml,
-      css: `${amilaFaceCss()}\n${template.css || ""}${isSi ? `\n${siTemplateCss(siFontKey)}` : ""}`,
+      css: `${amilaFaceCss()}\n${tplCss || ""}${isSi ? `\n${siTemplateCss(siFontKey)}` : ""}`,
       paper: templatePaper,
       data: templateData,
     });
@@ -1012,11 +1043,45 @@ const InvoicePreview = () => {
     }
   };
 
-  const designerUrl = `/invoice-template-designer?company=${encodeURIComponent(
-    invoiceData.companyCode || company || "*"
+  // The designer opens with the template TYPE of this company selected AND this very invoice
+  // shown (?type=T1&docNo=...&company=...), so it shows the same details as this page.
+  const designerUrl = `/invoice-template-designer?type=${encodeURIComponent(
+    `T${billTpl.id}`
+  )}&docNo=${encodeURIComponent(documentNo || "")}&company=${encodeURIComponent(
+    invoiceData.companyCode || company || ""
   )}`;
 
-  // ---------- Custom layout view ----------
+  // Layout links under the print button (edit links only for users who may edit layouts)
+  const layoutLinks = (
+    <>
+      {canEditTemplate && savedTpl && (
+        <button
+          onClick={() => setUseDefaultLayout((v) => !v)}
+          className="text-gray-600 underline hover:text-black"
+        >
+          {useDefaultLayout ? "Use custom layout" : "Use default layout"}
+        </button>
+      )}
+      {canEditTemplate && (
+        <a
+          href={designerUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-gray-600 underline hover:text-black"
+        >
+          Edit layout
+        </a>
+      )}
+      <button
+        onClick={() => setShowPrintSettings((v) => !v)}
+        className="text-gray-600 underline hover:text-black"
+      >
+        Print settings
+      </button>
+    </>
+  );
+
+  // ---------- Html template view (designer layout or MODIFY_TYPE 2, 3 ...) ----------
   if (useTemplate) {
     return (
       <div className="w-full my-2 sm:my-4">
@@ -1040,39 +1105,14 @@ const InvoicePreview = () => {
           >
             🖨️ Print Invoice
           </button>
-          <div className="flex justify-center gap-4 mt-3 text-sm">
-            {canEditTemplate && (
-              <>
-                <button
-                  onClick={() => setUseDefaultLayout(true)}
-                  className="text-gray-600 underline hover:text-black"
-                >
-                  Use default layout
-                </button>
-                <a
-                  href={designerUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-gray-600 underline hover:text-black"
-                >
-                  Edit layout
-                </a>
-              </>
-            )}
-            <button
-              onClick={() => setShowPrintSettings((v) => !v)}
-              className="text-gray-600 underline hover:text-black"
-            >
-              Print settings
-            </button>
-          </div>
+          <div className="flex justify-center gap-4 mt-3 text-sm">{layoutLinks}</div>
           {showPrintSettings && <PrintSettingsPanel />}
         </div>
       </div>
     );
   }
 
-  // ---------- Built-in (default) layout ----------
+  // ---------- Built-in receipt (MODIFY_TYPE 1 / no type) ----------
   return (
     <div
       ref={receiptRef}
@@ -1113,7 +1153,7 @@ const InvoicePreview = () => {
 
       {/* Items */}
       <div className="border-t-2 border-b-2 border-dashed border-black py-2 px-3 sm:px-4">
-        <div className="border-b border-black pb-1 mb-1 font-bold text-[10px] sm:text-xs items-head">
+        <div className="border-b border-black pb-1 mb-1 font-bold text-[11px] items-head">
           <div className="text-left whitespace-nowrap">{LJ.product}</div>
           <div
             className="grid grid-cols-4 gap-x-2"
@@ -1132,25 +1172,14 @@ const InvoicePreview = () => {
             <div key={idx} className="mb-2">
               <div className="font-bold text-[10px] sm:text-xs break-words">
                 {item.PRODUCT_CODE}{" "}
-                {isSi ? (
-                  // Sinhala bill: Sinhala name (AMILA); no Sinhala name -> English name
-                  sinhalaName ? (
-                    <span className="amila-name" style={{ fontFamily: SINHALA_FONT }}>
-                      {sinhalaName}
-                    </span>
-                  ) : (
-                    item.PRODUCT_NAME
-                  )
+                {isSi && sinhalaName ? (
+                  // Sinhala bill: the Sinhala name (AMILA font)
+                  <span className="amila-name" style={{ fontFamily: SINHALA_FONT }}>
+                    {sinhalaName}
+                  </span>
                 ) : (
-                  <>
-                    {item.PRODUCT_NAME}
-                    {sinhalaName && (
-                      <span className="amila-name" style={{ fontFamily: SINHALA_FONT }}>
-                        {" "}
-                        {sinhalaName}
-                      </span>
-                    )}
-                  </>
+                  // English bill (or no Sinhala name): the English name only
+                  item.PRODUCT_NAME
                 )}
                 {isRefundLine(item) ? LJ.refundTag : ""}
               </div>
@@ -1275,32 +1304,7 @@ const InvoicePreview = () => {
           🖨️ Print Invoice
         </button>
 
-        <div className="flex justify-center gap-4 mt-3 text-sm">
-          {canEditTemplate && template && (
-            <button
-              onClick={() => setUseDefaultLayout(false)}
-              className="text-gray-600 underline hover:text-black"
-            >
-              Use custom layout
-            </button>
-          )}
-          {canEditTemplate && (
-            <a
-              href={designerUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-gray-600 underline hover:text-black"
-            >
-              Customize layout
-            </a>
-          )}
-          <button
-            onClick={() => setShowPrintSettings((v) => !v)}
-            className="text-gray-600 underline hover:text-black"
-          >
-            Print settings
-          </button>
-        </div>
+        <div className="flex justify-center gap-4 mt-3 text-sm">{layoutLinks}</div>
         {showPrintSettings && <PrintSettingsPanel />}
       </div>
 
@@ -1308,7 +1312,8 @@ const InvoicePreview = () => {
       <style>{`
         ${amilaFaceCss()}
         ${sinhalaLabelCss(siFontKey)}
-        .print-container .items-head, .print-container .items-head * { font-size: 9px !important; white-space: nowrap !important; }
+        .print-container .items-head, .print-container .items-head * { font-size: 11px !important; white-space: nowrap !important; }
+        .print-container .items-head .si-t { font-size: 10.5px !important; }
         .print-container .amila-name { font-family: "AMILA", sans-serif !important; word-spacing: normal !important; }
         @page { size: A4; margin: 10mm; }
         @media print {
