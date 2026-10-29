@@ -8387,7 +8387,7 @@ exports.getCompanies = async (req, res) => {
 
     // FIX: Use correct database and table name
     const result = await pool.request().query(`
-      SELECT COMPANY_CODE, COMPANY_NAME 
+      SELECT COMPANY_CODE, COMPANY_NAME, MODIFY_TYPE
       FROM [RT_WEB].[dbo].[tb_COMPANY]
       ORDER BY COMPANY_CODE
     `);
@@ -8404,203 +8404,28 @@ exports.getCompanies = async (req, res) => {
   }
 };
 
-// GET - Invoice Preview (now returns cashAmount / creditAmount)
-// exports.getInvoicePreview = async (req, res) => {
-//   try {
-//     let { documentNo, company } = req.query;
-//     documentNo = (documentNo || "").trim().toUpperCase();
-//     company = (company || "").trim().toUpperCase();
- 
-//     if (!documentNo) {
-//       return res.status(400).json({ message: "Document number is required" });
-//     }
- 
-//     if (!req.user || !req.user.username) {
-//       return res.status(401).json({ message: "Unauthorized - please log in" });
-//     }
- 
-//     const username = req.user.username;
-//     const user_ip = String(req.user.ip).trim();
- 
-//     // Permission check (MAIN database)
-//     if (mssql.connected) await mssql.close();
-//     const mainPool = await connectToDatabase();
- 
-//     if (!mainPool || !mainPool.connected) {
-//       return res.status(500).json({ message: "Database connection failed" });
-//     }
- 
-//     const permResult = await mainPool
-//       .request()
-//       .input("username", mssql.NVarChar(100), username).query(`
-//         USE [RTPOS_MAIN];
-//         SELECT t_invoicePreview 
-//         FROM tb_USERS
-//         WHERE username = @username
-//       `);
- 
-//     if (permResult.recordset.length === 0) {
-//       return res
-//         .status(403)
-//         .json({ message: "No permission record found for the user" });
-//     }
- 
-//     const hasPermission = permResult.recordset[0].t_invoicePreview === "T";
- 
-//     if (!hasPermission) {
-//       return res.status(403).json({
-//         message: "You do not have permission to view the invoice preview",
-//       });
-//     }
- 
-//     // User database
-//     if (mssql.connected) await mssql.close();
-//     const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
- 
-//     if (!pool || !pool.connected) {
-//       return res
-//         .status(500)
-//         .json({ message: "User database connection failed" });
-//     }
- 
-//     // Auto-detect company if not provided
-//     if (!company) {
-//       const detect = await pool
-//         .request()
-//         .input("docNo", mssql.NVarChar(30), documentNo).query(`
-//           USE [RT_WEB];
-//           SELECT TOP 1 COMPANY_CODE 
-//           FROM tb_INVOICE_DETAILS 
-//           WHERE DOCUMENT_NO = @docNo
-//         `);
- 
-//       if (detect.recordset.length === 0) {
-//         return res.status(404).json({
-//           message: "Invoice not found. Unable to determine company code.",
-//         });
-//       }
- 
-//       company = detect.recordset[0].COMPANY_CODE.trim();
-//     }
- 
-//     // Company information
-//     const companyResult = await pool
-//       .request()
-//       .input("company", mssql.NVarChar(10), company).query(`
-//         USE [RT_WEB];
-//         SELECT COMPANY_NAME, ADDRESS, PHONE, RECEIPT_TEXT
-//         FROM tb_COMPANY 
-//         WHERE COMPANY_CODE = @company
-//       `);
- 
-//     if (companyResult.recordset.length === 0) {
-//       return res.status(404).json({
-//         message: `Company not found (code: ${company})`,
-//       });
-//     }
- 
-//     const companyInfo = companyResult.recordset[0];
- 
-//     // Do the payment columns exist yet? (older databases may not have them)
-//     const colCheck = await pool.request().query(`
-//       SELECT CASE WHEN COL_LENGTH('RT_WEB.dbo.tb_INVOICE_DETAILS', 'CASH_AMOUNT') IS NOT NULL
-//                    AND COL_LENGTH('RT_WEB.dbo.tb_INVOICE_DETAILS', 'CREDIT_AMOUNT') IS NOT NULL
-//              THEN 1 ELSE 0 END AS HasPay
-//     `);
-//     const hasPayCols = colCheck.recordset[0].HasPay === 1;
- 
-//     // Invoice items
-//     const itemsResult = await pool
-//       .request()
-//       .input("docNo", mssql.NVarChar(30), documentNo)
-//       .input("company", mssql.NVarChar(10), company).query(`
-//         USE [RT_WEB];
-//         SELECT 
-//           DOCUMENT_NO,
-//           CUSTOMER_CODE,
-//           CUSTOMER_NAME,
-//           PRODUCT_CODE,
-//           PRODUCT_NAME,
-//           QUANTITY,
-//           UNITPRICE,
-//           DISCOUNT_AMOUNT,
-//           TOTAL,
-//           TRUSER${hasPayCols ? ",\n          CASH_AMOUNT,\n          CREDIT_AMOUNT" : ""}
-//         FROM tb_INVOICE_DETAILS
-//         WHERE DOCUMENT_NO = @docNo 
-//           AND COMPANY_CODE = @company
-//         ORDER BY PRODUCT_CODE
-//       `);
- 
-//     if (itemsResult.recordset.length === 0) {
-//       return res.status(404).json({
-//         message: `No items found for invoice ${documentNo} under company ${company}`,
-//       });
-//     }
- 
-//     const items = itemsResult.recordset;
-//     const firstItem = items[0];
- 
-//     // Payment split is stored on every row of the invoice (same value) -> read from first row.
-//     // Legacy invoices (saved before this feature) have 0 + 0 -> send null so the
-//     // frontend shows them as full credit.
-//     let cashAmount = null;
-//     let creditAmount = null;
-//     if (hasPayCols) {
-//       const c = Number(firstItem.CASH_AMOUNT) || 0;
-//       const cr = Number(firstItem.CREDIT_AMOUNT) || 0;
-//       if (c + cr > 0) {
-//         cashAmount = c;
-//         creditAmount = cr;
-//       }
-//     }
- 
-//     return res.status(200).json({
-//       success: true,
-//       invoice: {
-//         documentNo,
-//         companyCode: company,
-//         companyName: companyInfo.COMPANY_NAME?.trim() || "UNKNOWN SHOP",
-//         address: companyInfo.ADDRESS?.trim() || "",
-//         phone: companyInfo.PHONE?.trim() || "",
-//         message: companyInfo.RECEIPT_TEXT?.trim() || "",
-//         customerName: firstItem.CUSTOMER_NAME?.trim() || "WALK-IN CUSTOMER",
-//         cashierName: firstItem.TRUSER?.trim() || "CASHIER",
-//         cashAmount,
-//         creditAmount,
-//         items,
-//       },
-//     });
-//   } catch (error) {
-//     console.error("Error in getInvoicePreview:", error);
-//     return res.status(500).json({
-//       message: "Failed to fetch invoice preview",
-//       error: error.message,
-//     });
-//   }
-// };
-
 // GET - Invoice Preview (cashAmount / creditAmount + documentDate / documentTime
-//       + PRODUCT_NAME_SINHALA)
+//       + PRODUCT_NAME_SINHALA + modifyType)
 //   * Any logged-in user can view / print an invoice
 //   * canEditTemplate tells the frontend if this user may edit the invoice layout
+//   * modifyType = tb_COMPANY.MODIFY_TYPE -> decides which invoice template (T1, T2 ...) is used
 exports.getInvoicePreview = async (req, res) => {
   try {
     let { documentNo, company } = req.query;
     documentNo = (documentNo || "").trim().toUpperCase();
     company = (company || "").trim().toUpperCase();
- 
+
     if (!documentNo) {
       return res.status(400).json({ message: "Document number is required" });
     }
- 
+
     if (!req.user || !req.user.username) {
       return res.status(401).json({ message: "Unauthorized - please log in" });
     }
- 
+
     const username = req.user.username;
     const user_ip = String(req.user.ip).trim();
- 
+
     // Layout-edit permission only. A failure here must never block the preview.
     let canEditTemplate = false;
     try {
@@ -8608,17 +8433,17 @@ exports.getInvoicePreview = async (req, res) => {
     } catch (permErr) {
       console.warn("Template edit permission check failed:", permErr.message);
     }
- 
+
     // User database
     if (mssql.connected) await mssql.close();
     const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
- 
+
     if (!pool || !pool.connected) {
       return res
         .status(500)
         .json({ message: "User database connection failed" });
     }
- 
+
     // Auto-detect company if not provided
     if (!company) {
       const detect = await pool
@@ -8629,34 +8454,34 @@ exports.getInvoicePreview = async (req, res) => {
           FROM tb_INVOICE_DETAILS 
           WHERE DOCUMENT_NO = @docNo
         `);
- 
+
       if (detect.recordset.length === 0) {
         return res.status(404).json({
           message: "Invoice not found. Unable to determine company code.",
         });
       }
- 
+
       company = detect.recordset[0].COMPANY_CODE.trim();
     }
- 
-    // Company information
+
+    // Company information (MODIFY_TYPE = invoice template type)
     const companyResult = await pool
       .request()
       .input("company", mssql.NVarChar(10), company).query(`
         USE [RT_WEB];
-        SELECT COMPANY_NAME, ADDRESS, PHONE, RECEIPT_TEXT
+        SELECT COMPANY_NAME, ADDRESS, PHONE, RECEIPT_TEXT, MODIFY_TYPE
         FROM tb_COMPANY 
         WHERE COMPANY_CODE = @company
       `);
- 
+
     if (companyResult.recordset.length === 0) {
       return res.status(404).json({
         message: `Company not found (code: ${company})`,
       });
     }
- 
+
     const companyInfo = companyResult.recordset[0];
- 
+
     // Do the payment columns exist yet? (older databases may not have them)
     const colCheck = await pool.request().query(`
       SELECT CASE WHEN COL_LENGTH('RT_WEB.dbo.tb_INVOICE_DETAILS', 'CASH_AMOUNT') IS NOT NULL
@@ -8664,14 +8489,14 @@ exports.getInvoicePreview = async (req, res) => {
              THEN 1 ELSE 0 END AS HasPay
     `);
     const hasPayCols = colCheck.recordset[0].HasPay === 1;
- 
+
     // Does the Sinhala name column exist yet? (older databases may not have it)
     const sinCheck = await pool.request().query(`
       SELECT CASE WHEN COL_LENGTH('RT_WEB.dbo.tb_INVOICE_DETAILS', 'PRODUCT_NAME_SINHALA') IS NOT NULL
              THEN 1 ELSE 0 END AS HasSin
     `);
     const hasSinCol = sinCheck.recordset[0].HasSin === 1;
- 
+
     // Invoice items (DOCUMENT_DATE / DOCUMENT_TIME / PRODUCT_NAME_SINHALA)
     const itemsResult = await pool
       .request()
@@ -8696,16 +8521,16 @@ exports.getInvoicePreview = async (req, res) => {
           AND COMPANY_CODE = @company
         ORDER BY PRODUCT_CODE
       `);
- 
+
     if (itemsResult.recordset.length === 0) {
       return res.status(404).json({
         message: `No items found for invoice ${documentNo} under company ${company}`,
       });
     }
- 
+
     const items = itemsResult.recordset;
     const firstItem = items[0];
- 
+
     // Payment split is stored on every row of the invoice (same value) -> read from first row.
     // Legacy invoices (saved before this feature) have 0 + 0 -> send null so the
     // frontend shows them as full credit.
@@ -8719,7 +8544,7 @@ exports.getInvoicePreview = async (req, res) => {
         creditAmount = cr;
       }
     }
- 
+
     return res.status(200).json({
       success: true,
       invoice: {
@@ -8728,6 +8553,8 @@ exports.getInvoicePreview = async (req, res) => {
         documentDate: firstItem.DOCUMENT_DATE || null,
         documentTime: firstItem.DOCUMENT_TIME || null,
         companyCode: company,
+        // template type of this company (tb_COMPANY.MODIFY_TYPE) -> frontend loads template "T<type>"
+        modifyType: String(companyInfo.MODIFY_TYPE ?? "").trim(),
         companyName: companyInfo.COMPANY_NAME?.trim() || "UNKNOWN SHOP",
         address: companyInfo.ADDRESS?.trim() || "",
         phone: companyInfo.PHONE?.trim() || "",
@@ -8878,226 +8705,6 @@ exports.savedInvoiceNumbers = async (req, res) => {
     }
   }
 };
-
-// POST - Insert invoice temp item (FIXED - Better table creation)
-// exports.insertInvoiceTemp = async (req, res) => {
-//   try {
-//     console.log("=== INSERT INVOICE TEMP START ===");
-//     console.log("Request Body:", req.body);
-
-//     const {
-//       company,
-//       companyName,
-//       customer, // NEW
-//       customerName, // NEW
-//       productCode,
-//       productName,
-//       costPrice,
-//       unitPrice,
-//       stock,
-//       quantity,
-//       discount,
-//       discountAmount,
-//       total,
-//     } = req.body;
-
-//     const username = req.user.username;
-
-//     if (!company || !productCode || !customer) {
-//       // VALIDATE CUSTOMER
-//       console.log("Validation failed:", { company, productCode });
-//       return res.status(400).json({
-//         message: "Missing required fields: company or productCode",
-//       });
-//     }
-
-//     const user_ip = String(req.user.ip).trim();
-
-//     if (mssql.connected) {
-//       await mssql.close();
-//     }
-
-//     const pool = await connectToUserDatabase(user_ip, req.user.port.trim());
-
-//     if (!pool || !pool.connected) {
-//       console.log("Database connection failed");
-//       return res.status(500).json({ message: "Database connection failed" });
-//     }
-
-//     // ✅ NEW: Check product UNIT type from database
-//     // Try posback database first (without COMPANY_CODE)
-//     let productCheck;
-//     try {
-//       productCheck = await pool
-//         .request()
-//         .input("productCode", mssql.NVarChar(30), productCode).query(`
-//           USE [${posback}];
-//           SELECT UNIT FROM tb_PRODUCT 
-//           WHERE PRODUCT_CODE = @productCode
-//         `);
-//     } catch (err) {
-//       // If fails, try RT_WEB database with COMPANY_CODE
-//       try {
-//         productCheck = await pool
-//           .request()
-//           .input("productCode", mssql.NVarChar(30), productCode)
-//           .input("company", mssql.NVarChar(10), company).query(`
-//             USE [RT_WEB];
-//             SELECT UNIT FROM tb_PRODUCT 
-//             WHERE PRODUCT_CODE = @productCode 
-//             AND COMPANY_CODE = @company
-//           `);
-//       } catch (err2) {
-//         console.log("Could not check UNIT type from database:", err2.message);
-//         // Continue without validation if both fail
-//         productCheck = { recordset: [] };
-//       }
-//     }
-
-//     // ✅ NEW: Validate quantity for NOS items
-//     if (productCheck.recordset.length > 0) {
-//       const unitType = productCheck.recordset[0].UNIT;
-
-//       if (unitType && unitType.trim().toUpperCase() === "NOS") {
-//         const qty = parseFloat(quantity) || 0;
-
-//         // Check if quantity is a whole number
-//         if (!Number.isInteger(qty)) {
-//           console.log(
-//             `NOS validation failed: quantity ${qty} is not a whole number`,
-//           );
-//           return res.status(400).json({
-//             message: "NOS items must have whole number quantities only",
-//           });
-//         }
-//       }
-//     }
-
-//     // Check if RT_WEB database exists
-//     try {
-//       const dbCheck = await pool.request().query(`
-//         SELECT name FROM sys.databases WHERE name = 'RT_WEB'
-//       `);
-
-//       if (dbCheck.recordset.length === 0) {
-//         console.log("RT_WEB database not found!");
-//         return res.status(500).json({
-//           message: "RT_WEB database does not exist",
-//         });
-//       }
-//     } catch (dbError) {
-//       console.error("Error checking database:", dbError);
-//       return res.status(500).json({
-//         message: "Database check failed",
-//         error: dbError.message,
-//       });
-//     }
-
-//     // Create/Update table with TRUSER column
-//     try {
-//       await pool.request().query(`
-//         USE [RT_WEB];
-        
-//         -- Create table if not exists
-//         IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='tb_InvoiceTemp' AND xtype='U')
-//         BEGIN
-//           CREATE TABLE tb_InvoiceTemp (
-//             IDX NUMERIC(18,0) IDENTITY(1,1) PRIMARY KEY,
-//             COMPANY_CODE NVARCHAR(10),
-//             COMPANY_NAME NVARCHAR(50),
-//             CUSTOMER_CODE NVARCHAR(20),        -- NEW
-//             CUSTOMER_NAME NVARCHAR(100),       -- NEW
-//             PRODUCT_CODE NVARCHAR(30),
-//             PRODUCT_NAME NVARCHAR(100),
-//             COSTPRICE MONEY,
-//             UNITPRICE MONEY,
-//             STOCK FLOAT,
-//             QUANTITY FLOAT,
-//             DISCOUNT MONEY,
-//             DISCOUNT_AMOUNT MONEY,
-//             TOTAL MONEY,
-//             TRUSER NVARCHAR(50),
-//             INSERT_TIME DATETIME DEFAULT GETDATE()
-//           )
-//           PRINT 'tb_InvoiceTemp table created with TRUSER column'
-//         END
-        
-//         -- Add TRUSER column if table exists but column doesn't
-//         IF EXISTS (SELECT * FROM sysobjects WHERE name='tb_InvoiceTemp' AND xtype='U')
-//         BEGIN
-//           IF NOT EXISTS (SELECT * FROM sys.columns 
-//                         WHERE object_id = OBJECT_ID('tb_InvoiceTemp') 
-//                         AND name = 'TRUSER')
-//           BEGIN
-//             ALTER TABLE tb_InvoiceTemp ADD TRUSER NVARCHAR(50)
-//             PRINT 'TRUSER column added to existing tb_InvoiceTemp table'
-//           END
-//         END
-//       `);
-//       console.log("Table setup completed successfully");
-//     } catch (tableError) {
-//       console.error("Error creating/updating table:", tableError);
-//       return res.status(500).json({
-//         message: "Table setup failed",
-//         error: tableError.message,
-//       });
-//     }
-
-//     // Parse values safely
-//     const qty = parseFloat(quantity) || 0;
-//     const safeCost = parseFloat(costPrice) || 0;
-//     const safePrice = parseFloat(unitPrice) || 0;
-//     const safeStock = parseFloat(stock) || 0;
-//     const safeDiscount = parseFloat(discount) || 0;
-//     const safeDiscountAmount = parseFloat(discountAmount) || 0;
-//     const safeTotal = parseFloat(total) || 0;
-
-//     console.log("Inserting with username:", username);
-
-//     // Insert with TRUSER
-//     const result = await pool
-//       .request()
-//       .input("company", mssql.NChar(10), company)
-//       .input("companyName", mssql.NVarChar(50), companyName || "")
-//       .input("customerCode", mssql.NVarChar(20), customer || "")
-//       .input("customerName", mssql.NVarChar(100), customerName || "")
-//       .input("productCode", mssql.NChar(30), productCode)
-//       .input("productName", mssql.NVarChar(100), productName || "")
-//       .input("costPrice", mssql.Money, safeCost)
-//       .input("unitPrice", mssql.Money, safePrice)
-//       .input("stock", mssql.Float, safeStock)
-//       .input("quantity", mssql.Float, qty)
-//       .input("discount", mssql.Money, safeDiscount)
-//       .input("discountAmount", mssql.Money, safeDiscountAmount)
-//       .input("total", mssql.Money, safeTotal)
-//       .input("username", mssql.NVarChar(50), username).query(`
-//         USE [RT_WEB];
-//         INSERT INTO tb_InvoiceTemp 
-//         (COMPANY_CODE, COMPANY_NAME, CUSTOMER_CODE, CUSTOMER_NAME, PRODUCT_CODE, PRODUCT_NAME, 
-//         COSTPRICE, UNITPRICE, STOCK, QUANTITY, DISCOUNT, DISCOUNT_AMOUNT, TOTAL, 
-//         TRUSER, INSERT_TIME)
-//         VALUES (@company, @companyName, @customerCode, @customerName, @productCode, @productName, 
-//                 @costPrice, @unitPrice, @stock, @quantity, @discount, @discountAmount, @total, 
-//                 @username, GETDATE())
-//       `);
-
-//     console.log("Insert successful, rows affected:", result.rowsAffected);
-
-//     return res.status(201).json({
-//       message: "Invoice item added successfully",
-//     });
-//   } catch (error) {
-//     console.error("=== INSERT INVOICE TEMP ERROR ===");
-//     console.error("Error:", error.message);
-//     console.error("Stack:", error.stack);
-//     return res.status(500).json({
-//       message: "Failed to add invoice item",
-//       error: error.message,
-//       stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
-//     });
-//   }
-// };
-
 
 // POST - Insert invoice temp item
 //   * AVGCOST  : read from POSBACK_SYSTEM.tb_PRODUCT
@@ -9399,298 +9006,6 @@ exports.insertInvoiceTemp = async (req, res) => {
     });
   }
 };
-
-
-// POST - Save invoice (now validates Cash + Credit == Invoice Total)
-// exports.saveInvoice = async (req, res) => {
-//   let pool = null;
-//   let transaction = null;
- 
-//   try {
-//     console.log("=== SAVE INVOICE START ===");
-//     const { company, customer, cashAmount, creditAmount } = req.body;
-//     const username = req.user.username;
- 
-//     if (!company || !customer) {
-//       return res
-//         .status(400)
-//         .json({ message: "Company and Customer are required" });
-//     }
- 
-//     const user_ip = String(req.user.ip).trim();
-//     if (mssql.connected) await mssql.close();
- 
-//     pool = await connectToUserDatabase(user_ip, req.user.port.trim());
-//     if (!pool || !pool.connected) {
-//       return res.status(500).json({ message: "Database connection failed" });
-//     }
- 
-//     // 1. Ensure RT_WEB database exists
-//     await ensureRtWebDatabase(pool);
- 
-//     // 2. Create tb_InvoiceTemp if missing (with TRUSER)
-//     await pool.request().query(`
-//       USE [RT_WEB];
- 
-//       IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='tb_InvoiceTemp' AND xtype='U')
-//       BEGIN
-//         CREATE TABLE tb_InvoiceTemp (
-//           IDX NUMERIC(18,0) IDENTITY(1,1) PRIMARY KEY,
-//           COMPANY_CODE NVARCHAR(10),
-//           COMPANY_NAME NVARCHAR(50),
-//           CUSTOMER_CODE NVARCHAR(20),
-//           CUSTOMER_NAME NVARCHAR(100),
-//           PRODUCT_CODE NVARCHAR(30),
-//           PRODUCT_NAME NVARCHAR(100),
-//           COSTPRICE MONEY,
-//           UNITPRICE MONEY,
-//           STOCK FLOAT,
-//           QUANTITY FLOAT,
-//           DISCOUNT MONEY,
-//           DISCOUNT_AMOUNT MONEY,
-//           TOTAL MONEY,
-//           TRUSER NVARCHAR(50),
-//           INSERT_TIME DATETIME DEFAULT GETDATE()
-//         );
-//         PRINT 'Created tb_InvoiceTemp';
-//       END
- 
-//       IF NOT EXISTS (
-//         SELECT * FROM sys.columns 
-//         WHERE object_id = OBJECT_ID('tb_InvoiceTemp') AND name = 'TRUSER'
-//       )
-//       BEGIN
-//         ALTER TABLE tb_InvoiceTemp ADD TRUSER NVARCHAR(50);
-//         PRINT 'Added TRUSER column';
-//       END
-//     `);
- 
-//     // 3. Create tb_DOCUMENT if missing
-//     await pool.request().query(`
-//       USE [RT_WEB];
- 
-//       IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='tb_DOCUMENT' AND xtype='U')
-//       BEGIN
-//         CREATE TABLE tb_DOCUMENT (
-//           COMPANY_CODE NVARCHAR(10) PRIMARY KEY,
-//           GRN NUMERIC(18,0) DEFAULT 1,
-//           PRN NUMERIC(18,0) DEFAULT 1,
-//           TOG NUMERIC(18,0) DEFAULT 1,
-//           INVOICE NUMERIC(18,0) DEFAULT 1,
-//           REPUSER NVARCHAR(50),
-//           INSERT_TIME DATETIME DEFAULT GETDATE()
-//         );
-//         PRINT 'Created tb_DOCUMENT';
-//       END
-//     `);
- 
-//     // 4. Add CASH_AMOUNT / CREDIT_AMOUNT columns to tb_INVOICE_DETAILS if missing
-//     await pool.request().query(ENSURE_INVOICE_PAYMENT_COLUMNS_SQL);
- 
-//     transaction = pool.transaction();
-//     await transaction.begin();
- 
-//     try {
-//       const hasTRUSERResult = await transaction.request().query(`
-//         SELECT CASE WHEN EXISTS (SELECT * FROM sys.columns 
-//                     WHERE object_id = OBJECT_ID('tb_InvoiceTemp') AND name = 'TRUSER')
-//               THEN 1 ELSE 0 END as HasTRUSER
-//       `);
-//       const hasTRUSER = hasTRUSERResult.recordset[0].HasTRUSER === 1;
- 
-//       // Count items + invoice total from the temp table
-//       let countQuery = `
-//         SELECT COUNT(*) as count, ISNULL(SUM(TOTAL), 0) as grandTotal
-//         FROM tb_InvoiceTemp
-//         WHERE COMPANY_CODE = @company AND CUSTOMER_CODE = @customer`;
-//       if (hasTRUSER) countQuery += ` AND TRUSER = @username`;
- 
-//       const countReq = transaction
-//         .request()
-//         .input("company", mssql.NVarChar(10), company.trim())
-//         .input("customer", mssql.NVarChar(20), customer.trim());
-//       if (hasTRUSER) countReq.input("username", mssql.NVarChar(50), username);
- 
-//       const countResult = await countReq.query(countQuery);
-//       const itemCount = countResult.recordset[0].count;
-//       const grandTotal = Number(countResult.recordset[0].grandTotal) || 0;
- 
-//       if (itemCount === 0) {
-//         await transaction.rollback();
-//         return res.status(400).json({ message: "No items found to save" });
-//       }
- 
-//       // ============ PAYMENT VALIDATION (cash + credit must equal total) ============
-//       const toCents = (v) => Math.round((parseFloat(v) || 0) * 100);
-//       const totalCents = toCents(grandTotal);
- 
-//       let cashCents;
-//       let creditCents;
- 
-//       if (
-//         (cashAmount === undefined || cashAmount === null) &&
-//         (creditAmount === undefined || creditAmount === null)
-//       ) {
-//         // Old client without payment fields → whole invoice on credit
-//         cashCents = 0;
-//         creditCents = totalCents;
-//       } else {
-//         cashCents = toCents(cashAmount);
-//         creditCents = toCents(creditAmount);
-//       }
- 
-//       if (cashCents < 0 || creditCents < 0) {
-//         await transaction.rollback();
-//         return res.status(400).json({
-//           message: "Cash and Credit amounts cannot be negative",
-//         });
-//       }
- 
-//       if (cashCents + creditCents !== totalCents) {
-//         await transaction.rollback();
-//         return res.status(400).json({
-//           message: `Cash (${(cashCents / 100).toFixed(2)}) + Credit (${(
-//             creditCents / 100
-//           ).toFixed(2)}) = ${((cashCents + creditCents) / 100).toFixed(
-//             2
-//           )} does not match the invoice total (${(totalCents / 100).toFixed(2)})`,
-//         });
-//       }
- 
-//       // ============ NEXT INVOICE NUMBER (duplicate-proof) ============
-//       const paddedCompany = company.trim().padStart(2, "0");
- 
-//       // Lock the counter row so two saves at the same time cannot read the same number
-//       const rowCheck = await transaction
-//         .request()
-//         .input("company", mssql.NVarChar(10), company.trim()).query(`
-//           SELECT INVOICE
-//           FROM RT_WEB.dbo.tb_DOCUMENT WITH (UPDLOCK, HOLDLOCK)
-//           WHERE COMPANY_CODE = @company
-//         `);
- 
-//       let counterNo = rowCheck.recordset.length > 0
-//         ? Number(rowCheck.recordset[0].INVOICE) || 0
-//         : 0;
- 
-//       // Highest invoice number that ALREADY exists in tb_INVOICE_DETAILS for this company.
-//       // If the counter was reset / out of sync, we still never reuse a saved number.
-//       const maxDocResult = await transaction
-//         .request()
-//         .input("company", mssql.NVarChar(10), company.trim())
-//         .input("prefix", mssql.NVarChar(12), paddedCompany + "%").query(`
-//           SELECT MAX(DOCUMENT_NO) AS maxDoc
-//           FROM RT_WEB.dbo.tb_INVOICE_DETAILS
-//           WHERE COMPANY_CODE = @company AND DOCUMENT_NO LIKE @prefix
-//         `);
- 
-//       let maxExistingNo = 0;
-//       const maxDoc = (maxDocResult.recordset[0].maxDoc || "").trim();
-//       if (maxDoc) {
-//         const n = parseInt(maxDoc.slice(paddedCompany.length), 10);
-//         if (!isNaN(n)) maxExistingNo = n;
-//       }
- 
-//       const currentInvoiceNo = Math.max(counterNo, maxExistingNo) + 1;
-//       const documentNumber =
-//         paddedCompany + String(currentInvoiceNo).padStart(8, "0");
- 
-//       // ============ UPSERT tb_DOCUMENT ============
-//       await transaction
-//         .request()
-//         .input("company", mssql.NVarChar(10), company.trim())
-//         .input("invoiceNo", mssql.Numeric(18, 0), currentInvoiceNo)
-//         .input("repuser", mssql.NVarChar(50), username).query(`
-//           IF EXISTS (SELECT 1 FROM RT_WEB.dbo.tb_DOCUMENT WHERE COMPANY_CODE = @company)
-//           BEGIN
-//             UPDATE RT_WEB.dbo.tb_DOCUMENT 
-//             SET INVOICE = @invoiceNo, REPUSER = @repuser, INSERT_TIME = GETDATE()
-//             WHERE COMPANY_CODE = @company
-//           END
-//           ELSE
-//           BEGIN
-//             INSERT INTO RT_WEB.dbo.tb_DOCUMENT (COMPANY_CODE, GRN, PRN, TOG, INVOICE, REPUSER)
-//             VALUES (@company, 1, 1, 1, @invoiceNo, @repuser)
-//           END
-//         `);
- 
-//       // ============ INSERT INTO tb_INVOICE_DETAILS ============
-//       let insertQuery = `
-//         INSERT INTO tb_INVOICE_DETAILS 
-//         (DOCUMENT_NO, COMPANY_CODE, COMPANY_NAME, CUSTOMER_CODE, CUSTOMER_NAME,
-//          PRODUCT_CODE, PRODUCT_NAME, COSTPRICE, UNITPRICE, STOCK, QUANTITY,
-//          DISCOUNT, DISCOUNT_AMOUNT, TOTAL${hasTRUSER ? ", TRUSER" : ""},
-//          CASH_AMOUNT, CREDIT_AMOUNT)
-//         SELECT 
-//           @docNo,
-//           COMPANY_CODE, COMPANY_NAME, CUSTOMER_CODE, CUSTOMER_NAME,
-//           PRODUCT_CODE, PRODUCT_NAME, COSTPRICE, UNITPRICE, STOCK, QUANTITY,
-//           DISCOUNT, DISCOUNT_AMOUNT, TOTAL${hasTRUSER ? ", TRUSER" : ""},
-//           @cash, @credit
-//         FROM tb_InvoiceTemp
-//         WHERE COMPANY_CODE = @company AND CUSTOMER_CODE = @customer
-//       `;
-//       if (hasTRUSER) insertQuery += ` AND TRUSER = @username`;
- 
-//       const insertReq = transaction
-//         .request()
-//         .input("docNo", mssql.NVarChar(10), documentNumber)
-//         .input("company", mssql.NVarChar(10), company.trim())
-//         .input("customer", mssql.NVarChar(20), customer.trim())
-//         .input("cash", mssql.Money, cashCents / 100)
-//         .input("credit", mssql.Money, creditCents / 100);
-//       if (hasTRUSER) insertReq.input("username", mssql.NVarChar(50), username);
- 
-//       const insertResult = await insertReq.query(insertQuery);
-//       const itemsSaved = insertResult.rowsAffected[0];
- 
-//       // ============ CLEAR TEMP TABLE ============
-//       let deleteQuery = `DELETE FROM tb_InvoiceTemp WHERE COMPANY_CODE = @company AND CUSTOMER_CODE = @customer`;
-//       if (hasTRUSER) deleteQuery += ` AND TRUSER = @username`;
- 
-//       const deleteReq = transaction
-//         .request()
-//         .input("company", mssql.NVarChar(10), company.trim())
-//         .input("customer", mssql.NVarChar(20), customer.trim());
-//       if (hasTRUSER) deleteReq.input("username", mssql.NVarChar(50), username);
- 
-//       await deleteReq.query(deleteQuery);
- 
-//       await transaction.commit();
- 
-//       console.log(
-//         `Invoice saved! Company: ${company}, Document No: ${documentNumber}, Items: ${itemsSaved}, Cash: ${cashCents / 100}, Credit: ${creditCents / 100}`,
-//       );
- 
-//       return res.status(200).json({
-//         saved: 1,
-//         message: "Invoice saved successfully",
-//         itemsSaved,
-//         invoiceNumber: currentInvoiceNo,
-//         documentNumber,
-//         companyCode: company,
-//         cashAmount: cashCents / 100,
-//         creditAmount: creditCents / 100,
-//       });
-//     } catch (innerError) {
-//       if (transaction) await transaction.rollback();
-//       throw innerError;
-//     }
-//   } catch (error) {
-//     console.error("=== SAVE INVOICE ERROR ===", error);
-//     return res.status(500).json({
-//       saved: 0,
-//       message: "Failed to save invoice",
-//       error: error.message,
-//     });
-//   } finally {
-//     if (pool)
-//       try {
-//         await pool.close();
-//       } catch (e) {}
-//   }
-// };
-
 
 // POST - Save invoice
 //   * Cash + Credit must equal the SALES total (refund lines are NOT part of the payment)
