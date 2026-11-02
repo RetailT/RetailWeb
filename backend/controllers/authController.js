@@ -9448,6 +9448,7 @@ exports.createCustomer = async (req, res) => {
     const address = clean(body.address, 1000);
     const email = clean(body.email, 50);
     const idNo = clean(body.idNo, 12).toUpperCase();
+    const location = clean(body.location, 100);
 
     // ---------- validation ----------
     if (!customerName) {
@@ -9477,6 +9478,15 @@ exports.createCustomer = async (req, res) => {
     }
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
       return res.status(400).json({ message: "Email address is not valid" });
+    }
+    // Location (optional): "lat,lng" e.g. 6.5854000,79.9607000
+    if (location) {
+      const m = /^(-?\d{1,3}(?:\.\d+)?),\s*(-?\d{1,3}(?:\.\d+)?)$/.exec(location);
+      const lat = m ? parseFloat(m[1]) : NaN;
+      const lng = m ? parseFloat(m[2]) : NaN;
+      if (!m || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+        return res.status(400).json({ message: "Location is not valid" });
+      }
     }
     if (String(body.address || "").trim().length > 1000) {
       return res
@@ -9606,6 +9616,7 @@ exports.createCustomer = async (req, res) => {
         ["CITY", mssql.NVarChar(500), ""],
         ["SHIPPING_ADDRESS", mssql.NVarChar(1000), address],
         ["LOCK_CUSTOMER", mssql.Char(1), DEF.FLAG_NO],
+        ["LOCATION", mssql.NVarChar(100), location],   // <-- NEW
         ["INSERT_TIME", null, { sql: NOW_SQL }],
       ];
 

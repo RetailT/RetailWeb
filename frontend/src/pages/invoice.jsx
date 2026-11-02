@@ -9,7 +9,7 @@ import axios from "axios";
 import { jwtDecode } from "jwt-decode";
 import { toast, Toaster } from "react-hot-toast";
 import BarcodeScannerComponent from "react-qr-barcode-scanner";
-import { CameraOff, ChevronDown, Plus, X } from "lucide-react";
+import { CameraOff, ChevronDown, Plus, X, LocateFixed } from "lucide-react";
 
 // ---------- Payment helpers (outside component) ----------
 // Work in cents to avoid floating point errors (0.1 + 0.2 !== 0.3)
@@ -41,6 +41,7 @@ const EMPTY_NEW_CUSTOMER = {
   address: "",
   email: "",
   idNo: "",
+  location: "", // "lat,lng"  e.g. 6.5854000,79.9607000
 };
 
 function App() {
@@ -111,6 +112,8 @@ function App() {
   const [newCustomerErrors, setNewCustomerErrors] = useState({});
   const [newCustomerServerError, setNewCustomerServerError] = useState("");
   const [savingCustomer, setSavingCustomer] = useState(false);
+  // true while the browser is fetching the current GPS location
+  const [gettingLocation, setGettingLocation] = useState(false);
 
   // ---------- Promotion (quantity-tier discount) state ----------
   // Tiers of the selected product from POSBACK_SYSTEM.tb_PROMOTION, e.g.
@@ -399,6 +402,7 @@ function App() {
     });
     setNewCustomerErrors({});
     setNewCustomerServerError("");
+    setGettingLocation(false);
     setShowCustomerSuggestions(false);
     setShowNewCustomer(true);
   };
@@ -409,6 +413,7 @@ function App() {
     setNewCustomer(EMPTY_NEW_CUSTOMER);
     setNewCustomerErrors({});
     setNewCustomerServerError("");
+    setGettingLocation(false);
   };
 
   const handleNewCustomerChange = (field, value) => {
@@ -421,6 +426,43 @@ function App() {
       setNewCustomerErrors((prev) => ({ ...prev, [field]: "" }));
     }
     if (newCustomerServerError) setNewCustomerServerError("");
+  };
+
+  // ---------- Current location (browser GPS) ----------
+  // NOTE: navigator.geolocation only works on HTTPS (or localhost).
+  const handleSetCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setNewCustomerErrors((prev) => ({
+        ...prev,
+        location: "This browser does not support location.",
+      }));
+      return;
+    }
+
+    setGettingLocation(true);
+    setNewCustomerErrors((prev) => ({ ...prev, location: "" }));
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude.toFixed(7);
+        const lng = pos.coords.longitude.toFixed(7);
+        setNewCustomer((prev) => ({ ...prev, location: `${lat},${lng}` }));
+        setGettingLocation(false);
+      },
+      (err) => {
+        let msg = "Could not get the current location.";
+        if (err.code === 1) {
+          msg = "Location permission denied. Allow location access in the browser.";
+        } else if (err.code === 2) {
+          msg = "Location is not available on this device.";
+        } else if (err.code === 3) {
+          msg = "Getting the location timed out. Try again.";
+        }
+        setNewCustomerErrors((prev) => ({ ...prev, location: msg }));
+        setGettingLocation(false);
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
   };
 
   const validateNewCustomer = () => {
@@ -477,6 +519,7 @@ function App() {
       e.stopPropagation();
     }
     if (savingCustomer) return;
+    if (gettingLocation) return; // wait until the location is ready
     if (!validateNewCustomer()) return;
 
     try {
@@ -491,6 +534,7 @@ function App() {
           address: newCustomer.address.trim(),
           email: newCustomer.email.trim(),
           idNo: newCustomer.idNo.trim().toUpperCase(),
+          location: newCustomer.location.trim(),
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -3017,6 +3061,59 @@ function App() {
                 )}
               </div>
 
+              {/* Current location */}
+              <div>
+                <label className="block mb-1 text-sm font-medium text-gray-700">
+                  Location
+                </label>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <button
+                    type="button"
+                    onClick={handleSetCurrentLocation}
+                    disabled={gettingLocation || savingCustomer}
+                    className={`flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-[#bc4a17] border border-[#bc4a17] rounded-md hover:bg-orange-50 transition whitespace-nowrap ${
+                      gettingLocation ? "opacity-60 cursor-not-allowed" : ""
+                    }`}
+                  >
+                    <LocateFixed size={16} />
+                    {gettingLocation
+                      ? "Getting location..."
+                      : newCustomer.location
+                      ? "Update location"
+                      : "Set current location"}
+                  </button>
+
+                  {newCustomer.location && (
+                    <div className="flex items-center flex-1 min-w-0 gap-2">
+                      <a
+                        href={`https://www.google.com/maps?q=${newCustomer.location}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-blue-600 truncate hover:underline"
+                        title="Open in Google Maps"
+                      >
+                        {newCustomer.location}
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setNewCustomer((prev) => ({ ...prev, location: "" }))
+                        }
+                        className="p-1 text-gray-500 rounded hover:text-gray-800 hover:bg-gray-100"
+                        aria-label="Clear location"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {newCustomerErrors.location && (
+                  <p className="mt-1 text-xs text-red-600">
+                    {newCustomerErrors.location}
+                  </p>
+                )}
+              </div>
+
               <div>
                 <label
                   htmlFor="newCustEmail"
@@ -3066,9 +3163,11 @@ function App() {
               </button>
               <button
                 type="submit"
-                disabled={savingCustomer}
+                disabled={savingCustomer || gettingLocation}
                 className={`px-6 py-2.5 text-sm font-medium text-white bg-black rounded-md shadow hover:bg-gray-800 transition ${
-                  savingCustomer ? "opacity-60 cursor-not-allowed" : ""
+                  savingCustomer || gettingLocation
+                    ? "opacity-60 cursor-not-allowed"
+                    : ""
                 }`}
               >
                 {savingCustomer ? "Saving..." : "Save Customer"}
