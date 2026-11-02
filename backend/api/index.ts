@@ -10,7 +10,7 @@ const authController = require("../controllers/authController");
 const debugRoutes = require('../routes/debug');
 
 Object.keys(authController).length;
-const names = ["dashboardOptions","dashboardCustomerOptions","vendorOptions","productName","loadingDashboard","getTodayYesterdaySales","getSalesTrend","getBranchPerformance","getTopSalesProducts","getBranchTodayYesterdaySales","aiReportChat"];
+const names = ["dashboardOptions","dashboardCustomerOptions","vendorOptions","productName","loadingDashboard","getTodayYesterdaySales","getSalesTrend","getBranchPerformance","getTopSalesProducts","getBranchTodayYesterdaySales","aiReportChat", "createCustomer"];
 names.forEach((n) => { if (typeof authController[n] !== "function") console.log("MISSING:", n); });
 
 app.use(
@@ -107,6 +107,7 @@ app.post('/cashier-update', authenticateToken, authController.updateCashier);
 app.post('/run-dayend', authenticateToken, authController.runDayend);
 app.post('/manual-download', authenticateToken, authController.manualDownload);
 app.post('/ai-report-chat', authenticateToken, authController.aiReportChat);
+app.post('/create-customer', authenticateToken, authController.createCustomer);
 
 app.delete('/stock-update-delete', authenticateToken, authController.stockUpdateDelete);
 app.delete('/grnprn-delete', authenticateToken, authController.grnprnDelete);

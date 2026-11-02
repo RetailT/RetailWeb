@@ -9424,6 +9424,259 @@ exports.deleteInvoiceTempItem = async (req, res) => {
   }
 };
 
+
+// POST - Create a new customer (POSBACK_SYSTEM.dbo.tb_CUSTOMER)
+//   * CUSTOMER code is AUTO-GENERATED  (highest numeric code + 1, minimum 100001)
+//   * IDX is also generated             (highest IDX + 1)  - the column is NOT identity
+//   * NO column is left NULL: text -> '', numbers -> 0, dates -> today
+//   * Whole thing runs in ONE transaction with a table lock, so two cashiers
+//     saving at the same moment can never get the same customer code
+exports.createCustomer = async (req, res) => {
+  let pool = null;
+  let transaction = null;
+
+  try {
+    const body = req.body || {};
+    const username = String(req.user?.username || "").trim();
+
+    // ---------- helpers ----------
+    const clean = (v, max) => String(v ?? "").trim().slice(0, max);
+
+    // ---------- values typed by the cashier ----------
+    const customerName = clean(body.customerName, 500);
+    const mobileNo = clean(body.mobileNo, 10);
+    const address = clean(body.address, 1000);
+    const email = clean(body.email, 50);
+    const idNo = clean(body.idNo, 12).toUpperCase();
+
+    // ---------- validation ----------
+    if (!customerName) {
+      return res.status(400).json({ message: "Customer name is required" });
+    }
+    if (customerName.length < 2) {
+      return res
+        .status(400)
+        .json({ message: "Customer name must be at least 2 characters" });
+    }
+    if (!/[A-Za-z\u0D80-\u0DFF]/.test(customerName)) {
+      return res
+        .status(400)
+        .json({ message: "Customer name must contain letters" });
+    }
+    // Sri Lankan mobile: 10 digits starting with 07
+    if (mobileNo && !/^07[0-9]{8}$/.test(mobileNo)) {
+      return res.status(400).json({
+        message: "Enter a valid mobile number (07XXXXXXXX, 10 digits)",
+      });
+    }
+    // NIC: old format 9 digits + V/X, or new format 12 digits
+    if (idNo && !/^([0-9]{9}[VX]|[0-9]{12})$/.test(idNo)) {
+      return res.status(400).json({
+        message: "Enter a valid NIC (123456789V or 12 digits)",
+      });
+    }
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+      return res.status(400).json({ message: "Email address is not valid" });
+    }
+    if (String(body.address || "").trim().length > 1000) {
+      return res
+        .status(400)
+        .json({ message: "Address is too long (max 1000 characters)" });
+    }
+
+    // ---------- database ----------
+    const user_ip = String(req.user.ip).trim();
+    if (mssql.connected) await mssql.close();
+
+    pool = await connectToUserDatabase(user_ip, req.user.port.trim());
+    if (!pool || !pool.connected) {
+      return res.status(500).json({ message: "Database connection failed" });
+    }
+
+    transaction = pool.transaction();
+    await transaction.begin();
+
+    try {
+      // ---------- duplicate checks (same mobile / same NIC) ----------
+      if (mobileNo || idNo) {
+        const dupReq = transaction.request();
+        const conds = [];
+        if (mobileNo) {
+          dupReq.input("mobileNo", mssql.NVarChar(10), mobileNo);
+          conds.push("LTRIM(RTRIM(MOBILENO)) = @mobileNo");
+        }
+        if (idNo) {
+          dupReq.input("idNo", mssql.NVarChar(30), idNo);
+          conds.push("UPPER(LTRIM(RTRIM(IDNO))) = @idNo");
+        }
+        const dupRes = await dupReq.query(`
+          SELECT TOP 1 CUSTOMER, CUSTOMER_NAME, MOBILENO, IDNO
+          FROM [${posback}].dbo.tb_CUSTOMER WITH (UPDLOCK, HOLDLOCK)
+          WHERE ${conds.join(" OR ")}
+        `);
+
+        if (dupRes.recordset.length > 0) {
+          const d = dupRes.recordset[0];
+          const sameMobile =
+            mobileNo && String(d.MOBILENO || "").trim() === mobileNo;
+          await transaction.rollback();
+          return res.status(409).json({
+            success: false,
+            message: `${
+              sameMobile ? "This mobile number" : "This NIC number"
+            } already belongs to customer ${String(d.CUSTOMER).trim()} - ${String(
+              d.CUSTOMER_NAME || ""
+            ).trim()}`,
+          });
+        }
+      }
+
+      // ---------- next customer code + next IDX ----------
+      // Only purely numeric codes are used to find the highest code
+      // (a code like "ABC01" is ignored). UPDLOCK + HOLDLOCK keeps the table
+      // locked until commit, so nobody else can take the same number.
+      const maxRes = await transaction.request().query(`
+        SELECT
+          ISNULL(MAX(CASE
+                       WHEN LTRIM(RTRIM(CUSTOMER)) NOT LIKE '%[^0-9]%'
+                        AND LEN(LTRIM(RTRIM(CUSTOMER))) BETWEEN 1 AND 15
+                       THEN CAST(LTRIM(RTRIM(CUSTOMER)) AS BIGINT)
+                     END), 0) AS maxCode,
+          ISNULL(MAX(IDX), 0) AS maxIdx
+        FROM [${posback}].dbo.tb_CUSTOMER WITH (UPDLOCK, HOLDLOCK)
+      `);
+
+      const FIRST_CODE = 100001;
+      const maxCode = Number(maxRes.recordset[0].maxCode) || 0;
+      const maxIdx = Number(maxRes.recordset[0].maxIdx) || 0;
+
+      const nextCode = Math.max(maxCode + 1, FIRST_CODE);
+      const nextIdx = maxIdx + 1;
+      const customerCode = String(nextCode);
+
+      // ---------- default values (NOTHING is NULL) ----------
+      // Change these here if your POS needs different default values.
+      const DEF = {
+        TYPE: "", // customer type
+        CUSTTYPE: "",
+        COMPANY_CODE: "",
+        FLAG_NO: "F", // BACK / CHK / LOCK_CUSTOMER  ('F' = No)
+      };
+
+      const TODAY_SQL = "CONVERT(DATETIME, CONVERT(VARCHAR(10), GETDATE(), 120), 120)";
+      const NOW_SQL = "GETDATE()";
+
+      // [column, sql type, value]   (value { sql: "..." } is written straight into the query)
+      const row = [
+        ["IDXS", mssql.Numeric(18, 0), 0],
+        ["CUSTOMER", mssql.NVarChar(50), customerCode],
+        ["CUSTOMER_NAME", mssql.NVarChar(500), customerName],
+        ["TYPE", mssql.NVarChar(30), DEF.TYPE],
+        ["CREDITLIMIT", mssql.Money, 0],
+        ["CREDITPERIOD", mssql.Numeric(10, 0), 0],
+        ["BALANCE", mssql.Money, 0],
+        ["COMPANYNAME", mssql.NVarChar(50), ""],
+        ["CUSTOMER_NAMESINHALA", mssql.NVarChar(50), ""],
+        ["ADDRESS", mssql.NVarChar(1000), address],
+        ["PHONENO1", mssql.NVarChar(15), ""],
+        ["PHONENO2", mssql.NVarChar(10), ""],
+        ["MOBILENO", mssql.NVarChar(10), mobileNo],
+        ["FAXNO", mssql.NVarChar(15), ""],
+        ["IDNO", mssql.NVarChar(30), idNo],
+        ["EMAIL", mssql.NVarChar(50), email],
+        ["WEB", mssql.NVarChar(50), ""],
+        ["AREACODE", mssql.Char(10), ""],
+        ["TOWNCODE", mssql.Char(10), ""],
+        ["NBTNO", mssql.NVarChar(50), ""],
+        ["VATNO", mssql.NVarChar(50), ""],
+        ["CRUSER", mssql.NVarChar(50), username],
+        ["EDITUSER", mssql.NVarChar(50), ""],
+        ["CRDATE", null, { sql: TODAY_SQL }],
+        ["EDITDATE", null, { sql: TODAY_SQL }],
+        ["CRTIME", null, { sql: NOW_SQL }],
+        ["EDITTIME", null, { sql: NOW_SQL }],
+        ["BACK", mssql.Char(1), DEF.FLAG_NO],
+        ["CHK", mssql.Char(1), DEF.FLAG_NO],
+        ["COMPANY_CODE", mssql.Char(10), DEF.COMPANY_CODE],
+        ["CUSTTYPE", mssql.NVarChar(50), DEF.CUSTTYPE],
+        ["ACCOUNTNO", mssql.NVarChar(50), ""],
+        ["BANK_CODE", mssql.NVarChar(50), ""],
+        ["BRANCH_CODE", mssql.NVarChar(50), ""],
+        ["BRANCH_NAME", mssql.NVarChar(50), ""],
+        ["CITY", mssql.NVarChar(500), ""],
+        ["SHIPPING_ADDRESS", mssql.NVarChar(1000), address],
+        ["LOCK_CUSTOMER", mssql.Char(1), DEF.FLAG_NO],
+        ["INSERT_TIME", null, { sql: NOW_SQL }],
+      ];
+
+      const insertReq = transaction.request();
+      const colList = [];
+      const valList = [];
+
+      row.forEach(([col, type, value], i) => {
+        colList.push(col);
+        if (value && typeof value === "object" && value.sql) {
+          valList.push(value.sql);
+        } else {
+          insertReq.input(`p${i}`, type, value);
+          valList.push(`@p${i}`);
+        }
+      });
+
+      await insertReq.query(`
+        INSERT INTO [${posback}].dbo.tb_CUSTOMER
+        (${colList.join(", ")})
+        VALUES (${valList.join(", ")})
+      `);
+
+      await transaction.commit();
+
+      console.log(
+        `Customer created: ${customerCode} - ${customerName} (by ${username})`
+      );
+
+      return res.status(201).json({
+        success: true,
+        message: "Customer created successfully",
+        customer: {
+          code: customerCode,
+          name: customerName,
+        },
+      });
+    } catch (innerError) {
+      if (transaction) {
+        try {
+          await transaction.rollback();
+        } catch (e) {}
+      }
+      throw innerError;
+    }
+  } catch (error) {
+    console.error("=== CREATE CUSTOMER ERROR ===", error);
+
+    // 2627 / 2601 = duplicate key
+    if (error.number === 2627 || error.number === 2601) {
+      return res.status(409).json({
+        success: false,
+        message: "Customer code already exists. Please try again.",
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to create customer",
+      error: error.message,
+    });
+  } finally {
+    if (pool) {
+      try {
+        await pool.close();
+      } catch (e) {}
+    }
+  }
+};
+
+
 // GRN/PRN/TOG table for scan page
 exports.grnprnTableData = async (req, res) => {
   const { name, code, selectedType } = req.query;

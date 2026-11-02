@@ -9,7 +9,7 @@ import axios from "axios";
 import { jwtDecode } from "jwt-decode";
 import { toast, Toaster } from "react-hot-toast";
 import BarcodeScannerComponent from "react-qr-barcode-scanner";
-import { CameraOff, ChevronDown } from "lucide-react";
+import { CameraOff, ChevronDown, Plus, X } from "lucide-react";
 
 // ---------- Payment helpers (outside component) ----------
 // Work in cents to avoid floating point errors (0.1 + 0.2 !== 0.3)
@@ -33,6 +33,15 @@ const sanitizeAmount = (val) => {
 const amilaFaceCss = () =>
   `@font-face{font-family:"AMILA";src:local("AMILA"),url("${window.location.origin}/fonts/AMILA.ttf") format("truetype");font-display:swap;}`;
 const SINHALA_FONT = '"AMILA", sans-serif';
+
+// ---------- New customer form (empty values) ----------
+const EMPTY_NEW_CUSTOMER = {
+  customerName: "",
+  mobileNo: "",
+  address: "",
+  email: "",
+  idNo: "",
+};
 
 function App() {
   const { authToken } = useContext(AuthContext);
@@ -95,6 +104,13 @@ function App() {
   const [customerSearch, setCustomerSearch] = useState("");
   const [filteredCustomers, setFilteredCustomers] = useState([]);
   const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
+
+  // ---------- New customer (popup) state ----------
+  const [showNewCustomer, setShowNewCustomer] = useState(false);
+  const [newCustomer, setNewCustomer] = useState(EMPTY_NEW_CUSTOMER);
+  const [newCustomerErrors, setNewCustomerErrors] = useState({});
+  const [newCustomerServerError, setNewCustomerServerError] = useState("");
+  const [savingCustomer, setSavingCustomer] = useState(false);
 
   // ---------- Promotion (quantity-tier discount) state ----------
   // Tiers of the selected product from POSBACK_SYSTEM.tb_PROMOTION, e.g.
@@ -226,6 +242,7 @@ function App() {
   const saveButtonRef = useRef(null);
   const cashRef = useRef(null);
   const creditRef = useRef(null);
+  const newCustomerNameRef = useRef(null);
   // true = the cashier typed the discount himself -> the promotion must NOT override it
   const discountManualRef = useRef(false);
 
@@ -361,9 +378,161 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toCents(payableTotal)]);
 
+  // ---------- New customer popup: focus the name field when it opens ----------
+  useEffect(() => {
+    if (showNewCustomer) {
+      const t = setTimeout(() => newCustomerNameRef.current?.focus(), 50);
+      return () => clearTimeout(t);
+    }
+  }, [showNewCustomer]);
+
   if (!authToken) {
     return <Navigate to="/login" replace />;
   }
+
+  // ---------- New customer handlers ----------
+  const openNewCustomer = () => {
+    setNewCustomer({
+      ...EMPTY_NEW_CUSTOMER,
+      // whatever the cashier already typed in the customer box becomes the name
+      customerName: selectedCustomer ? "" : customerSearch.trim(),
+    });
+    setNewCustomerErrors({});
+    setNewCustomerServerError("");
+    setShowCustomerSuggestions(false);
+    setShowNewCustomer(true);
+  };
+
+  const closeNewCustomer = () => {
+    if (savingCustomer) return;
+    setShowNewCustomer(false);
+    setNewCustomer(EMPTY_NEW_CUSTOMER);
+    setNewCustomerErrors({});
+    setNewCustomerServerError("");
+  };
+
+  const handleNewCustomerChange = (field, value) => {
+    let v = value;
+    if (field === "mobileNo") v = v.replace(/[^0-9]/g, "").slice(0, 10);
+    // NIC: old format 123456789V (9 digits + V/X) or new format 12 digits
+    if (field === "idNo") v = v.replace(/[^0-9vVxX]/g, "").toUpperCase().slice(0, 12);
+    setNewCustomer((prev) => ({ ...prev, [field]: v }));
+    if (newCustomerErrors[field]) {
+      setNewCustomerErrors((prev) => ({ ...prev, [field]: "" }));
+    }
+    if (newCustomerServerError) setNewCustomerServerError("");
+  };
+
+  const validateNewCustomer = () => {
+    const errs = {};
+    const name = newCustomer.customerName.trim();
+    const mobile = newCustomer.mobileNo.trim();
+    const nic = newCustomer.idNo.trim().toUpperCase();
+    const email = newCustomer.email.trim();
+    const address = newCustomer.address.trim();
+
+    // Name: required, at least 2 characters, must contain a letter
+    if (!name) {
+      errs.customerName = "Customer name is required.";
+    } else if (name.length < 2) {
+      errs.customerName = "Customer name must be at least 2 characters.";
+    } else if (!/[A-Za-z\u0D80-\u0DFF]/.test(name)) {
+      errs.customerName = "Customer name must contain letters.";
+    }
+
+    // Mobile (optional): Sri Lankan mobile, 10 digits starting with 07
+    if (mobile && !/^07[0-9]{8}$/.test(mobile)) {
+      errs.mobileNo = "Enter a valid mobile number (07XXXXXXXX, 10 digits).";
+    }
+
+    // NIC (optional): 9 digits + V/X, or 12 digits
+    if (nic && !/^([0-9]{9}[VX]|[0-9]{12})$/.test(nic)) {
+      errs.idNo = "Enter a valid NIC (123456789V or 12 digits).";
+    }
+
+    // Email (optional)
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+      errs.email = "Email address is not valid.";
+    }
+
+    if (address.length > 1000) {
+      errs.address = "Address is too long (max 1000 characters).";
+    }
+
+    setNewCustomerErrors(errs);
+
+    // focus the first field that has an error
+    if (errs.customerName) document.getElementById("newCustName")?.focus();
+    else if (errs.mobileNo) document.getElementById("newCustMobile")?.focus();
+    else if (errs.idNo) document.getElementById("newCustIdNo")?.focus();
+    else if (errs.email) document.getElementById("newCustEmail")?.focus();
+    else if (errs.address) document.getElementById("newCustAddress")?.focus();
+
+    return Object.keys(errs).length === 0;
+  };
+
+  const handleSaveNewCustomer = async (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (savingCustomer) return;
+    if (!validateNewCustomer()) return;
+
+    try {
+      setSavingCustomer(true);
+      setNewCustomerServerError("");
+
+      const response = await axios.post(
+        `${process.env.REACT_APP_BACKEND_URL}create-customer`,
+        {
+          customerName: newCustomer.customerName.trim(),
+          mobileNo: newCustomer.mobileNo.trim(),
+          address: newCustomer.address.trim(),
+          email: newCustomer.email.trim(),
+          idNo: newCustomer.idNo.trim().toUpperCase(),
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (response.data?.success && response.data.customer) {
+        const created = {
+          code: String(response.data.customer.code).trim(),
+          name: String(response.data.customer.name).trim(),
+        };
+
+        // add to the dropdown list without reloading everything
+        setCustomers((prev) => [
+          ...prev.filter((c) => c.code !== created.code),
+          created,
+        ]);
+
+        // select it straight away
+        handleCustomerSelect(created);
+
+        setShowNewCustomer(false);
+        setNewCustomer(EMPTY_NEW_CUSTOMER);
+        setNewCustomerErrors({});
+
+        setAlert({
+          message: `Customer created: ${created.code} ${created.name}`,
+          type: "success",
+        });
+        setTimeout(() => setAlert(null), 4000);
+      } else {
+        setNewCustomerServerError(
+          response.data?.message || "Failed to create customer"
+        );
+      }
+    } catch (err) {
+      console.error("Create customer failed:", err);
+      setNewCustomerServerError(
+        err.response?.data?.message || "Failed to create customer"
+      );
+    } finally {
+      setSavingCustomer(false);
+    }
+  };
 
   // ---------- Payment handlers ----------
   const handleMethodChange = (e) => {
@@ -728,12 +897,12 @@ function App() {
 
     try {
       setDisable(true);
-      await fetchStockData({
-        companyCode: selectedCompany,
-        companyName: selectedCompanyName,
-        customerCode: selectedCustomer,
-        customerName: selectedCustomerName,
-      });
+      // await fetchStockData({
+      //   companyCode: selectedCompany,
+      //   companyName: selectedCompanyName,
+      //   customerCode: selectedCustomer,
+      //   customerName: selectedCustomerName,
+      // });
 
       setInitialData(true);
       setHasCameraPermission(true);
@@ -1774,81 +1943,97 @@ function App() {
                     )}
                   </div>
 
-                  {/* Customer Search with Autocomplete */}
+                  {/* Customer Search with Autocomplete + New Customer button */}
                   <div className="flex flex-col flex-1 min-w-[240px]">
                     <label className="text-sm font-medium text-gray-700 mb-1.5">
                       Select a Customer
                     </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        id="customer-select"
-                        value={customerSearch}
-                        onChange={handleCustomerSearch}
-                        onFocus={() => setShowCustomerSuggestions(true)}
-                        onClick={() => setShowCustomerSuggestions(true)}
-                        onKeyDown={handleCustomerInputKeyDown}
-                        onBlur={() =>
-                          setTimeout(() => setShowCustomerSuggestions(false), 200)
-                        }
-                        placeholder="Select or search customer..."
-                        className="w-full p-2.5 pr-9 text-sm bg-white border border-gray-300 rounded-md focus:outline-none"
-                        autoComplete="off"
-                      />
+                    <div className="flex items-stretch gap-2">
+                      <div className="relative flex-1 min-w-0">
+                        <input
+                          type="text"
+                          id="customer-select"
+                          value={customerSearch}
+                          onChange={handleCustomerSearch}
+                          onFocus={() => setShowCustomerSuggestions(true)}
+                          onClick={() => setShowCustomerSuggestions(true)}
+                          onKeyDown={handleCustomerInputKeyDown}
+                          onBlur={() =>
+                            setTimeout(() => setShowCustomerSuggestions(false), 200)
+                          }
+                          placeholder="Select or search customer..."
+                          className="w-full p-2.5 pr-9 text-sm bg-white border border-gray-300 rounded-md focus:outline-none"
+                          autoComplete="off"
+                        />
 
-                      {/* Dropdown arrow */}
+                        {/* Dropdown arrow */}
+                        <button
+                          type="button"
+                          tabIndex={-1}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            setShowCustomerSuggestions((prev) => !prev);
+                            document.getElementById("customer-select")?.focus();
+                          }}
+                          className="absolute inset-y-0 right-0 flex items-center px-2.5 text-gray-500 hover:text-gray-700"
+                          aria-label="Toggle customer list"
+                        >
+                          <ChevronDown size={18} />
+                        </button>
+
+                        {showCustomerSuggestions && displayedCustomers.length > 0 && (
+                          <ul className="absolute z-50 w-full mt-1 overflow-y-auto bg-white border border-gray-300 rounded-md shadow-lg max-h-52 top-full">
+                            {displayedCustomers.map((customer) => (
+                              <li
+                                key={customer.code}
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  handleCustomerSelect(customer);
+                                }}
+                                className={`p-2.5 text-sm cursor-pointer hover:bg-gray-100 border-b border-gray-100 last:border-b-0 flex justify-between items-center ${
+                                  selectedCustomer === customer.code
+                                    ? "bg-gray-100 font-medium"
+                                    : ""
+                                }`}
+                              >
+                                <span>{customer.name}</span>
+                                <span className="ml-2 text-xs text-gray-400">
+                                  {customer.code}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+
+                        {showCustomerSuggestions &&
+                          customers.length === 0 && (
+                            <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg p-2.5 text-sm text-gray-500 top-full">
+                              No customers loaded
+                            </div>
+                          )}
+
+                        {showCustomerSuggestions &&
+                          customers.length > 0 &&
+                          displayedCustomers.length === 0 && (
+                            <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg p-2.5 text-sm text-gray-500 top-full">
+                              No customers found
+                            </div>
+                          )}
+                      </div>
+
+                      {/* New customer button */}
                       <button
                         type="button"
-                        tabIndex={-1}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          setShowCustomerSuggestions((prev) => !prev);
-                          document.getElementById("customer-select")?.focus();
-                        }}
-                        className="absolute inset-y-0 right-0 flex items-center px-2.5 text-gray-500 hover:text-gray-700"
-                        aria-label="Toggle customer list"
+                        onClick={openNewCustomer}
+                        disabled={disable}
+                        title="Create a new customer"
+                        className={`flex items-center justify-center gap-1 px-3 text-sm font-medium text-white bg-[#f17e21] hover:bg-[#efa05f] rounded-md shadow transition whitespace-nowrap ${
+                          disable ? "opacity-60 cursor-not-allowed" : ""
+                        }`}
                       >
-                        <ChevronDown size={18} />
+                        <Plus size={16} />
+                        New Customer
                       </button>
-
-                      {showCustomerSuggestions && displayedCustomers.length > 0 && (
-                        <ul className="absolute z-50 w-full mt-1 overflow-y-auto bg-white border border-gray-300 rounded-md shadow-lg max-h-52 top-full">
-                          {displayedCustomers.map((customer) => (
-                            <li
-                              key={customer.code}
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                handleCustomerSelect(customer);
-                              }}
-                              className={`p-2.5 text-sm cursor-pointer hover:bg-gray-100 border-b border-gray-100 last:border-b-0 flex justify-between items-center ${
-                                selectedCustomer === customer.code
-                                  ? "bg-gray-100 font-medium"
-                                  : ""
-                              }`}
-                            >
-                              <span>{customer.name}</span>
-                              <span className="ml-2 text-xs text-gray-400">
-                                {customer.code}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-
-                      {showCustomerSuggestions &&
-                        customers.length === 0 && (
-                          <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg p-2.5 text-sm text-gray-500 top-full">
-                            No customers loaded
-                          </div>
-                        )}
-
-                      {showCustomerSuggestions &&
-                        customers.length > 0 &&
-                        displayedCustomers.length === 0 && (
-                          <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg p-2.5 text-sm text-gray-500 top-full">
-                            No customers found
-                          </div>
-                        )}
                     </div>
                     {customerError && (
                       <p className="mt-1.5 text-sm text-red-600">{customerError}</p>
@@ -2672,6 +2857,226 @@ function App() {
           )}
         </div>
       </div>
+
+      {/* ---------- NEW CUSTOMER POPUP ---------- */}
+      {showNewCustomer && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-3 bg-black/50"
+          onMouseDown={(e) => {
+            // click on the dark background closes the popup
+            if (e.target === e.currentTarget) closeNewCustomer();
+          }}
+        >
+          <form
+            onSubmit={handleSaveNewCustomer}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") closeNewCustomer();
+            }}
+            className="w-full max-w-lg max-h-[92vh] overflow-y-auto bg-white rounded-lg shadow-xl"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+              <div>
+                <h3 className="text-lg font-semibold text-[#bc4a17]">
+                  New Customer
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={closeNewCustomer}
+                disabled={savingCustomer}
+                className="p-1 text-gray-500 rounded hover:text-gray-800 hover:bg-gray-100"
+                aria-label="Close"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Fields */}
+            <div className="px-5 py-4 space-y-3">
+              <div>
+                <label
+                  htmlFor="newCustName"
+                  className="block mb-1 text-sm font-medium text-gray-700"
+                >
+                  Customer Name <span className="text-red-600">*</span>
+                </label>
+                <input
+                  type="text"
+                  id="newCustName"
+                  ref={newCustomerNameRef}
+                  value={newCustomer.customerName}
+                  onChange={(e) =>
+                    handleNewCustomerChange("customerName", e.target.value)
+                  }
+                  maxLength={500}
+                  autoComplete="off"
+                  placeholder="Customer name"
+                  className={`w-full px-3 py-2 text-sm text-gray-700 bg-gray-100 border rounded-md focus:outline-none ${
+                    newCustomerErrors.customerName
+                      ? "border-red-500"
+                      : "border-gray-300"
+                  }`}
+                />
+                {newCustomerErrors.customerName && (
+                  <p className="mt-1 text-xs text-red-600">
+                    {newCustomerErrors.customerName}
+                  </p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label
+                    htmlFor="newCustMobile"
+                    className="block mb-1 text-sm font-medium text-gray-700"
+                  >
+                    Mobile No
+                  </label>
+                  <input
+                    type="text"
+                    id="newCustMobile"
+                    value={newCustomer.mobileNo}
+                    onChange={(e) =>
+                      handleNewCustomerChange("mobileNo", e.target.value)
+                    }
+                    inputMode="numeric"
+                    maxLength={10}
+                    autoComplete="off"
+                    placeholder="07XXXXXXXX"
+                    className={`w-full px-3 py-2 text-sm text-gray-700 bg-gray-100 border rounded-md focus:outline-none ${
+                      newCustomerErrors.mobileNo
+                        ? "border-red-500"
+                        : "border-gray-300"
+                    }`}
+                  />
+                  {newCustomerErrors.mobileNo && (
+                    <p className="mt-1 text-xs text-red-600">
+                      {newCustomerErrors.mobileNo}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="newCustIdNo"
+                    className="block mb-1 text-sm font-medium text-gray-700"
+                  >
+                    ID / NIC No
+                  </label>
+                  <input
+                    type="text"
+                    id="newCustIdNo"
+                    value={newCustomer.idNo}
+                    onChange={(e) =>
+                      handleNewCustomerChange("idNo", e.target.value)
+                    }
+                    maxLength={12}
+                    autoComplete="off"
+                    placeholder="123456789V or 12 digits"
+                    className={`w-full px-3 py-2 text-sm text-gray-700 bg-gray-100 border rounded-md focus:outline-none ${
+                      newCustomerErrors.idNo
+                        ? "border-red-500"
+                        : "border-gray-300"
+                    }`}
+                  />
+                  {newCustomerErrors.idNo && (
+                    <p className="mt-1 text-xs text-red-600">
+                      {newCustomerErrors.idNo}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="newCustAddress"
+                  className="block mb-1 text-sm font-medium text-gray-700"
+                >
+                  Address
+                </label>
+                <textarea
+                  id="newCustAddress"
+                  value={newCustomer.address}
+                  onChange={(e) =>
+                    handleNewCustomerChange("address", e.target.value)
+                  }
+                  rows={2}
+                  maxLength={1000}
+                  placeholder="Address"
+                  className={`w-full px-3 py-2 text-sm text-gray-700 bg-gray-100 border rounded-md focus:outline-none ${
+                    newCustomerErrors.address
+                      ? "border-red-500"
+                      : "border-gray-300"
+                  }`}
+                />
+                {newCustomerErrors.address && (
+                  <p className="mt-1 text-xs text-red-600">
+                    {newCustomerErrors.address}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label
+                  htmlFor="newCustEmail"
+                  className="block mb-1 text-sm font-medium text-gray-700"
+                >
+                  Email
+                </label>
+                <input
+                  type="text"
+                  id="newCustEmail"
+                  value={newCustomer.email}
+                  onChange={(e) =>
+                    handleNewCustomerChange("email", e.target.value)
+                  }
+                  maxLength={50}
+                  autoComplete="off"
+                  placeholder="name@example.com"
+                  className={`w-full px-3 py-2 text-sm text-gray-700 bg-gray-100 border rounded-md focus:outline-none ${
+                    newCustomerErrors.email
+                      ? "border-red-500"
+                      : "border-gray-300"
+                  }`}
+                />
+                {newCustomerErrors.email && (
+                  <p className="mt-1 text-xs text-red-600">
+                    {newCustomerErrors.email}
+                  </p>
+                )}
+              </div>
+
+              {newCustomerServerError && (
+                <p className="px-3 py-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md">
+                  {newCustomerServerError}
+                </p>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex flex-col-reverse gap-2 px-5 py-4 border-t border-gray-200 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={closeNewCustomer}
+                disabled={savingCustomer}
+                className="px-6 py-2.5 text-sm font-medium text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={savingCustomer}
+                className={`px-6 py-2.5 text-sm font-medium text-white bg-black rounded-md shadow hover:bg-gray-800 transition ${
+                  savingCustomer ? "opacity-60 cursor-not-allowed" : ""
+                }`}
+              >
+                {savingCustomer ? "Saving..." : "Save Customer"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
