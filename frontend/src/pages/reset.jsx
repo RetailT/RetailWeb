@@ -62,6 +62,7 @@ const Reset = () => {
   const [sVendor, setSVendor] = useState(false);
   const [cashierController, setCashierController] = useState(false);
   const [dayend, setDayend] = useState(false);
+  const [aiAssistant, setAiAssistant] = useState(false);
 
   const token = localStorage.getItem("authToken");
   const navigate = useNavigate();
@@ -194,6 +195,7 @@ useEffect(() => {
             d_sales_report: salesReport,
             d_invoice: invoice,
             d_productView: productView,
+            d_ai_assistant: aiAssistant,  
           },
         ],
         stock_wise: [
@@ -357,6 +359,7 @@ setNewCustomerID("");
             setSalesReport(user.d_sales_report === "T");
             setInvoice(user.d_invoice === "T");
             setProductView(user.d_productView === "T");
+            setAiAssistant(user.d_ai_assistant === "T");
             setScan(user.t_scan === "T");
             setTransInvoice(user.t_invoice === "T");
             setInvoicePreview(user.t_invoicePreview === "T");
@@ -406,6 +409,7 @@ setNewCustomerID("");
             setTransInvoice(false);
             setInvoicePreview(false);
             setProductView(false);
+            setAiAssistant(false);
             setScan(false);
             setStock(false);
             setStockUpdate(false);
@@ -454,6 +458,7 @@ setNewCustomerID("");
             setTransInvoice(false);
             setInvoicePreview(false);
             setProductView(false);
+            setAiAssistant(false);
             setScan(false);
             setStock(false);
             setStockUpdate(false);
@@ -817,6 +822,17 @@ const autoFill = (customerID) => {
                         />
                         <span className="text-sm text-gray-700">
                           Product View
+                        </span>
+                      </label>
+                      <label className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          checked={aiAssistant}
+                          onChange={(e) => setAiAssistant(e.target.checked)}
+                          className="w-4 h-4 sm:w-5 sm:h-5"
+                        />
+                        <span className="text-sm text-gray-700">
+                          AI Assistant
                         </span>
                       </label>
                     </div>
