@@ -899,6 +899,7 @@ exports.login = async (req, res) => {
         d_sales_report: user.d_sales_report,
         d_invoice: user.d_invoice,
         d_productView: user.d_productView,
+        d_ai_assistant: user.d_ai_assistant,
         t_scan: user.t_scan,
         t_stock: user.t_stock,
         t_invoice: user.t_invoice,
@@ -1022,8 +1023,8 @@ exports.register = async (req, res) => {
       .input("password", mssql.VarChar, hashedPassword).query(`
         USE [${posmain}];
         INSERT INTO tb_USERS (username, email, password, resetToken, resetTokenExpiry, ip_address, port, CUSTOMERID, a_permission,
-        a_sync, d_company, d_department, d_category, d_scategory, d_vendor, d_invoice, d_sales_report, d_productView, t_scan, t_invoice, t_invoicePreview, t_stock, t_grn, t_prn, t_tog, t_stock_update, u_cashier_controller, t_invoiceDesigner)
-        VALUES (@username, @email, @password, '', '', '', '', NULL, 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F','F', 'F','F', 'F','F', 'F', 'F', 'F', 'F', 'F', 'F', 'F')
+        a_sync, d_company, d_department, d_category, d_scategory, d_vendor, d_invoice, d_sales_report, d_productView, d_ai_assistant, t_scan, t_invoice, t_invoicePreview, t_stock, t_grn, t_prn, t_tog, t_stock_update, u_cashier_controller, t_invoiceDesigner)
+        VALUES (@username, @email, @password, '', '', '', '', NULL, 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F','F', 'F','F', 'F','F', 'F', 'F', 'F', 'F', 'F', 'F', 'F', 'F')
       `);
 
     return res.status(201).json({ message: "User added successfully" });
@@ -10246,6 +10247,7 @@ exports.findUserConnection = async (req, res) => {
         u.[d_sales_report],
         u.[d_invoice],
         u.[d_productView], 
+        u.[d_ai_assistant],
         u.[t_scan],
         u.[t_invoice],
         u.[t_invoicePreview],
@@ -10655,6 +10657,7 @@ exports.resetDatabaseConnection = async (req, res) => {
         "d_sales_report",
         "d_invoice",
         "d_productView",
+        "d_ai_assistant",
         "t_scan",
         "t_invoice",
         "t_invoicePreview",

@@ -606,7 +606,7 @@ const Dashboard = () => {
           </Panel>
 
           {/* AI Report Assistant */}
-          {/* <AiReportChat authToken={authToken} /> */}
+          <AiReportChat authToken={authToken} />
         </div>
       </div>
     </div>

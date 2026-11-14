@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { jwtDecode } from "jwt-decode";
 import axios from "axios";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -15,6 +16,7 @@ import {
 
 const SUGGESTIONS = [
   "Today's net sales by branch",
+  "Cash vs card sales today",
   "Top 10 products this month",
   "Compare this month vs last month",
   "Daily sales for the last 7 days",
@@ -25,7 +27,7 @@ const INTRO = {
   role: "assistant",
   intro: true,
   content:
-    "Hi! I can generate sales reports for you. Ask in plain English (or Sinhala), for example by branch, product, day, month or hour. Net sales = Sales - Returns.",
+    "Hi! I can generate sales reports for you. Ask in plain English (or Sinhala), for example by branch, product, day, month or hour. I can also show discounts, returns, VAT/NBT, and cash / card / non-cash sales.",
 };
 
 const DIM_LABEL = {
@@ -40,23 +42,94 @@ const fmtMoney = (n) =>
   Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtQty = (n) => Number(n || 0).toLocaleString("en-US", { maximumFractionDigits: 2 });
 
-// ---- PDF export ----
-const downloadPdf = (report) => {
-  const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
-  const margin = 40;
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
+// ---- which table columns to show ----
+const getColumns = (report) =>
+  report.mode === "product"
+    ? [
+        { key: "netSales", label: "Net Sales", fmt: fmtMoney, strong: true },
+        { key: "grossSales", label: "Gross", fmt: fmtMoney },
+        { key: "itemDiscount", label: "Discount", fmt: fmtMoney },
+        { key: "returnAmount", label: "Returns", fmt: fmtMoney, red: true },
+        { key: "netQty", label: "Net Qty", fmt: fmtQty },
+      ]
+    : [
+        { key: "netSales", label: "Net Sales", fmt: fmtMoney, strong: true },
+        { key: "grossSales", label: "Gross", fmt: fmtMoney },
+        { key: "totalDiscount", label: "Discount", fmt: fmtMoney },
+        { key: "returnAmount", label: "Returns", fmt: fmtMoney, red: true },
+        { key: "cashSales", label: "Cash", fmt: fmtMoney },
+        { key: "cardSales", label: "Card", fmt: fmtMoney },
+        { key: "nonCashSales", label: "Non-cash", fmt: fmtMoney },
+      ];
 
-  const period =
-    report.startDate === report.endDate
-      ? report.startDate
-      : `${report.startDate} to ${report.endDate}`;
-  const filters = [
-    report.branches.length ? `Branches: ${report.branches.join(", ")}` : "All branches",
+// ---- summary figures (totals) ----
+// Core items are always shown. Optional ones only when they are not zero.
+const getSummaryItems = (report) => {
+  const t = report.totals;
+  if (report.mode === "product") {
+    return [
+      { label: "Net Sales (Rs.)", value: fmtMoney(t.netSales) },
+      { label: "Gross Sales (Rs.)", value: fmtMoney(t.grossSales) },
+      { label: "Item Discount (Rs.)", value: fmtMoney(t.itemDiscount) },
+      { label: "Returns (Rs.)", value: fmtMoney(t.returnAmount) },
+      { label: "Net Qty", value: fmtQty(t.netQty) },
+      { label: "Returned Qty", value: fmtQty(t.returnQty) },
+    ];
+  }
+
+  const core = [
+    { label: "Net Sales (Rs.)", value: fmtMoney(t.netSales) },
+    { label: "Gross Sales (Rs.)", value: fmtMoney(t.grossSales) },
+    { label: "Item Discount (Rs.)", value: fmtMoney(t.itemDiscount) },
+    { label: "Subtotal Discount (Rs.)", value: fmtMoney(t.subDiscount) },
+    { label: `Returns (Rs.) [${fmtQty(t.returnCount)}]`, value: fmtMoney(t.returnAmount) },
+    { label: "Cash Sales (Rs.)", value: fmtMoney(t.cashSales) },
+    { label: "Card Sales (Rs.)", value: fmtMoney(t.cardSales) },
+    { label: "Non-cash Sales (Rs.)", value: fmtMoney(t.nonCashSales) },
+  ];
+  const optional = [
+    ["Gift Voucher Sales (Rs.)", t.giftVoucherSales],
+    ["Credit Note (Rs.)", t.creditNote],
+    ["Advance (Rs.)", t.advance],
+    ["VAT (Rs.)", t.vat],
+    ["NBT (Rs.)", t.nbt],
+    ["Service Charge (Rs.)", t.serviceCharge],
+    ["Bank Charge (Rs.)", t.bankCharge],
+    ["Round Up (Rs.)", t.roundUp],
+    ["Customer Payments (Rs.)", t.customerPayment],
+    ["  - in Cash (Rs.)", t.customerCashPayment],
+    ["  - Credit (Rs.)", t.customerCreditPayment],
+    ["Paid Out (Rs.)", t.paidOut],
+  ]
+    .filter(([, v]) => Number(v || 0) !== 0)
+    .map(([label, v]) => ({ label: label.trim(), value: fmtMoney(v) }));
+
+  return [...core, ...optional, { label: "Net Qty", value: fmtQty(t.netQty) }];
+};
+
+const periodText = (report) =>
+  report.startDate === report.endDate ? report.startDate : `${report.startDate} to ${report.endDate}`;
+
+const filterText = (report) =>
+  [
+    report.branches.length ? report.branches.join(", ") : "All branches",
     report.productSearch ? `Product: "${report.productSearch}"` : null,
   ]
     .filter(Boolean)
-    .join("  |  ");
+    .join(" | ");
+
+const isTopLimited = (report) =>
+  report.dimension !== "none" &&
+  report.rows.length >= report.topN &&
+  (report.dimension === "product" || report.dimension === "branch");
+
+// ---- PDF export ----
+const downloadPdf = (report) => {
+  const landscape = report.mode !== "product" && report.dimension !== "none";
+  const doc = new jsPDF({ orientation: landscape ? "landscape" : "portrait", unit: "pt", format: "a4" });
+  const margin = 40;
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
 
   // Header
   doc.setFont("helvetica", "bold");
@@ -67,32 +140,41 @@ const downloadPdf = (report) => {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.setTextColor(107, 114, 128);
-  doc.text(`Period: ${period}`, margin, 70);
-  doc.text(filters, margin, 85, { maxWidth: pageWidth - margin * 2 });
+  doc.text(`Period: ${periodText(report)}`, margin, 70);
+  doc.text(filterText(report).replace(/\|/g, "  |  "), margin, 85, {
+    maxWidth: pageWidth - margin * 2,
+  });
 
-  // Totals
   doc.setDrawColor(229, 231, 235);
   doc.line(margin, 100, pageWidth - margin, 100);
 
-  const totals = [
-    { label: "Net Sales (Rs.)", value: fmtMoney(report.totals.netSales), color: [234, 88, 12] },
-    { label: "Returns (Rs.)", value: fmtMoney(report.totals.returnAmount), color: [239, 68, 68] },
-    { label: "Net Qty", value: fmtQty(report.totals.netQty), color: [5, 150, 105] },
-  ];
-  const colWidth = (pageWidth - margin * 2) / totals.length;
-  totals.forEach((t, i) => {
-    const x = margin + i * colWidth;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.setTextColor(107, 114, 128);
-    doc.text(t.label, x, 122);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(15);
-    doc.setTextColor(...t.color);
-    doc.text(t.value, x, 142);
+  // Summary (4 columns: label, value, label, value)
+  const items = getSummaryItems(report);
+  const pairs = [];
+  for (let i = 0; i < items.length; i += 2) {
+    pairs.push([
+      items[i].label,
+      items[i].value,
+      items[i + 1] ? items[i + 1].label : "",
+      items[i + 1] ? items[i + 1].value : "",
+    ]);
+  }
+  autoTable(doc, {
+    body: pairs,
+    startY: 108,
+    margin: { left: margin, right: margin },
+    theme: "plain",
+    styles: { font: "helvetica", fontSize: 9, cellPadding: 3, textColor: [55, 65, 81] },
+    columnStyles: {
+      0: { textColor: [107, 114, 128] },
+      1: { halign: "right", fontStyle: "bold" },
+      2: { textColor: [107, 114, 128] },
+      3: { halign: "right", fontStyle: "bold" },
+    },
   });
 
-  doc.line(margin, 156, pageWidth - margin, 156);
+  let y = (doc.lastAutoTable?.finalY || 140) + 14;
+  doc.line(margin, y - 6, pageWidth - margin, y - 6);
 
   // Table
   if (report.dimension !== "none") {
@@ -100,38 +182,25 @@ const downloadPdf = (report) => {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(11);
       doc.setTextColor(107, 114, 128);
-      doc.text("No sales data for this period.", margin, 185);
+      doc.text("No sales data for this period.", margin, y + 14);
     } else {
+      const cols = getColumns(report);
       const hasCode = report.rows.some((r) => r.code);
-      const head = [
-        [
-          DIM_LABEL[report.dimension] || "Item",
-          ...(hasCode ? ["Code"] : []),
-          "Net Sales",
-          "Sales",
-          "Returns",
-          "Net Qty",
-        ],
-      ];
+      const head = [[DIM_LABEL[report.dimension] || "Item", ...(hasCode ? ["Code"] : []), ...cols.map((c) => c.label)]];
       const body = report.rows.map((r) => [
         r.label || "",
         ...(hasCode ? [r.code || ""] : []),
-        fmtMoney(r.netSales),
-        fmtMoney(r.salesAmount),
-        fmtMoney(r.returnAmount),
-        fmtQty(r.netQty),
+        ...cols.map((c) => c.fmt(r[c.key])),
       ]);
 
       const firstNumericCol = hasCode ? 2 : 1;
       const columnStyles = {};
-      for (let c = firstNumericCol; c < head[0].length; c++) {
-        columnStyles[c] = { halign: "right" };
-      }
+      for (let c = firstNumericCol; c < head[0].length; c++) columnStyles[c] = { halign: "right" };
 
       autoTable(doc, {
         head,
         body,
-        startY: 172,
+        startY: y,
         margin: { left: margin, right: margin, bottom: 50 },
         theme: "striped",
         styles: { font: "helvetica", fontSize: 9, cellPadding: 5, textColor: [55, 65, 81] },
@@ -139,14 +208,6 @@ const downloadPdf = (report) => {
         alternateRowStyles: { fillColor: [249, 250, 251] },
         columnStyles,
       });
-
-      if (
-        report.rows.length >= report.topN &&
-        (report.dimension === "product" || report.dimension === "branch")
-      ) {
-        // note about the TOP N limit goes in the footer line below
-        doc.setProperties({ subject: `Top ${report.topN} shown. Totals include all rows.` });
-      }
     }
   }
 
@@ -160,12 +221,7 @@ const downloadPdf = (report) => {
     doc.setTextColor(156, 163, 175);
     doc.text(`RTPOS AI Report Assistant | Generated ${generated}`, margin, pageHeight - 25);
     doc.text(`Page ${i} of ${pages}`, pageWidth - margin, pageHeight - 25, { align: "right" });
-    if (
-      i === pages &&
-      report.dimension !== "none" &&
-      report.rows.length >= report.topN &&
-      (report.dimension === "product" || report.dimension === "branch")
-    ) {
+    if (i === pages && isTopLimited(report)) {
       doc.text(
         `Showing the top ${report.topN}. Totals above include all rows.`,
         margin,
@@ -181,12 +237,15 @@ const downloadPdf = (report) => {
 // ---- One report (totals + table) ----
 const ReportCard = ({ report }) => {
   const hasCode = report.rows.some((r) => r.code);
-  const filters = [
-    report.branches.length ? report.branches.join(", ") : "All branches",
-    report.productSearch ? `Product: "${report.productSearch}"` : null,
-  ]
-    .filter(Boolean)
-    .join(" | ");
+  const cols = getColumns(report);
+  const items = getSummaryItems(report);
+  const headline = items.slice(0, 3);
+  const rest = items.slice(3);
+  const headlineStyles = [
+    { bg: "bg-orange-50", text: "text-orange-600" },
+    { bg: "bg-emerald-50", text: "text-emerald-600" },
+    { bg: "bg-red-50", text: "text-red-500" },
+  ];
 
   return (
     <div className="mt-3 overflow-hidden bg-white border border-gray-200 rounded-xl">
@@ -194,10 +253,7 @@ const ReportCard = ({ report }) => {
         <div className="min-w-0">
           <p className="text-sm font-bold text-gray-800 truncate">{report.title}</p>
           <p className="text-xs text-gray-400">
-            {report.startDate === report.endDate
-              ? report.startDate
-              : `${report.startDate} to ${report.endDate}`}{" "}
-            | {filters}
+            {periodText(report)} | {filterText(report)}
           </p>
         </div>
         <button
@@ -209,25 +265,29 @@ const ReportCard = ({ report }) => {
         </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 p-4">
-        <div className="p-3 rounded-lg bg-orange-50">
-          <p className="text-[11px] font-medium text-gray-400">Net Sales (Rs.)</p>
-          <p className="text-sm font-extrabold text-orange-600 sm:text-base">
-            {fmtMoney(report.totals.netSales)}
-          </p>
-        </div>
-        <div className="p-3 rounded-lg bg-red-50">
-          <p className="text-[11px] font-medium text-gray-400">Returns (Rs.)</p>
-          <p className="text-sm font-extrabold text-red-500 sm:text-base">
-            {fmtMoney(report.totals.returnAmount)}
-          </p>
-        </div>
-        <div className="p-3 rounded-lg bg-emerald-50">
-          <p className="text-[11px] font-medium text-gray-400">Net Qty</p>
-          <p className="text-sm font-extrabold text-emerald-600 sm:text-base">
-            {fmtQty(report.totals.netQty)}
-          </p>
-        </div>
+      {/* Headline figures */}
+      <div className="grid grid-cols-3 gap-3 p-4 pb-2">
+        {headline.map((it, i) => (
+          <div key={it.label} className={`p-3 rounded-lg ${headlineStyles[i].bg}`}>
+            <p className="text-[11px] font-medium text-gray-400">{it.label}</p>
+            <p className={`text-sm font-extrabold sm:text-base ${headlineStyles[i].text}`}>
+              {it.value}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {/* Other figures */}
+      <div className="grid grid-cols-2 gap-x-6 gap-y-1 px-4 pb-4 sm:grid-cols-3">
+        {rest.map((it) => (
+          <div
+            key={it.label}
+            className="flex items-center justify-between py-1 text-xs border-b border-gray-50"
+          >
+            <span className="text-gray-400">{it.label}</span>
+            <span className="font-semibold text-gray-700">{it.value}</span>
+          </div>
+        ))}
       </div>
 
       {report.dimension !== "none" && (
@@ -241,18 +301,14 @@ const ReportCard = ({ report }) => {
                   <th className="py-2 pr-3 font-semibold text-gray-400 whitespace-nowrap">
                     {DIM_LABEL[report.dimension]}
                   </th>
-                  <th className="py-2 pr-3 font-semibold text-right text-gray-400 whitespace-nowrap">
-                    Net Sales
-                  </th>
-                  <th className="py-2 pr-3 font-semibold text-right text-gray-400 whitespace-nowrap">
-                    Sales
-                  </th>
-                  <th className="py-2 pr-3 font-semibold text-right text-gray-400 whitespace-nowrap">
-                    Returns
-                  </th>
-                  <th className="py-2 font-semibold text-right text-gray-400 whitespace-nowrap">
-                    Net Qty
-                  </th>
+                  {cols.map((c) => (
+                    <th
+                      key={c.key}
+                      className="py-2 pr-3 font-semibold text-right text-gray-400 whitespace-nowrap"
+                    >
+                      {c.label}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -264,29 +320,36 @@ const ReportCard = ({ report }) => {
                         <span className="block text-[10px] text-gray-400">{r.code}</span>
                       )}
                     </td>
-                    <td className="py-2 pr-3 font-semibold text-right text-gray-800 whitespace-nowrap">
-                      {fmtMoney(r.netSales)}
-                    </td>
-                    <td className="py-2 pr-3 text-right text-gray-500 whitespace-nowrap">
-                      {fmtMoney(r.salesAmount)}
-                    </td>
-                    <td className="py-2 pr-3 text-right text-red-400 whitespace-nowrap">
-                      {fmtMoney(r.returnAmount)}
-                    </td>
-                    <td className="py-2 text-right text-gray-500 whitespace-nowrap">
-                      {fmtQty(r.netQty)}
-                    </td>
+                    {cols.map((c) => (
+                      <td
+                        key={c.key}
+                        className={`py-2 pr-3 text-right whitespace-nowrap ${
+                          c.strong
+                            ? "font-semibold text-gray-800"
+                            : c.red
+                            ? "text-red-400"
+                            : "text-gray-500"
+                        }`}
+                      >
+                        {c.fmt(r[c.key])}
+                      </td>
+                    ))}
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
-          {report.rows.length >= report.topN &&
-            (report.dimension === "product" || report.dimension === "branch") && (
-              <p className="pt-2 text-[11px] text-gray-400">
-                Showing the top {report.topN}. Totals above include all rows.
-              </p>
-            )}
+          {isTopLimited(report) && (
+            <p className="pt-2 text-[11px] text-gray-400">
+              Showing the top {report.topN}. Totals above include all rows.
+            </p>
+          )}
+          {report.mode === "product" && (
+            <p className="pt-1 text-[11px] text-gray-400">
+              Product figures are item-level. Subtotal discounts, taxes and payments are not
+              recorded per product.
+            </p>
+          )}
         </div>
       )}
     </div>
@@ -359,6 +422,15 @@ const AiReportChat = ({ authToken }) => {
       sendMessage();
     }
   };
+
+  // Show the AI assistant only to users who have the permission
+  let canUseAi = false;
+    try {
+      canUseAi = authToken ? jwtDecode(authToken).d_ai_assistant === "T" : false;
+    } catch (e) {
+      canUseAi = false;
+    }
+    if (!canUseAi) return null;
 
   return (
     <div className="p-5 transition-all duration-200 bg-white border border-gray-100 shadow-lg rounded-2xl sm:p-7 hover:shadow-xl">
