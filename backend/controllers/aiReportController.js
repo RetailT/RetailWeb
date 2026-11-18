@@ -5,22 +5,28 @@
 //                 (period, branch, product, breakdown). The AI never writes SQL.
 //   2. VALIDATE - the server checks every field of the spec (dates, branch codes,
 //                 limits). Anything unknown is dropped or rejected.
-//   3. QUERY    - the server runs fixed, parameterised SQL on tb_SALES (DET) and
-//                 tb_SALESPAYMENT (PAYMENT) using the SAME rules as Sp_SaleSumView.
+//   3. QUERY    - the server runs fixed, parameterised SQL using the SAME rules
+//                 as Sp_SaleSumView (see the data sources below).
 //   4. NARRATE  - the AI writes a short summary using ONLY the numbers returned.
 //   5. The exact tables (straight from SQL) are sent to the frontend as well, so
 //      the numbers shown to the customer never depend on the AI.
 //
 // Works with any OpenAI-compatible API (xAI Grok, Groq, Gemini, OpenRouter...).
-// Configure with env vars: AI_API_KEY, AI_BASE_URL, AI_MODEL.
+// Configure with env vars: AI_API_KEY, AI_BASE_URL, AI_MODEL, AI_FALLBACK_MODEL.
 //
 // NOTE: this file only READS existing columns. It does not create or alter
 // any table / column in the database.
 //
 // ---------------------------------------------------------------------------
+// DATA SOURCES
+//   Days BEFORE today : tb_SALES (DET) + tb_SALESPAYMENT (PAYMENT)   (after Dayend)
+//   TODAY             : tb_ONLINESALESMAIN                            (live, before Dayend)
+//   If a branch has no live rows today (Dayend already done), that branch's
+//   rows for today are read from tb_SALES instead - never counted twice.
+//
 // CALCULATION RULES (mirrors Sp_SaleSumView)
-//   DET     (tb_SALES)        : SL, RF, SD, NBT, VAT, RU, SVC, CP, ADV, PO
-//   PAYMENT (tb_SALESPAYMENT) : PT, BL, BC, CRN
+//   DET     : SL, RF, SD, NBT, VAT, RU, SVC, CP, ADV, PO
+//   PAYMENT : PT, BL, BC, CRN
 //
 //   GrossSales   = SUM(Amount of SL+RF) + ItemDiscount + RU
 //   ItemDiscount = SUM(Discount of SL+RF)
@@ -33,8 +39,8 @@
 //   NonCashSales = Net - Cash - CRN + ADV + VAT + NBT + GiftVoucher   (SP: "CREDITSALES")
 //   CustPayCredit= CP - CustPayCash
 //
-//   Sales date = SALESDATE column. Hour breakdown uses the [TIME] column
-//   (SALESDATE itself is always 00:00:00 in this database).
+//   Sales date = SALESDATE column (tb_SALES) / [DATE] column (tb_ONLINESALESMAIN).
+//   Hour breakdown uses the [TIME] column (the date columns are always 00:00:00).
 // ---------------------------------------------------------------------------
 
 const MAX_HISTORY = 6;
@@ -73,7 +79,7 @@ const DIM_SQL = {
     select: "CONVERT(VARCHAR(7), S.SALESDATE, 23) AS Label",
     group: "CONVERT(VARCHAR(7), S.SALESDATE, 23)",
   },
-  // hour comes from the existing [TIME] column (SALESDATE is always midnight)
+  // hour comes from the existing [TIME] column (the date column is always midnight)
   hour: {
     select: "RIGHT('0' + CAST(DATEPART(HOUR, S.[TIME]) AS VARCHAR(2)), 2) + ':00' AS Label",
     group: "RIGHT('0' + CAST(DATEPART(HOUR, S.[TIME]) AS VARCHAR(2)), 2) + ':00'",
@@ -415,7 +421,12 @@ module.exports = ({ connectToUserDatabase, getPosback, mssql }) => {
   const modeOf = (spec) =>
     spec.dimension === "product" || spec.productSearch ? "product" : "full";
 
-  const buildSql = (spec, posback, totalsOnly) => {
+  // today = YYYY-MM-DD (Colombo).
+  //   days BEFORE today -> tb_SALES / tb_SALESPAYMENT   (after Dayend)
+  //   TODAY             -> tb_ONLINESALESMAIN           (live, before Dayend)
+  //   If a branch has no live rows today (Dayend already done), today's rows
+  //   for that branch are read from tb_SALES instead (never counted twice).
+  const buildSql = (spec, posback, totalsOnly, today) => {
     const mode = modeOf(spec);
     const dimKey = totalsOnly ? "none" : spec.dimension;
     const dim = DIM_SQL[dimKey];
@@ -423,46 +434,83 @@ module.exports = ({ connectToUserDatabase, getPosback, mssql }) => {
     const params = [
       ["StartDate", "VarChar", spec.startDate],
       ["EndDate", "VarChar", spec.endDate],
+      ["Today", "VarChar", today],
     ];
 
-    // ---- filters applied inside both halves of the merged data (date + branch) ----
-    const baseWhere = [
-      "S.SALESDATE >= CAST(@StartDate AS DATE)",
-      "S.SALESDATE < DATEADD(DAY, 1, CAST(@EndDate AS DATE))",
-    ];
+    const hasToday = spec.endDate >= today; // does the range include today?
+
+    // ---- branch filter (shared parameters for both sources) ----
+    let branchNames = [];
     if (spec.branchCodes.length) {
-      const names = spec.branchCodes.map((code, i) => {
+      branchNames = spec.branchCodes.map((code, i) => {
         params.push([`b${i}`, "VarChar", code]);
         return `@b${i}`;
       });
-      baseWhere.push(`S.Company_Code IN (${names.join(", ")})`);
     }
 
-    // Only existing columns are used. [TIME] is needed for the hour breakdown.
-    const cols = `
+    // ---- 1) tb_SALES: all days before today, plus today for branches that
+    //         have NO live rows in tb_ONLINESALESMAIN (Dayend already done) ----
+    const histWhere = [
+      "S.SALESDATE >= CAST(@StartDate AS DATE)",
+      "S.SALESDATE < DATEADD(DAY, 1, CAST(@EndDate AS DATE))",
+      `(S.SALESDATE < CAST(@Today AS DATE)
+        OR NOT EXISTS (
+          SELECT 1 FROM tb_ONLINESALESMAIN X
+          WHERE RTRIM(X.COMPANY_CODE) = RTRIM(S.Company_Code)
+            AND X.[DATE] >= CAST(@Today AS DATE)
+            AND X.[DATE] < DATEADD(DAY, 1, CAST(@Today AS DATE))
+        ))`,
+    ];
+    if (branchNames.length) histWhere.push(`S.Company_Code IN (${branchNames.join(", ")})`);
+
+    // ---- 2) tb_ONLINESALESMAIN: today's live data ----
+    const todayWhere = [
+      "O.[DATE] >= CAST(@Today AS DATE)",
+      "O.[DATE] < DATEADD(DAY, 1, CAST(@Today AS DATE))",
+    ];
+    if (branchNames.length) todayWhere.push(`O.COMPANY_CODE IN (${branchNames.join(", ")})`);
+
+    // same column list / names for both sources so the UNION lines up
+    const histCols = `
         RTRIM(S.Company_Code) AS Company_Code,
         RTRIM(S.Product_Code) AS Product_Code,
         S.SALESDATE, S.[TIME], S.ID, S.[TYPE], S.PRODUCT_NAME, S.PAYMODE,
         S.AMOUNT, S.DISCOUNT, S.QTY`;
 
-    // DET part (tb_SALES). In product mode only item rows (SL / RF) matter.
-    const detIds = mode === "product" ? ["SL", "RF"] : DET_IDS;
-    const detSelect = `
-      SELECT ${cols}
-      FROM tb_SALES S
-      WHERE S.ID IN (${sqlList(detIds)})
-        AND ${baseWhere.join("\n        AND ")}`;
+    const todayCols = `
+        RTRIM(O.COMPANY_CODE) AS Company_Code,
+        RTRIM(O.PRODUCT_CODE) AS Product_Code,
+        DATEADD(DAY, DATEDIFF(DAY, 0, O.[DATE]), 0) AS SALESDATE,
+        O.[TIME], O.ID, O.[TYPE], O.PRODUCT_NAME, O.PAYMODE,
+        O.AMOUNT, O.DISCOUNT, O.QTY`;
 
-    // PAYMENT part (tb_SALESPAYMENT) - only in full mode
-    const paySelect =
-      mode === "full"
-        ? `
-      UNION ALL
-      SELECT ${cols}
+    // product mode: only item rows (SL / RF). full mode: every id.
+    const liveIds = mode === "product" ? ["SL", "RF"] : [...DET_IDS, ...PAY_IDS];
+    const histIds = mode === "product" ? ["SL", "RF"] : DET_IDS;
+
+    const parts = [];
+
+    parts.push(`
+      SELECT ${histCols}
+      FROM tb_SALES S
+      WHERE S.ID IN (${sqlList(histIds)})
+        AND ${histWhere.join("\n        AND ")}`);
+
+    if (mode === "full") {
+      parts.push(`
+      SELECT ${histCols}
       FROM tb_SALESPAYMENT S
       WHERE S.ID IN (${sqlList(PAY_IDS)})
-        AND ${baseWhere.join("\n        AND ")}`
-        : "";
+        AND ${histWhere.join("\n        AND ")}`);
+    }
+
+    if (hasToday) {
+      parts.push(`
+      SELECT ${todayCols}
+      FROM tb_ONLINESALESMAIN O
+      WHERE O.ID IN (${sqlList(liveIds)})
+        AND ${todayWhere.join("\n        AND ")}`);
+    }
 
     // ---- outer query ----
     const needsProduct = dimKey === "product" || !!spec.productSearch;
@@ -494,8 +542,7 @@ module.exports = ({ connectToUserDatabase, getPosback, mssql }) => {
     const sql = `
       USE [${posback}];
       WITH F AS (
-        ${detSelect}
-        ${paySelect}
+        ${parts.join("\n      UNION ALL\n")}
       )
       SELECT ${top}
         ${dim ? dim.select + "," : ""}
@@ -580,15 +627,15 @@ module.exports = ({ connectToUserDatabase, getPosback, mssql }) => {
     };
   };
 
-  const runSpec = async (pool, posback, spec, branchNameByCode) => {
+  const runSpec = async (pool, posback, spec, branchNameByCode, today) => {
     const mode = modeOf(spec);
 
     let rows = [];
     if (spec.dimension !== "none") {
-      rows = (await exec(pool, buildSql(spec, posback, false))).map((r) => mapRow(r, mode));
+      rows = (await exec(pool, buildSql(spec, posback, false, today))).map((r) => mapRow(r, mode));
     }
     // Overall totals for the same filters (not limited by TOP N)
-    const totalRows = await exec(pool, buildSql(spec, posback, true));
+    const totalRows = await exec(pool, buildSql(spec, posback, true, today));
 
     return {
       title: spec.title,
@@ -614,7 +661,7 @@ module.exports = ({ connectToUserDatabase, getPosback, mssql }) => {
           message: "You do not have permission to use the AI assistant.",
         });
       }
-      
+
       const message = typeof req.body?.message === "string" ? req.body.message.trim() : "";
       if (!message) {
         return res.status(400).json({ success: false, message: "Please type a question." });
@@ -688,7 +735,7 @@ module.exports = ({ connectToUserDatabase, getPosback, mssql }) => {
       // 3) QUERY (sequential on purpose - avoids exhausting the shared connection pool)
       const reports = [];
       for (const spec of specs) {
-        reports.push(await runSpec(pool, posback, spec, branchNameByCode));
+        reports.push(await runSpec(pool, posback, spec, branchNameByCode, today));
       }
 
       // 4) NARRATE (if this fails the exact tables are still returned)

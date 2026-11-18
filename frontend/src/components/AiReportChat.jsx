@@ -425,12 +425,12 @@ const AiReportChat = ({ authToken }) => {
 
   // Show the AI assistant only to users who have the permission
   let canUseAi = false;
-    try {
-      canUseAi = authToken ? jwtDecode(authToken).d_ai_assistant === "T" : false;
-    } catch (e) {
-      canUseAi = false;
-    }
-    if (!canUseAi) return null;
+  try {
+    canUseAi = authToken ? jwtDecode(authToken).d_ai_assistant === "T" : false;
+  } catch (e) {
+    canUseAi = false;
+  }
+  if (!canUseAi) return null;
 
   return (
     <div className="p-5 transition-all duration-200 bg-white border border-gray-100 shadow-lg rounded-2xl sm:p-7 hover:shadow-xl">
